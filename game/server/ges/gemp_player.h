@@ -48,7 +48,17 @@ public:
 	virtual int  GetMatchScore()			{ return m_iMatchScore; }
 	virtual void SetMatchScore( int val )	{ m_iMatchScore = val; }
 	virtual void AddMatchScore( int val )	{ m_iMatchScore += val; }
-	virtual void ResetMatchScores()			{ m_iMatchScore = 0; m_iMatchDeaths = 0; }
+	virtual void ResetMatchScores()			{ m_iMatchScore = 0; m_iMatchDeaths = 0; m_iMatchKills = 0; m_iNetMatchDeaths = 0; m_iMatchSuicides = 0; }
+
+	// Kills of other players this match (no suicides or team kills), for ge_wincondition
+	int  GetMatchKills() const				{ return m_iMatchKills; }
+	void AddMatchKill()						{ m_iMatchKills++; }
+	// Every death this match (suicides included), counted as it happens
+	int  GetMatchKDDeaths() const			{ return m_iNetMatchDeaths; }
+	void AddMatchKDDeath()					{ m_iNetMatchDeaths++; }
+	// Suicides this match (killed by themselves, the world or a fall), for the split screen scoreboard
+	int  GetMatchSuicides() const			{ return m_iMatchSuicides; }
+	void AddMatchSuicide()					{ m_iMatchSuicides++; }
 
 	virtual void ResetScores()				{ BaseClass::ResetScores(); ResetRoundScore(); }
 
@@ -165,6 +175,32 @@ public:
 
 	virtual void  FinishClientPutInServer();
 
+	// -------------------------------------------------
+	// Split screen
+	// -------------------------------------------------
+	// Guests are fake clients that are controlled by another client (their owner)
+	bool IsSplitGuest() const					{ return m_iSplitOwner > 0; }
+	int  GetSplitOwnerIndex() const				{ return m_iSplitOwner; }
+	int  GetSplitSlot() const					{ return m_iSplitSlot; }
+	int  GetSplitAngleReset() const				{ return m_nSplitAngleReset; }
+	void SetSplitGuest( int iOwnerEntIndex, int iSlot );
+	void UpdateSplitGuestState();
+	void SplitCycleWeapon( int dir );
+
+	// Player 1 of a split screen game (ges_ss_host): GoldenEye's team / character
+	// menus stay closed for them and their profile's character is used whenever
+	// they'd otherwise have to pick one (spawning, team changes, round restarts)
+	bool IsSplitHost() const					{ return m_bSplitHost; }
+	void SetSplitHost( bool bHost, const char *character );
+	void ApplySplitHostCharacter();
+
+	// Guests act like humans to the game rules even though the engine sees a fake client
+	virtual bool IsBot() const					{ return IsSplitGuest() ? false : BaseClass::IsBot(); }
+
+	virtual void ProcessUsercmds( CUserCmd *cmds, int numcmds, int totalcmds, int dropped_packets, bool paused );
+	virtual void PlayerRunCommand( CUserCmd *ucmd, IMoveHelper *moveHelper );
+	virtual void SetupVisibility( CBaseEntity *pViewEntity, unsigned char *pvs, int pvssize );
+
 	enum SpawnState {
 		SS_INITIAL = 1,
 		SS_ACTIVE,
@@ -200,6 +236,22 @@ protected:
 	CNetworkArray( int, m_iWeaponSkinInUse, WEAPON_RANDOM ); //Random marks the last of the actual weapons.
 
 	CNetworkVar(int, m_iSteamIDHash);
+
+	// Split screen guest state (sent to everyone, only meaningful for guests)
+	CNetworkVar( int, m_iSplitOwner );			// Entity index of the owning client, 0 if not a guest
+	CNetworkVar( int, m_iSplitSlot );			// Local slot on the owner's screen (1..7)
+	CNetworkVar( int, m_nSplitAngleReset );		// Bumped whenever the server forces our view angles
+	CNetworkQAngle( m_angSplitReset );			// The forced view angles
+	CNetworkVar( int, m_iSplitClip );			// Active weapon clip, for the owner's split HUD
+	CNetworkVar( int, m_iSplitAmmo );			// Active weapon reserve ammo, for the owner's split HUD
+
+	bool	m_bSplitHost;
+	char	m_szSplitHostChar[32];			// Profile character (or CHAR_RANDOM_IDENT)
+	float	m_flSplitHostCharTime;			// When to give a split screen host their character, 0 = not pending
+
+	CNetworkVar( int, m_iMatchKills );			// Kills this match, for the kills / K:D win conditions
+	CNetworkVar( int, m_iMatchSuicides );		// Suicides this match, for the split screen scoreboard
+	CNetworkVar( int, m_iNetMatchDeaths );		// Deaths this match, for K:D (also sent for the HUD)
 
 	char m_szCleanName[32];
 

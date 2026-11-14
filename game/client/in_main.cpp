@@ -44,6 +44,10 @@ extern ConVar cam_idealyaw;
 // For showing/hiding the scoreboard
 #include <game/client/iviewport.h>
 
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -1046,6 +1050,12 @@ void CInput::ExtraMouseSample( float frametime, bool active )
 #endif
 	}
 
+#ifdef GE_DLL
+	// Split screen match: the mouse doesn't look around (only controllers play)
+	if ( GESplitScreenClient()->IsControllerOnly() )
+		engine->SetViewAngles( originalViewangles );
+#endif
+
 	// Retreive view angles from engine ( could have been set in IN_AdjustAngles above )
 	engine->GetViewAngles( viewangles );
 
@@ -1216,6 +1226,22 @@ void CInput::CreateMove ( int sequence_number, float input_sample_frametime, boo
 		}
 	}
 
+#ifdef GE_DLL
+	// Split screen match: keyboard and mouse don't play, only controllers (player 1's
+	// too). Esc, the console and the menus still use them.
+	if ( GESplitScreenClient()->IsControllerOnly() )
+	{
+		viewangles = originalViewangles;
+		engine->SetViewAngles( viewangles );
+		cmd->forwardmove = cmd->sidemove = cmd->upmove = 0;
+		cmd->buttons = 0;
+		cmd->impulse = 0;
+	}
+
+	// Split screen: player 1's controller drives the main player
+	GESplitScreenClient()->HostCreateMove( input_sample_frametime, cmd, viewangles, active );
+#endif
+
 	// Use new view angles if alive, otherwise user last angles we stored off.
 	if ( g_iAlive )
 	{
@@ -1287,6 +1313,11 @@ void CInput::CreateMove ( int sequence_number, float input_sample_frametime, boo
 		cmd->entitygroundcontact.AddToTail( m_EntityGroundContact[i] );
 	}
 	m_EntityGroundContact.RemoveAll();
+#endif
+
+#ifdef GE_DLL
+	// Split screen: carry the input of our local guest players to the server
+	GESplitScreenClient()->FillGuestCmds( cmd );
 #endif
 
 	pVerified->m_cmd = *cmd;

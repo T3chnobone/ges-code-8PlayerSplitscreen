@@ -60,6 +60,11 @@
 #include "c_baseobject.h"
 #endif
 
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#include "c_baseviewmodel.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -2885,6 +2890,11 @@ bool C_BaseAnimating::SetupBones( matrix3x4_t *pBoneToWorldOut, int nMaxBones, i
 		matrix3x4_t parentTransform;
 		AngleMatrix( GetRenderAngles(), GetRenderOrigin(), parentTransform );
 
+#ifdef GE_DLL
+		if ( IsViewModel() && GESS_DebugViewModelActive() )
+			GESS_DebugViewModel( "bones", this );
+#endif
+
 		// Load the boneMask with the total of what was asked for last frame.
 		boneMask |= m_iPrevBoneMask;
 
@@ -3134,6 +3144,12 @@ int C_BaseAnimating::DrawModel( int flags )
 	VPROF_BUDGET( "C_BaseAnimating::DrawModel", VPROF_BUDGETGROUP_MODEL_RENDERING );
 	if ( !m_bReadyToDraw )
 		return 0;
+
+#ifdef GE_DLL
+	// Split screen: don't draw a player's own body, weapon and hat in their own viewport
+	if ( GESS_ShouldHideForCurrentView( this ) )
+		return 0;
+#endif
 
 	int drawn = 0;
 
@@ -3395,6 +3411,10 @@ void C_BaseAnimating::ProcessMuzzleFlashEvent()
 			// Format the position for first person view
 			if ( GetOwnerEntity() == CBasePlayer::GetLocalPlayer() )
 				::FormatViewModelAttachment( vAttachment, true );
+			// A split screen guest's gun: the same, in the guest's own camera (the
+			// light was left where the flash shows, off to the side of the gun model)
+			else if ( IsViewModel() && GESS_IsLocalGuest( static_cast<C_BaseViewModel*>( this )->GetOwner() ) )
+				UncorrectViewModelAttachment( vAttachment );
 		#endif
 
 			// Make an elight
@@ -3929,7 +3949,8 @@ void C_BaseAnimating::FireEvent( const Vector& origin, const QAngle& angles, int
 	case CL_EVENT_EJECTBRASS1:
 		if ( m_Attachments.Count() > 0 )
 		{
-			if ( MainViewOrigin().DistToSqr( GetAbsOrigin() ) < (256 * 256) )
+			// (split screen: a viewmodel is always near its own player's view, which may not be the main one)
+			if ( IsViewModel() || MainViewOrigin().DistToSqr( GetAbsOrigin() ) < (256 * 256) )
 			{
 				Vector attachOrigin;
 				QAngle attachAngles; 

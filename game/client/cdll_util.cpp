@@ -27,6 +27,9 @@
 #include <vgui/ILocalize.h>
 #include "view.h"
 #include "ixboxsystem.h"
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -1078,6 +1081,12 @@ static unsigned char ComputeDistanceFade( C_BaseEntity *pEntity, float flMinDist
 
 	float flCurrentDistanceSq = CurrentViewOrigin().DistToSqr( pEntity->WorldSpaceCenter() );
 	C_BasePlayer *pLocal = C_BasePlayer::GetLocalPlayer();
+#ifdef GE_DLL
+	// Split screen: the zoom of the player whose view this is
+	C_BasePlayer *pViewer = ToBasePlayer( GESS_GetRenderViewer() );
+	if ( pViewer )
+		pLocal = pViewer;
+#endif
 	if ( pLocal )
 	{
 		float flDistFactor = pLocal->GetFOVDistanceAdjustFactor();

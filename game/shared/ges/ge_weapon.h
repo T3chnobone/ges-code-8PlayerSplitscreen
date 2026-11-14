@@ -197,6 +197,13 @@ private:
 	float m_flLastBobCalc;
 	float m_flLastSpeedrat;
 	float m_flLastFallrat;
+#ifdef CLIENT_DLL
+	// Split screen guests: their velocity isn't sent to us, so the bob uses a smoothed
+	// velocity from where they're drawn (the server's estimate jumped around)
+	Vector m_vecBobLastOrigin;
+	Vector m_vecBobVelocity;
+	bool m_bHaveBobOrigin;
+#endif
 #endif
 
 	CNetworkVar( bool, m_bEnableGlow );

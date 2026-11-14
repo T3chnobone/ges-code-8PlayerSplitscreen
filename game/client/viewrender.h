@@ -440,6 +440,16 @@ private:
 	bool			ShouldDrawViewModel( bool drawViewmodel );
 	void			DrawViewModels( const CViewSetup &view, bool drawViewmodel );
 
+#ifdef GE_DLL
+	// Split screen: render one view per local player into its part of the screen
+	void			RenderSplitScreen( const CViewSetup &baseView, float flBaseFov, float flBaseViewModelFov, int nClearFlags, int whatToDraw );
+	// Each split screen player's camera and first person gun for this frame (from SetUpViews)
+	void			SetUpSplitScreenViews( const CViewSetup &baseView );
+	// One split screen view: its camera, the fields of view it's drawn with, and
+	// whether it draws a first person gun. False if the slot has no view.
+	bool			GetSplitScreenView( int slot, const CViewSetup &baseView, float flBaseFov, float flBaseViewModelFov, CViewSetup &out, bool &bDrawViewModel );
+#endif
+
 	void			PerformScreenSpaceEffects( int x, int y, int w, int h );
 
 	// Overlays

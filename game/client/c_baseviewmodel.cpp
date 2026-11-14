@@ -23,6 +23,8 @@
 #endif
 #ifdef GE_DLL
 #include "ge_weapon.h"
+#include "c_gemp_player.h"
+#include "ge_splitscreen_client.h"
 #endif
 
 #if defined( REPLAY_ENABLED )
@@ -95,10 +97,54 @@ void FormatViewModelAttachment( Vector &vOrigin, bool bInverse )
 }
 
 
+#ifdef GE_DLL
+// Split screen: the same as above, but in the camera of the player who owns the
+// viewmodel (each player has their own view; the main view is player 1's)
+static bool GESS_FormatViewModelAttachmentForOwner( C_BaseEntity *pOwner, Vector &vOrigin, bool bInverse )
+{
+	Vector viewOrigin;
+	QAngle viewAngles;
+	float fov, fovViewmodel;
+	if ( !GESS_GetPlayerViewSetup( pOwner, viewOrigin, viewAngles, fov, fovViewmodel ) )
+		return false;
+
+	const float worldx = tan( fov * M_PI / 360.0 );
+	const float viewx = tan( fovViewmodel * M_PI / 360.0 );
+	const float factor = viewx ? ( worldx / viewx ) : 0.0f;
+
+	Vector forward, right, up;
+	AngleVectors( viewAngles, &forward, &right, &up );
+	const Vector tmp = vOrigin - viewOrigin;
+	Vector vTransformed( right.Dot( tmp ), up.Dot( tmp ), forward.Dot( tmp ) );
+	if ( bInverse )
+	{
+		if ( factor != 0 )
+		{
+			vTransformed.x /= factor;
+			vTransformed.y /= factor;
+		}
+		else
+		{
+			vTransformed.x = vTransformed.y = 0.0f;
+		}
+	}
+	else
+	{
+		vTransformed.x *= factor;
+		vTransformed.y *= factor;
+	}
+	vOrigin = viewOrigin + right * vTransformed.x + up * vTransformed.y + forward * vTransformed.z;
+	return true;
+}
+#endif
+
 void C_BaseViewModel::FormatViewModelAttachment( int nAttachment, matrix3x4_t &attachmentToWorld )
 {
 	Vector vecOrigin;
 	MatrixPosition( attachmentToWorld, vecOrigin );
+#ifdef GE_DLL
+	if ( !GESS_FormatViewModelAttachmentForOwner( GetOwner(), vecOrigin, false ) )
+#endif
 	::FormatViewModelAttachment( vecOrigin, false );
 	PositionMatrix( vecOrigin, attachmentToWorld );
 }
@@ -112,6 +158,9 @@ bool C_BaseViewModel::IsViewModel() const
 void C_BaseViewModel::UncorrectViewModelAttachment( Vector &vOrigin )
 {
 	// Unformat the attachment.
+#ifdef GE_DLL
+	if ( !GESS_FormatViewModelAttachmentForOwner( GetOwner(), vOrigin, true ) )
+#endif
 	::FormatViewModelAttachment( vOrigin, true );
 }
 
@@ -338,6 +387,11 @@ int C_BaseViewModel::DrawModel( int flags )
 		ret = BaseClass::DrawModel( flags );
 	}
 
+#ifdef GE_DLL
+	if ( ( flags & STUDIO_RENDER ) && GESS_DebugViewModelActive() )
+		GESS_DebugViewModel( "draw", this );
+#endif
+
 	// Now that we've rendered, reset the animation restart flag
 	if ( flags & STUDIO_RENDER )
 	{
@@ -489,6 +543,20 @@ void C_BaseViewModel::PostDataUpdate( DataUpdateType_t updateType )
 {
 	BaseClass::PostDataUpdate(updateType);
 	OnLatchInterpolatedVariables( LATCH_ANIMATION_VAR );
+
+#ifdef GE_DLL
+	// A split screen guest's viewmodel: let the guest find it, so it can be
+	// positioned and drawn in the guest's own view
+	C_GEMPPlayer *pGuest = ToGEMPPlayer( GetOwner() );
+	C_BasePlayer *pLocal = C_BasePlayer::GetLocalPlayer();
+	if ( pGuest && pLocal && pGuest != pLocal && pGuest->IsSplitGuest() && pGuest->GetSplitOwnerIndex() == pLocal->entindex() )
+	{
+		if ( pGuest->GetViewModel( ViewModelIndex(), true ) != this )
+			pGuest->SetSplitGuestViewModel( ViewModelIndex(), this );
+	}
+	if ( GESS_DebugViewModelActive() )
+		GESS_DebugViewModel( "net", this );
+#endif
 }
 
 
@@ -502,6 +570,18 @@ void C_BaseViewModel::AddEntity( void )
 	{
 		ResetLatched();
 	}
+
+#ifdef GE_DLL
+	// Our own viewmodels (player 1's and split screen guests') stay in the
+	// interpolation list: Interpolate is what moves a server-driven (not
+	// predicted) viewmodel's animation along, and the list drops an entity once
+	// it stops moving. GE's death blood (viewmodel 1, in front of a dead player's
+	// still view) then froze on its first frame as a strip at the top of the
+	// screen instead of running down it. (Called once a frame, from Simulate.)
+	C_BaseEntity *pOwner = GetOwner();
+	if ( pOwner && !GetPredictable() && ( pOwner == C_BasePlayer::GetLocalPlayer() || GESS_IsLocalGuest( pOwner ) ) )
+		AddToInterpolationList();
+#endif
 }
 
 //-----------------------------------------------------------------------------

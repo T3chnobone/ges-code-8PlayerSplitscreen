@@ -17,6 +17,7 @@
 #include "ge_charPanel.h"
 
 #include "ge_charselectgui.h"
+#include "ge_splitscreen_client.h"
 #include "clientmode_ge.h"
 #include "ge_character_data.h"
 #include "gemp_gamerules.h"
@@ -86,6 +87,13 @@ void CGECharSelect::ShowPanel(bool bShow)
 	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
 	if ( !pPlayer || BaseClass::IsVisible() == bShow )
 		return;
+
+	// In a split screen game everyone's character comes from their profile
+	if ( bShow && GESS_ShouldSuppressGameMenus() )
+	{
+		SetVisible( false );
+		return;
+	}
 
 	int team = pPlayer->GetTeamNumber();
 	if ( bShow && team != TEAM_SPECTATOR )

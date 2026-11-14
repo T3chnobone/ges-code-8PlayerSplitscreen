@@ -43,6 +43,7 @@ public:
 	virtual void Update( void );
 	virtual void OnThink( void );
 	virtual bool NeedsUpdate( void );
+	virtual void ShowPanel( bool bShow );
 
 	virtual Color GetBlackBarColor( void ) { return Color(172,160,138,185); } // A folder color semi-transparent
 

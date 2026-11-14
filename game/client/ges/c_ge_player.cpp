@@ -28,6 +28,8 @@
 // For special music setup
 #include "ge_musicmanager.h"
 
+#include "ge_splitscreen_client.h"
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -171,7 +173,10 @@ void C_GEPlayer::CalcView( Vector &eyeOrigin, QAngle &eyeAngles, float &zNear, f
 			Vector vForward; 
 			AngleVectors( eyeAngles, &vForward );
 
-			if ( ge_fp_ragdoll_auto.GetBool() )
+			// Split screen: always through the dead man's eyes until the respawn,
+			// like the guests (the third person chase camera jumped in whenever the
+			// body fell against a wall or the floor)
+			if ( ge_fp_ragdoll_auto.GetBool() && !GESS_IsSplitActive() )
 			{
 				// DM: Don't use first person view when we are very close to something
 				trace_t tr;
@@ -182,6 +187,13 @@ void C_GEPlayer::CalcView( Vector &eyeOrigin, QAngle &eyeAngles, float &zNear, f
 			}
 			else
 				return;
+		}
+		else if ( GESS_IsSplitActive() )
+		{
+			// No body yet (it comes a moment after the death): stay where our eyes
+			// were instead of the third person chase camera
+			C_BasePlayer::CalcView( eyeOrigin, eyeAngles, zNear, zFar, fov );
+			return;
 		}
 	}
 
@@ -362,7 +374,7 @@ void C_GEPlayer::ClientThink( void )
 		// Check if we should draw our hat
 		if ( m_hHat.Get() )
 		{
-			if ( !ShouldDrawLocalPlayer() ) //IsAlive()
+			if ( !ShouldDrawLocalPlayer() && !GESS_IsSplitActive() ) //IsAlive()
 				m_hHat.Get()->AddEffects( EF_NODRAW );
 			else
 				m_hHat.Get()->RemoveEffects( EF_NODRAW );

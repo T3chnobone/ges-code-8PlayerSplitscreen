@@ -21,6 +21,9 @@
 #include "iclientmode.h"
 #include "viewrender.h"
 #include "view.h"
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
 
 #ifdef PORTAL
 	#include "c_prop_portal.h"
@@ -973,6 +976,12 @@ int CBeam::DrawModel( int flags )
 
 	if ( CurrentViewID() == VIEW_SHADOW_DEPTH_TEXTURE )
 		return 0;
+
+#ifdef GE_DLL
+	// Light beams (point_spotlight) shone through a dead player's death blood
+	if ( GESS_ShouldHideLightsForCurrentView() )
+		return 0;
+#endif
 
 #ifdef PORTAL
 	if ( ( !g_pPortalRender->IsRenderingPortal() && !m_bDrawInMainRender ) || 

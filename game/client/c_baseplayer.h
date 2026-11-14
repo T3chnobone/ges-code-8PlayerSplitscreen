@@ -105,6 +105,11 @@ public:
 	void	SetAnimationExtension( const char *pExtension );
 
 	C_BaseViewModel		*GetViewModel( int viewmodelindex = 0, bool bObserverOK=true );
+#ifdef GE_DLL
+	// Split screen guests' viewmodel handles aren't networked to us (they're in the
+	// local player only data), so their viewmodels register themselves here
+	void				SetSplitGuestViewModel( int index, C_BaseViewModel *pVM ) { if ( index >= 0 && index < MAX_VIEWMODELS ) m_hViewModel[index] = pVM; }
+#endif
 	C_BaseCombatWeapon	*GetActiveWeapon( void ) const;
 	const char			*GetTracerType( void );
 

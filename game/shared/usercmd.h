@@ -16,6 +16,10 @@
 #include "imovehelper.h"
 #include "checksum_crc.h"
 
+#ifdef GE_DLL
+#include "ge_splitscreen_shared.h"
+#endif
+
 
 class bf_read;
 class bf_write;
@@ -61,6 +65,11 @@ public:
 #if defined( HL2_DLL ) || defined( HL2_CLIENT_DLL )
 		entitygroundcontact.RemoveAll();
 #endif
+#ifdef GE_DLL
+		hostweaponcycle = 0;
+		for ( int i = 0; i < GES_SS_MAX_GUESTS; i++ )
+			splitguests[i].Reset();
+#endif
 	}
 
 	CUserCmd& operator =( const CUserCmd& src )
@@ -89,6 +98,11 @@ public:
 
 #if defined( HL2_DLL ) || defined( HL2_CLIENT_DLL )
 		entitygroundcontact			= src.entitygroundcontact;
+#endif
+#ifdef GE_DLL
+		hostweaponcycle		= src.hostweaponcycle;
+		for ( int i = 0; i < GES_SS_MAX_GUESTS; i++ )
+			splitguests[i] = src.splitguests[i];
 #endif
 
 		return *this;
@@ -131,6 +145,15 @@ public:
 		upmove = 0.f;
 		buttons = 0;
 		impulse = 0;
+#ifdef GE_DLL
+		hostweaponcycle = 0;
+		for ( int i = 0; i < GES_SS_MAX_GUESTS; i++ )
+		{
+			bool bActive = splitguests[i].active;
+			splitguests[i].Reset();
+			splitguests[i].active = bActive;
+		}
+#endif
 	}
 
 	// For matching server and client commands for debugging
@@ -170,6 +193,13 @@ public:
 	// Back channel to communicate IK state
 #if defined( HL2_DLL ) || defined( HL2_CLIENT_DLL )
 	CUtlVector< CEntityGroundContact > entitygroundcontact;
+#endif
+
+#ifdef GE_DLL
+	// Split screen: weapon cycle request for the host (-1, 0, +1). Event, not state.
+	signed char hostweaponcycle;
+	// Split screen: input for the local guest players owned by this client
+	CGESplitGuestCmd splitguests[ GES_SS_MAX_GUESTS ];
 #endif
 
 };

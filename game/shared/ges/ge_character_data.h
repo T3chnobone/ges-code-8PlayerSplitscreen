@@ -111,4 +111,7 @@ protected:
 
 extern const CGECharacters *GECharacters();
 
+// Loads the character scripts once, without precaching models (usable from the main menu)
+extern void GECharacters_EnsureParsed();
+
 #endif //GE_CHARACTER_DATA_H

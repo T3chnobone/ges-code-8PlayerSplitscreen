@@ -747,7 +747,7 @@ CGEBotPlayer *ToGEBotPlayer( CBaseEntity *pEntity )
 		return static_cast<CGEBotPlayer*>( ((CNPC_GEBase*)pEntity)->GetBotPlayer() );
 #endif
 	}
-	else if ( pEntity->IsPlayer() && (pEntity->GetFlags() & FL_FAKECLIENT) )
+	else if ( pEntity->IsPlayer() && (pEntity->GetFlags() & FL_FAKECLIENT) && static_cast<CGEPlayer*>(pEntity)->IsBotPlayer() )
 	{
 #ifdef _DEBUG
 		return dynamic_cast<CGEBotPlayer*>( pEntity );

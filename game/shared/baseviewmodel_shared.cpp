@@ -13,6 +13,9 @@
 #include "prediction.h"
 #include "client_virtualreality.h"
 #include "sourcevr/isourcevirtualreality.h"
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
 #else
 #include "vguiscreen.h"
 #endif
@@ -363,11 +366,26 @@ void CBaseViewModel::SendViewModelMatchingSequence( int sequence )
 	m_nAnimationParity = ( m_nAnimationParity + 1 ) & ( (1<<VIEWMODEL_ANIMATION_PARITY_BITS) - 1 );
 
 #if defined( CLIENT_DLL )
+#ifdef GE_DLL
+	if ( GESS_DebugViewModelActive() )
+		GESS_DebugViewModel( prediction->InPrediction() ? "send-pred" : "send", this );
+#endif
 	m_nOldAnimationParity = m_nAnimationParity;
 
 	// Force frame interpolation to start at exactly frame zero
 	m_flAnimTime			= gpGlobals->curtime;
 #else
+#ifdef GE_DLL
+	static ConVar ges_ss_debug_vmanim( "ges_ss_debug_vmanim", "0", FCVAR_DONTRECORD, "Testing: log the server's first person gun animations of player <index> (0: off)." );
+	if ( ges_ss_debug_vmanim.GetInt() > 0 && GetOwner() && GetOwner()->entindex() == ges_ss_debug_vmanim.GetInt() )
+	{
+		CBaseCombatWeapon *pDbgWeapon = m_hWeapon.Get();
+		Msg( "[vmanim sv] t%.3f player %d vm %d seq %d %s (vm model %s) weapon %s model %s act %d ideal %d\n", gpGlobals->curtime,
+			GetOwner()->entindex(), ViewModelIndex(), sequence, GetSequenceName( sequence ), STRING( GetModelName() ),
+			pDbgWeapon ? pDbgWeapon->GetClassname() : "-", pDbgWeapon ? STRING( pDbgWeapon->GetModelName() ) : "-",
+			pDbgWeapon ? (int) pDbgWeapon->GetActivity() : -1, pDbgWeapon ? (int) pDbgWeapon->GetIdealActivity() : -1 );
+	}
+#endif
 	CBaseCombatWeapon *weapon = m_hWeapon.Get();
 	bool showControlPanels = weapon && weapon->ShouldShowControlPanels();
 	SetControlPanelsActive( showControlPanels );

@@ -34,6 +34,7 @@ protected:
 	CNetworkArray( int, m_iDevStatus, MAX_PLAYERS+1 );
 	CNetworkArray( int, m_iCampingPercent, MAX_PLAYERS+1 );
 	CNetworkArray( int, m_iFrags, MAX_PLAYERS+1 );
+	CNetworkArray( int, m_iSuicides, MAX_PLAYERS+1 );	// Suicides this match (split screen scoreboard)
 	CNetworkArray( int, m_iScoreBoardColor, MAX_PLAYERS+1 );
 	CNetworkArray( bool, m_bIsActive, MAX_PLAYERS+1 );
 };

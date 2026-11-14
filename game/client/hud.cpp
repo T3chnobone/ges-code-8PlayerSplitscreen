@@ -702,7 +702,7 @@ void CHudTexture::DrawSelfScaled( int x, int y, int w, int h, float scale, Color
 	}
 }
 
-void CHudTexture::DrawScew_Left( int tex2, int width, int height, float percent, int offset, int radius ) const
+void CHudTexture::DrawScew_Left( int tex2, int width, int height, float percent, int offset, int radius, int centerX, int centerY, int alpha ) const
 {
 	// ASSUMPTIONS:
 	//	1. The image will be centered vertically about the midline of the screen
@@ -713,7 +713,7 @@ void CHudTexture::DrawScew_Left( int tex2, int width, int height, float percent,
 	// Make sure the percent cut is between 0 and 1
 	percent = clamp( percent, 0.0f, 1.0f );
 	vgui::surface()->DrawSetTexture( textureId );
-	vgui::surface()->DrawSetColor( Color(255,255,255,255) );
+	vgui::surface()->DrawSetColor( Color(255,255,255,alpha) );
 	
 	// This defines the placement of the U,V on the image
 	float scaledV1, scaledV2, scaledU;
@@ -725,6 +725,11 @@ void CHudTexture::DrawScew_Left( int tex2, int width, int height, float percent,
 
 	vgui::surface()->GetScreenSize( midX, midY );
 	midX /= 2; midY /= 2;
+	if ( centerX >= 0 && centerY >= 0 )
+	{
+		midX = centerX;
+		midY = centerY;
+	}
 	// Determine the proper origin X position for a perfect circle based on our image
 	origX = midX - offset + midH;
 
@@ -830,12 +835,12 @@ void CHudTexture::DrawScew_Left( int tex2, int width, int height, float percent,
 		};
 		// Draw it on the screen
 		vgui::surface()->DrawSetTexture( tex2 );
-		vgui::surface()->DrawSetColor( 255, 255, 255, 255 );
+		vgui::surface()->DrawSetColor( 255, 255, 255, alpha );
 		vgui::surface()->DrawTexturedPolygon( 5, invPoints );
 	}
 }
 
-void CHudTexture::DrawScew_Right( int tex2, int width, int height, float percent, int offset, int radius ) const
+void CHudTexture::DrawScew_Right( int tex2, int width, int height, float percent, int offset, int radius, int centerX, int centerY, int alpha ) const
 {
 	// ASSUMPTIONS:
 	//	1. The image will be centered vertically about the midline of the screen
@@ -846,7 +851,7 @@ void CHudTexture::DrawScew_Right( int tex2, int width, int height, float percent
 	// Make sure the percent cut is between 0 and 1
 	percent = clamp( percent, 0.0f, 1.0f );
 	vgui::surface()->DrawSetTexture( textureId );
-	vgui::surface()->DrawSetColor( Color(255,255,255,255) );
+	vgui::surface()->DrawSetColor( Color(255,255,255,alpha) );
 	
 	// This defines the placement of the U,V on the image
 	float scaledV1, scaledV2, scaledU;
@@ -858,6 +863,11 @@ void CHudTexture::DrawScew_Right( int tex2, int width, int height, float percent
 
 	vgui::surface()->GetScreenSize( midX, midY );
 	midX /= 2; midY /= 2;
+	if ( centerX >= 0 && centerY >= 0 )
+	{
+		midX = centerX;
+		midY = centerY;
+	}
 
 	// If we aren't doing ANY scaling then skip unnecessary calcs
 	if ( percent == 1.0f )
@@ -963,7 +973,7 @@ void CHudTexture::DrawScew_Right( int tex2, int width, int height, float percent
 		};
 		// Draw it on the screen
 		vgui::surface()->DrawSetTexture( tex2 );
-		vgui::surface()->DrawSetColor( 255, 255, 255, 255 );
+		vgui::surface()->DrawSetColor( 255, 255, 255, alpha );
 		vgui::surface()->DrawTexturedPolygon( 5, invPoints );
 	}
 }

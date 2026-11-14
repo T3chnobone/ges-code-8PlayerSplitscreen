@@ -8,6 +8,9 @@
 #include "c_playerresource.h"
 #include "c_team.h"
 #include "gamestringpool.h"
+#ifdef GE_DLL
+#include "c_gemp_player.h"
+#endif
 
 #ifdef HL2MP
 #include "hl2mp_gamerules.h"
@@ -254,6 +257,16 @@ bool C_PlayerResource::IsFakePlayer( int iIndex )
 	player_info_t sPlayerInfo;
 	if ( engine->GetPlayerInfo( iIndex, &sPlayerInfo ) )
 	{
+#ifdef GE_DLL
+		// Split screen guests are people on someone's controllers, played through
+		// fake clients: not bots in the scoreboard, match report or anywhere else
+		if ( sPlayerInfo.fakeplayer )
+		{
+			C_GEMPPlayer *pGuest = ToGEMPPlayer( UTIL_PlayerByIndex( iIndex ) );
+			if ( pGuest && pGuest->IsSplitGuest() )
+				return false;
+		}
+#endif
 		return sPlayerInfo.fakeplayer;
 	}
 	

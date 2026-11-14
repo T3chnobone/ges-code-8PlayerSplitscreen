@@ -17,6 +17,10 @@
 #include "toolframework/itoolframework.h"
 #include "toolframework_client.h"
 
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -328,6 +332,12 @@ bool C_BaseCombatWeapon::IsCarriedByLocalPlayer( void )
 //-----------------------------------------------------------------------------
 bool C_BaseCombatWeapon::ShouldDrawUsingViewModel( void )
 {
+#ifdef GE_DLL
+	// Split screen guests see their gun as a viewmodel too: tracers and beams start
+	// from its muzzle, as they do for player 1
+	if ( GESS_IsLocalGuest( GetOwner() ) )
+		return true;
+#endif
 	return IsCarriedByLocalPlayer() && !C_BasePlayer::ShouldDrawLocalPlayer();
 }
 
@@ -437,6 +447,12 @@ bool C_BaseCombatWeapon::ShouldDraw( void )
 		if ( !ShouldDrawLocalPlayerViewModel() )
 			return true;
 
+#ifdef GE_DLL
+		// Split screen: other local players see our world model
+		if ( GESS_IsSplitActive() )
+			return true;
+#endif
+
 		// don't draw active weapon if not in some kind of 3rd person mode, the viewmodel will do that
 		return false;
 	}
@@ -471,6 +487,26 @@ bool C_BaseCombatWeapon::ShouldDrawPickup( void )
 // Purpose: Render the weapon. Draw the Viewmodel if the weapon's being carried
 //			by this player, otherwise draw the worldmodel.
 //-----------------------------------------------------------------------------
+#ifdef GE_DLL
+//-----------------------------------------------------------------------------
+// While our own weapon still has its first person (view) model, its animation
+// events (muzzle flashes, shells) belong to the viewmodel entity, which plays
+// them. Normally this weapon is invisible then and they're skipped, but in split
+// screen it's drawn for the other players, and its sequence events fired stray
+// muzzle flashes, e.g. when changing weapons.
+//-----------------------------------------------------------------------------
+void C_BaseCombatWeapon::DoAnimationEvents( CStudioHdr *pStudio )
+{
+	const int iWorld = GetWorldModelIndex();
+	if ( IsCarriedByLocalPlayer() && iWorld > 0 && GetModelIndex() != iWorld )
+	{
+		DisableMuzzleFlash();
+		return;
+	}
+	BaseClass::DoAnimationEvents( pStudio );
+}
+#endif
+
 int C_BaseCombatWeapon::DrawModel( int flags )
 {
 	VPROF_BUDGET( "C_BaseCombatWeapon::DrawModel", VPROF_BUDGETGROUP_MODEL_RENDERING );
@@ -490,9 +526,30 @@ int C_BaseCombatWeapon::DrawModel( int flags )
 		// without notification 
 		
 		if ( localplayer->GetObserverMode() == OBS_MODE_IN_EYE &&
-			 localplayer->GetObserverTarget() == GetOwner() ) 
+			 localplayer->GetObserverTarget() == GetOwner() )
 			return false;
 	}
+
+#ifdef GE_DLL
+	// Split screen: the other players see our gun in our hands. Our own weapon
+	// keeps the view model the server gave it (prediction uses its sequences), so
+	// draw it with the world model just for this, then put everything back.
+	if ( GESS_IsSplitActive() && IsCarriedByLocalPlayer() )
+	{
+		const int iModel = GetModelIndex();
+		const int iWorld = GetWorldModelIndex();
+		if ( iWorld > 0 && iModel != iWorld )
+		{
+			const int iSequence = GetSequence();
+			SetModelIndex( iWorld );
+			SetSequence( 0 );	// the view model's sequence numbers mean nothing here
+			const int ret = BaseClass::DrawModel( flags );
+			SetModelIndex( iModel );
+			SetSequence( iSequence );
+			return ret;
+		}
+	}
+#endif
 
 	return BaseClass::DrawModel( flags );
 }

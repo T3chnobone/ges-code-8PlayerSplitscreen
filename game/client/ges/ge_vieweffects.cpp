@@ -18,13 +18,14 @@
 #include "ge_utils.h"
 #include "ge_shareddefs.h"
 #include "ge_vieweffects.h"
+#include "ge_splitscreen_client.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
 #define CROSSHAIR_SCALE	0.5f
 
-static CGEViewEffects g_ViewEffects;
+CGEViewEffects g_ViewEffects; // not static: ge_vieweffects.h declares it extern
 IViewEffects *vieweffects = ( IViewEffects * )&g_ViewEffects;
 
 #define ATTR_TIMEOUT 3.0f
@@ -146,7 +147,10 @@ void CGEViewEffects::GenerateRandomAttractor( attractor_t &attractor )
 // Draw a 3D crosshair scaled by our current zoom
 void CGEViewEffects::DrawCrosshair( void )
 {
-	C_GEPlayer *pPlayer = ToGEPlayer( C_BasePlayer::GetLocalPlayer() );
+	// Split screen: this is drawn in every player's view, so use the aim of the player
+	// whose view it is (it showed in everyone's view when player 1 aimed)
+	C_BaseEntity *pViewer = GESS_GetRenderViewer();
+	C_GEPlayer *pPlayer = ToGEPlayer( pViewer ? pViewer : C_BasePlayer::GetLocalPlayer() );
 
 	// Check our draw conditions
 	if ( ShouldDrawCrosshair( pPlayer ) )

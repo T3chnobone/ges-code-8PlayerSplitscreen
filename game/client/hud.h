@@ -67,8 +67,8 @@ public:
 	void DrawSelfScaled( int x, int y, float scale, Color clr = Color(255,255,255,255) ) const;
 	void DrawSelfScaled( int x, int y, int w, int h, float scale, Color clr = Color(255,255,255,255) ) const;
 
-	void DrawScew_Left( int tex2, int width, int height, float percent, int offset, int radius ) const;
-	void DrawScew_Right( int tex2, int width, int height, float percent, int offset, int radius ) const;
+	void DrawScew_Left( int tex2, int width, int height, float percent, int offset, int radius, int centerX = -1, int centerY = -1, int alpha = 255 ) const;	// center: split screen views
+	void DrawScew_Right( int tex2, int width, int height, float percent, int offset, int radius, int centerX = -1, int centerY = -1, int alpha = 255 ) const;	// center: split screen views
 #endif
 	void DrawSelfCropped( int x, int y, int cropx, int cropy, int cropw, int croph, Color clr ) const;
 	// new version to scale the texture over a finalWidth and finalHeight passed in

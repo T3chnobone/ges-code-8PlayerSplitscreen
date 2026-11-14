@@ -175,7 +175,8 @@ void CGECharacters::Sort()
 //
 CGECharacterDataParser GECharacterDataParser;
 
-void GECharacters_Precache( void *pUser )
+// Parse the character scripts if that hasn't happened yet (safe to call from menus)
+void GECharacters_EnsureParsed()
 {
 	// This only runs once
 	if ( !GECharacterDataParser.HasBeenParsed() )
@@ -184,6 +185,11 @@ void GECharacters_Precache( void *pUser )
 		GECharacterDataParser.InitParser("scripts/character/*.X");
 		g_GECharacters.Sort();
 	}
+}
+
+void GECharacters_Precache( void *pUser )
+{
+	GECharacters_EnsureParsed();
 
 	// Always precache the models
 	for ( int i=0; i < GECharacters()->Count(); i++ )

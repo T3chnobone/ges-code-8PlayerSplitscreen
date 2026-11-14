@@ -15,6 +15,9 @@
 #include "vguiscreen.h"
 #include "saverestore_utlvector.h"
 #include "hltvdirector.h"
+#ifdef GE_DLL
+#include "gemp_player.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -74,6 +77,17 @@ int CBaseViewModel::ShouldTransmit( const CCheckTransmitInfo *pInfo )
 	{
 		return FL_EDICT_ALWAYS;
 	}
+
+#ifdef GE_DLL
+	// Split screen guests' viewmodels are drawn by the client that owns the guest
+	// (guests aren't flagged as fake clients, so don't test IsFakeClient)
+	if ( pOwner )
+	{
+		CGEMPPlayer *pGuest = ToGEMPPlayer( pOwner );
+		if ( pGuest && pGuest->IsSplitGuest() && pGuest->GetSplitOwnerIndex() == engine->IndexOfEdict( pInfo->m_pClientEnt ) )
+			return FL_EDICT_ALWAYS;
+	}
+#endif
 
 	// check if recipient spectates the own of this viewmodel
 	CBaseEntity *pRecipientEntity = CBaseEntity::Instance( pInfo->m_pClientEnt );

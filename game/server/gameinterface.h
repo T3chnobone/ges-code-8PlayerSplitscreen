@@ -57,6 +57,9 @@ public:
 
 	// Notify that the player is spawned
 	virtual void			ClientSpawned( edict_t *pPlayer ) OVERRIDE;
+
+	// Hook for player voice (SDK 2013 update)
+	virtual void			ClientVoice( edict_t *pPlayer ) OVERRIDE;
 };
 
 
@@ -152,6 +155,9 @@ public:
 
 	// Called to see if the game server is okay with a manual changelevel or map command
 	virtual bool			IsManualMapChangeOkay( const char **pszReason ) OVERRIDE;
+
+	// Lets the engine list workshop maps (SDK 2013 update; GE:S has none)
+	virtual bool			GetWorkshopMap( uint32 uIndex, WorkshopMapDesc_t *pDesc ) OVERRIDE;
 
 private:
 

@@ -20,6 +20,10 @@
 #include "replay/ienginereplay.h"
 #endif
 
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -58,6 +62,12 @@ void CHud::Think(void)
 	{
 		// Visible?
 		bool visible = m_HudList[i]->ShouldDraw();
+
+#ifdef GE_DLL
+		// Split screen draws its own per-player HUD
+		if ( visible && GESplitScreenClient()->ShouldHideHudElement( m_HudList[i]->GetName() ) )
+			visible = false;
+#endif
 
 #if defined( REPLAY_ENABLED )
 		visible = visible && !bPlayingReplay;

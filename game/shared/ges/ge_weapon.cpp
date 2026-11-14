@@ -124,6 +124,11 @@ CGEWeapon::CGEWeapon()
 	m_flLastBobCalc = 0;
 	m_flLastSpeedrat = 0;
 	m_flLastFallrat = 0;
+#ifdef CLIENT_DLL
+	m_vecBobLastOrigin.Init();
+	m_vecBobVelocity.Init();
+	m_bHaveBobOrigin = false;
+#endif
 	m_bClientGlow = false;
 	m_pEntGlowEffect = (CEntGlowEffect*)g_pScreenSpaceEffects->GetScreenSpaceEffect("ge_entglow");
 #endif
@@ -422,8 +427,34 @@ float CGEWeapon::CalcViewmodelBob( void )
 	if ( !gpGlobals->frametime || player == NULL )
 		return 0;
 
+	// Our own velocity; for a split screen guest the client only has an estimate
+	// (velocity is only sent to the player it belongs to)
+	Vector velocity = player->GetLocalVelocity();
+#ifdef CLIENT_DLL
+	if ( !player->IsLocalPlayer() )
+	{
+		// Measured from where they're drawn each frame and smoothed: estimating it
+		// from the last network updates jumped about, and so did their gun
+		const Vector pos = player->GetAbsOrigin();
+		if ( m_bHaveBobOrigin && framelength > 0.0f && framelength < 0.25f )
+		{
+			const Vector instant = ( pos - m_vecBobLastOrigin ) / framelength;
+			const float k = clamp( framelength * 8.0f, 0.0f, 1.0f );
+			m_vecBobVelocity += ( instant - m_vecBobVelocity ) * k;
+		}
+		else if ( !m_bHaveBobOrigin || framelength >= 0.25f )
+		{
+			m_vecBobVelocity.Init();
+		}
+		if ( framelength > 0.0f || !m_bHaveBobOrigin )
+			m_vecBobLastOrigin = pos;
+		m_bHaveBobOrigin = true;
+		velocity = m_vecBobVelocity;
+	}
+#endif
+
 	// Find the speed ratio vs max speed
-	float speedrat = player->GetLocalVelocity().Length2D() / (float)GE_NORM_SPEED;
+	float speedrat = velocity.Length2D() / (float)GE_NORM_SPEED;
 
 	speedrat = clamp( speedrat, m_flLastSpeedrat - 6 * framelength, m_flLastSpeedrat + 6 * framelength ); // A little bit of interpolation to prevent flickering.
 	speedrat = clamp( speedrat, 0, 1.5f );
@@ -441,7 +472,7 @@ float CGEWeapon::CalcViewmodelBob( void )
 
 	// Now let's add an offset for how fast we're falling
 
-	float fallspeed = clamp(player->GetLocalVelocity().z, -GE_FALL_S, GE_FALL_S);
+	float fallspeed = clamp(velocity.z, -GE_FALL_S, GE_FALL_S);
 	float fallrat = -(fallspeed / GE_FALL_S) - (clamp(player->GetJumpPenalty(), 0, 50) / 200);
 
 	fallrat = clamp(fallrat, m_flLastFallrat - 10 * framelength, m_flLastFallrat + 10 * framelength);

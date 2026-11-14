@@ -6,6 +6,9 @@
 //===========================================================================//
 #include "cbase.h"
 #include "view_shared.h"
+#ifdef GE_DLL
+#include "ges/ge_splitscreen_client.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -58,6 +61,12 @@ C_FuncReflectiveGlass::~C_FuncReflectiveGlass()
 
 bool C_FuncReflectiveGlass::ShouldDraw()
 {
+#ifdef GE_DLL
+	// Split screen doesn't render mirror reflections (that pass breaks the views),
+	// so leave the glass out: the wall behind it shows instead of a black pane
+	if ( GESS_IsSplitActive() )
+		return false;
+#endif
 	return true;
 }
 

@@ -16,6 +16,9 @@
 #include "view_shared.h"
 #include "tier0/vprof.h"
 #include "materialsystem/imaterialvar.h"
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -497,6 +500,12 @@ void CGlowOverlay::Deactivate()
 void CGlowOverlay::DrawOverlays( bool bCacheFullSceneState )
 {
 	VPROF("CGlowOverlay::DrawOverlays()");
+
+#ifdef GE_DLL
+	// Light glows (env_lightglow, the sun) shone through a dead player's death blood
+	if ( GESS_ShouldHideLightsForCurrentView() )
+		return;
+#endif
 
 	CMatRenderContextPtr pRenderContext( materials );
 

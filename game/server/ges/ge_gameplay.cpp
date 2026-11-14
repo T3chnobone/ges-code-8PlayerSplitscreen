@@ -318,6 +318,11 @@ void CGEBaseGameplayManager::BroadcastRoundEnd( bool showreport )
 		gameeventmanager->FireEvent(pEvent);
 	}
 
+	// A round ended without a report (ge_endround 0, or nothing happened): no
+	// rankings or "round ended" message either
+	if ( !showreport )
+		return;
+
 	// Print it to the chat
 	IGameEvent *event = gameeventmanager->CreateEvent("round_ranks");
 	if (event)
@@ -477,9 +482,12 @@ const char *CGEBaseGameplayManager::GetNextScenario()
 	// Consider bots too.
 	iNumConnections = MAX(iNumConnections, ge_bot_threshold.GetInt());
 
+	// ge_autoteam 0 (or no threshold) means teams are never switched on automatically,
+	// as in StartRound. Before, a threshold of 0 always counted as reached, so every
+	// map loaded with teams on and the game had to restart the round to turn them off.
 	if (ge_teamplay.GetInt() != 1)
 	{
-		if (iNumConnections >= teamthresh)
+		if (teamthresh > 0 && iNumConnections >= teamthresh)
 			ge_teamplay.SetValue(2); // Premptively go into teamplay if we've got enough players for it.
 		else
 			ge_teamplay.SetValue(0);
@@ -754,11 +762,35 @@ void CGEBaseGameplayManager::StartRound()
 	BroadcastRoundStart();
 }
 
+// Anything happened this round: someone scored, died, or a team scored
+static bool GE_RoundHadActivity()
+{
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CGEMPPlayer *pPlayer = ToGEMPPlayer( UTIL_PlayerByIndex( i ) );
+		if ( pPlayer && ( pPlayer->GetRoundScore() != 0 || pPlayer->GetRoundDeaths() != 0 ) )
+			return true;
+	}
+
+	for ( int t = TEAM_MI6; t <= TEAM_JANUS; t++ )
+	{
+		CTeam *pTeam = GetGlobalTeam( t );
+		if ( pTeam && pTeam->GetRoundScore() != 0 )
+			return true;
+	}
+	return false;
+}
+
 void CGEBaseGameplayManager::EndRound( bool showreport /*=true*/ )
 {
 	// Ignore this call if we are not playing a round
 	if ( !IsInRound() )
 		return;
+
+	// Nothing to report for a round where nothing happened (warm-up, a restart
+	// right after the map loaded, nobody playing yet), unless the match is over
+	if ( showreport && !m_bGameOver && !GE_RoundHadActivity() )
+		showreport = false;
 
 	// Call into python to do post round cleanup and score setting
 	GetScenario()->OnRoundEnd();
@@ -838,6 +870,10 @@ bool CGEBaseGameplayManager::ShouldEndMatch()
 {
 	// We are already over!
 	if ( IsGameOver() )
+		return true;
+
+	// Someone reached the kill limit (ge_wincondition 1)
+	if ( IsInRound() && GEMPRules()->HasReachedKillLimit() )
 		return true;
 
 	// We must be able to end our round to end the match

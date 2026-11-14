@@ -40,6 +40,7 @@
 #include "ge_gamerules.h"
 #include "gemp_gamerules.h"
 #include "c_ge_playerresource.h"
+#include "ge_splitscreen_client.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -145,6 +146,15 @@ void CGESpectatorGUI::Update()
 	g_pVGuiLocalize->ConstructString( szEtxraInfo,sizeof( szEtxraInfo ), g_pVGuiLocalize->Find("#Spec_Map" ),1, wMapName );
 
 	SetLabelText("extrainfo", szEtxraInfo );
+}
+
+// Split screen game: each player's view has its own HUD (the full-screen spectator
+// bars, "Waiting to spawn", would cover the other players' views)
+void CGESpectatorGUI::ShowPanel( bool bShow )
+{
+	if ( bShow && GESS_ShouldSuppressGameMenus() )
+		bShow = false;
+	BaseClass::ShowPanel( bShow );
 }
 
 void CGESpectatorGUI::OnThink( void )

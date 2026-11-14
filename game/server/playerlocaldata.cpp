@@ -14,6 +14,10 @@
 #include "playernet_vars.h"
 #include "fogcontroller.h"
 #include "tier0/vprof.h"
+#ifdef GE_DLL
+#include "ges/gemp_player.h"
+#include "ges/ge_splitscreen_server.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -204,6 +208,22 @@ void CPlayerLocalData::UpdateAreaBits( CBasePlayer *pl, unsigned char chAreaPort
 	int i;
 	int area = engine->GetArea( origin );
 	engine->GetAreaBits( area, tempBits, sizeof( tempBits ) );
+
+#ifdef GE_DLL
+	// Split screen guests are drawn by this client too: add the areas they can see,
+	// or the client culls everything outside the host's areas and their views are black
+	for ( int slot = 1; slot <= GES_SS_MAX_GUESTS; slot++ )
+	{
+		CGEMPPlayer *pGuest = GESplitScreenServer()->GetGuest( pl, slot );
+		if ( !pGuest )
+			continue;
+
+		unsigned char guestBits[32];
+		engine->GetAreaBits( engine->GetArea( pGuest->EyePosition() ), guestBits, sizeof( guestBits ) );
+		for ( i = 0; i < (int)sizeof( tempBits ); i++ )
+			tempBits[i] |= guestBits[i];
+	}
+#endif
 	for ( i=0; i < m_chAreaBits.Count(); i++ )
 	{
 		if ( tempBits[i] != m_chAreaBits[ i ] )

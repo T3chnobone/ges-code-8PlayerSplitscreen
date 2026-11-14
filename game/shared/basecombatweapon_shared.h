@@ -509,6 +509,9 @@ public:
 
 	// Returns the aiment render origin + angles
 	virtual int				DrawModel( int flags );
+#ifdef GE_DLL
+	virtual void			DoAnimationEvents( CStudioHdr *pStudio );
+#endif
 	virtual bool			ShouldDraw( void );
 	virtual bool			ShouldDrawPickup( void );
 	virtual void			HandleInput( void ) { return; };

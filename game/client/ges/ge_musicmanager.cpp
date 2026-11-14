@@ -208,6 +208,10 @@ int CGEMusicManager::Run()
 	m_bRun = true;
 
 #ifdef _WIN32
+	// Load FMOD Ex (fmodex.dll, shipped in gesource\bin); without it music is disabled
+	if ( !GE_LoadFMODEx() )
+		return 0;
+
 	// Crate FMOD system
 	FMOD_RESULT result = FMOD::System_Create( &m_pSystem );
 
@@ -217,6 +221,17 @@ int CGEMusicManager::Run()
 	} else {
 		DevMsg( 2, "[FMOD] System successfully created\n" );
 	}
+
+	// This code drives the FMOD Ex 4.x C API
+	unsigned int fmodVersion = 0;
+	m_pSystem->getVersion( &fmodVersion );
+	if ( ( fmodVersion >> 16 ) != 0x0004 ) {
+		Warning( "[FMOD] ERROR: fmodex.dll version %08x is not FMOD Ex 4.x, music is disabled\n", fmodVersion );
+		m_pSystem->release();
+		m_pSystem = NULL;
+		return 0;
+	}
+	DevMsg( 2, "[FMOD] FMOD Ex version %08x\n", fmodVersion );
 
 	// Initialize FMOD system
 	result = m_pSystem->init( 16, FMOD_INIT_NORMAL, 0 );

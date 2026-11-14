@@ -1,0 +1,38 @@
+"GameInfo"
+{
+	game		"GoldenEye: Source (v5.0)"
+	title		""
+	title2		""
+
+	icon 		"resource/steamicon"
+
+	developer	"Team GoldenEye: Source"
+	developer_url	"http://www.geshl2.com"
+
+	manual		"http://wiki.geshl2.com"
+
+	nohimodel 1
+	nocrosshair 1
+	nomodels 1
+
+	type multiplayer_only
+
+	FileSystem
+	{
+		SteamAppId				243750
+		ToolsAppId				211
+
+		SearchPaths
+		{
+			game+mod+mod_write+default_write_path	|gameinfo_path|.
+			gamebin				|gameinfo_path|bin
+			game				|all_source_engine_paths|hl2/hl2_textures.vpk
+			game				|all_source_engine_paths|hl2/hl2_sound_vo_english.vpk
+			game				|all_source_engine_paths|hl2/hl2_sound_misc.vpk
+			game				|all_source_engine_paths|hl2/hl2_misc.vpk
+			platform			|all_source_engine_paths|platform/platform_misc.vpk
+			game				|all_source_engine_paths|hl2
+			platform			|all_source_engine_paths|platform
+		}
+	}
+}

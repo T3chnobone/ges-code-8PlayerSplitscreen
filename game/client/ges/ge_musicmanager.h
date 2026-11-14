@@ -17,7 +17,7 @@
 #include "igamesystem.h"
 
 #ifdef _WIN32
-#include "fmod/fmod.hpp"
+#include "ge_fmodex.h" // FMOD Ex (fmodex.dll), loaded at runtime
 #endif
 
 #define GE_MUSIC_MENU		"_menu"

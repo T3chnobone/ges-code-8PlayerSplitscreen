@@ -1,0 +1,338 @@
+# Local split screen
+
+Up to 8 players can play on one PC. Player 1 chooses how many players share each display (1 to 8)
+on the Split Screen menu's Match page, and every player's view is the same size. With the game
+window spanning two monitors, each monitor gets that many players (8 at most in total).
+
+## How it works
+
+Source SDK 2013 supports one local player per client and one game window, and the engine
+is closed source. This feature is built entirely in the mod code:
+
+- **Player 1** is the normal local player.
+- **Players 2 to 8 are "guests"**. A guest is a fake client that the server creates and that
+  belongs to player 1's client (`game/server/ges/ge_splitscreen_server.*`). Guests play as
+  normal players, not bots.
+- **Guest input** is read from controllers by the client
+  (`game/client/ges/ge_splitscreen_gamepad.*`). It is sent to the server inside player 1's
+  own usercmds, in `CUserCmd::splitguests` (`game/shared/usercmd.*`). Guest movement runs in
+  the same tick as player 1's.
+- **Rendering**: `CViewRender::RenderSplitScreen` (`game/client/view.cpp`) draws one view per
+  player into its viewport. Each player's own body, weapon and hat are hidden in their own
+  view. Guests' viewmodels are sent to the owning client and only drawn in that guest's view.
+- **HUD**: while the screen is split, the normal HUD (which belongs to player 1) is hidden,
+  except chat and kill feed, and so is the full-screen spectator bar. Each view shows its own
+  name, time left, score (and team scores), health and ammo, with fonts sized for the screen.
+  Health and armour only appear for a few seconds when that player is hit, healed, picks up
+  armour or spawns, then fade out, like the single player game (`ges_ss_hud_bars_hit 0` keeps them
+  on screen, `ges_ss_hud_bars_time` sets how long they stay). `CGESplitScreenHud`
+  (`game/client/ges/hud/ge_splitscreen_hud.cpp`) draws a compact HUD and the join menus in
+  each viewport.
+
+This also works on a dedicated server: guests ride on their owner's connection.
+
+## Split Screen menu (main menu)
+
+One main menu entry opens the Split Screen menu (`ges_splitscreen`). Add it to the mod's
+`resource/GameMenu.res`:
+
+```
+"SplitScreen"
+{
+	"label"		"Split Screen"
+	"command"	"engine ges_splitscreen"
+}
+```
+
+The menu has two pages, **Profiles** and **Match**, picked with the tabs at the top (or Y).
+`ges_splitscreen_profiles` and `ges_splitscreen_match` open it on that page.
+
+### Profiles page
+
+Each profile has a name, a character (or random), controller sensitivity (0.1 to 3.0),
+inverted look, and **Invited**. Only invited profiles are offered when a player joins, and a
+"Guest" entry is always available. Profiles are saved to `cfg/ges_splitscreen_profiles.txt`.
+The page also lists connected controllers and which players are ready (the lobby).
+
+### Using the menu with a controller
+
+Every player's controller can drive the menu, not only player 1's:
+
+| Controller | In the menu |
+|---|---|
+| D-pad up / down | Move between settings (a gold outline shows where you are) |
+| D-pad left / right | Change the setting: next / previous choice, slider, number, tick box |
+| A | Press a button, tick a box, or type in a text field |
+| B | Close the menu |
+| Y | Profiles / Match page |
+| START | Join (or leave) the next match |
+| LB / RB | Previous / next profile for that player |
+
+Holding the d-pad repeats, and speeds up after a second and a half (handy for kill limits).
+Other players' controllers can also use the left stick like a d-pad; player 1's sticks still move
+the mouse cursor, and its right trigger still clicks.
+
+### Typing with a controller
+
+Pressing A on a text field (the profile name) opens the game's on-screen keyboard: a grid of
+letters, numbers and symbols with Shift, Space, Delete and Done keys. D-pad moves, A types,
+X deletes, Y adds a space, LB is shift, RB finishes, B cancels. The first letter is a capital.
+The mouse and the real keyboard also work on it.
+
+### Match page (game modes and win conditions)
+
+On the Match page you pick:
+
+- **Map**: any installed map.
+- **Game mode**: the same scenarios as online matches: Deathmatch, The Man with the Golden
+  Gun, License to Kill, You Only Live Twice, Arsenal, Gun Trade, Dr. No Armor, A View to a
+  Kill, The Living Daylights, Capture the Key and Tournament Deathmatch. Custom scenarios
+  found in `python/ges/GamePlay` are listed too.
+- **Weapons**: which weapons are on the map, like the N64 game's weapon options. The list is
+  the same weapon sets online servers use (for example Power Weapons or Proximity Mines),
+  read from `scripts/loadouts/weapon_sets_default.txt` and any `weapon_sets_custom*.txt`, so
+  custom sets show up too. "Random" picks a new set each round. Gun Trade hands out its own
+  weapons, so the list is greyed out for it.
+- **Team game**: MI6 vs Janus. It is greyed out for modes that are always or never team
+  games (for example the Golden Gun is never a team game, Capture the Key always is).
+- **Jumping allowed**: `ge_allowjump` for everyone in the match (guests too). Jump is the right
+  stick click.
+- **Win condition**:
+  - *Timed, highest score*: the mode's normal scoring when the time limit runs out.
+  - *First to N kills*: the match ends as soon as a player (or team) reaches the kill limit.
+    With a time limit, the most kills wins when time runs out. 0 minutes means no time limit.
+  - *Timed, best kill/death ratio*: when time runs out, the best kills divided by deaths
+    wins (no deaths counts as 1). Ties go to the player with more kills.
+- **Time limit** (minutes) and **kills to win**.
+
+Kills of teammates and suicides don't count as kills; suicides do count as deaths. While
+kills or K/D decides the match, each player's split screen HUD shows their kills
+(`Kills 7 / 20`) or ratio (`K/D 1.40 (7/5)`) instead of the score.
+
+Matches start straight into play: teams are set before the map loads, so there's no restart and
+no empty round report. A round that ends with nothing scored shows no report either; the match
+report at the end of a match always shows.
+
+**Start match** saves the settings to `cfg/ges_splitscreen_match.txt` and loads the map with
+`maxplayers 16`. The limits are set again a second after the map loads, because a
+mode's own config file can change them. `ges_splitscreen_match_start` starts a match with the
+saved settings without opening the menu.
+
+These are server settings (`ge_wincondition`, `ge_killlimit`), so they also work on a
+dedicated server. They stay set until changed, so set `ge_wincondition 0` before hosting a
+normal online game in the same session.
+
+## Players per display and the screen layout
+
+**Players per display** (Match page) sets how many players share each display. It only goes up to the number of players who have joined in the Split Screen menu (player 1 plus everyone who pressed START, as listed in the top right), shared across the displays (display 1 first), and shows "N players joined" next to it. It follows players joining and leaving while the menu is open, and player 1's choice comes back when players rejoin. 4 on one display
+gives 4 players, on two displays 8; 5 on one display gives 5. The page shows a diagram of the
+displays and how they will be split. Every view is the same size, in an equal grid per display:
+
+| Players | Grid |
+|---|---|
+| 1 | Whole screen |
+| 2 | Top / bottom halves |
+| 3-4 | 2x2 |
+| 5-6 | 3x2 |
+| 7-8 | 4x2 |
+
+A grid cell nobody plays in (the 4th quarter with 3 players, the 6th cell with 5) shows the
+**scoreboard**: GoldenEye's own one, as when holding TAB online (players by score with their character,
+deaths and ping, MI6 and Janus sections in team games, map, time left and game mode). Any further spare cells show the GoldenEye logo.
+
+## Joining the match (before it starts)
+
+When a match from the Split Screen menu loads, the screen splits into its final layout and the game
+waits: no timers, no music, and nobody can move or fire. One by one, each screen asks for its
+player: **press the right trigger** to take it (screen 1 is player 1's controller). In a team game
+that screen then asks for a team: **left stick left / right** for MI6 or Janus, **right trigger**
+to confirm. Players who are in can change their profile with LB / RB, and B gives a screen back.
+The match (clocks, music, movement) starts when every screen has a player. Player 1 can press START
+to begin with the players who are in so far; the screens nobody took close and the layout is worked
+out again for the players who are playing. The spare cell lists who is in while this happens.
+## Joining
+
+- **In the menus (lobby)**: profiles are chosen here, not in the game. Player 1 is always in; the
+  other players press START to join (START again leaves). Each player then rotates through the
+  invited profiles and Guest with LB / RB (profiles another player is using are skipped). The
+  Split Screen menu's Profiles page lists who is in and with which profile. Everyone joins with
+  their profile when the match starts; nobody gets a picker at the start of the game.
+- **In a game**: a player presses START and joins at once with the next free profile.
+- **While playing**: START opens that player's menu in their own view (the game carries on). It
+  opens on the **leaderboard** (GoldenEye's own scoreboard, with their row highlighted and their health and armour shown); left / right go to the
+  other pages: **Swap team** (team games: A or the right trigger moves them to the other team and
+  respawns them at once), **Change profile** (LB / RB, or A for the list) and **Exit game** (No / Yes
+  with up / down, then A or the right trigger). A player who exits leaves the match and the screen
+  is split again for the others. When player 1 exits, the match ends for everyone, the results
+  (match report) are shown and then everyone goes back to the Split Screen menu. START or B closes
+  the menu. The Back button does nothing in split screen.
+- Guests stay through map changes. They leave when player 1 leaves.
+
+Controllers belong to players in the order they press a button. When the game starts no
+controller is player 1 yet, and the main menu shows "Press any button on a controller to be
+player 1". The first controller to press any button becomes player 1: it drives the menus and
+is player 1's controller in matches. The press that claims player 1 doesn't also click anything.
+The next controllers become players 2 to 8 in the order they press a button. A controller only
+ever drives one player. Mouse and keyboard always work for player 1 too.
+
+If player 1's controller is unplugged, the next controller to press a button takes over (a
+spare one, or one whose player hasn't joined yet). An unplugged guest who was ready in the menus
+is un-readied; one who is playing stays in the game, idle, until a spare controller presses a
+button. `ges_ss_status` shows which controller belongs to which player.
+
+Set `ges_ss_host_pad 0` if player 1 only uses keyboard and mouse; every controller is then a guest.
+
+During a match, a player whose controller is unplugged keeps their place: their view shows
+"Controller disconnected" until a spare controller presses a button and takes it over. Another
+player's controller never takes over player 1 mid-match; that only happens in the menus.
+
+**Keyboard and mouse are off during split screen matches** (`ges_ss_kbm_off 1`): only controllers
+play, player 1 included. Esc, the console key and the menus still use the keyboard and mouse.
+Online and normal games are unchanged.
+
+The first time the Split Screen menu opens it explains this, with a "Don't show this again" tick
+box (`ges_ss_hide_intro`).
+
+**No spectators.** Split screen players never become spectators. Player 1 spawns as soon as the
+map loads with the profile chosen in the lobby (or the first free one) and the auto team. Guests spawn as soon as they join. Team
+changes respawn the player straight away, with no suicide or lost point. `spectate` and
+`jointeam 1` are ignored for them, and GoldenEye's full-screen spectator bars are hidden. A
+mode that eliminates players (You Only Live Twice when out of lives) shows "Out - waiting for
+the next round" in that player's own view.
+
+## Controls
+
+| Controller | Action |
+|---|---|
+| Left stick | Move |
+| Right stick | Look |
+| Right trigger | Fire |
+| Left trigger | Aim mode |
+| RB | Alt fire / zoom |
+| A | Use (doors, buttons) |
+| B / left stick click | Crouch |
+| X | Reload |
+| Y / LB | Next / previous weapon |
+| Right stick click | Jump (when the match allows jumping) |
+| Back | Nothing (the leaderboard is on START) |
+| Start | Join / leaderboard and menu |
+
+**Mouse from player 1's controller**: whenever the mouse cursor is visible (main menu, pause menu,
+team/character select), player 1's controller's sticks move the cursor and its right trigger is the
+left mouse button.
+
+## Second screen (players 5 to 8)
+
+The game has one window, so "another screen" means stretching that window across two
+monitors side by side. On Windows, `ges_ss_span_monitors` does this: it makes the window
+borderless and the size of both monitors. You can also launch with
+`-windowed -noborder -w <total width> -h <height>`.
+
+With `ges_ss_dualscreen 2` (the default), a window wider than 2.6:1 is treated as two
+screens: the first "players per display" players go on the left half and the rest on the right.
+
+## Console variables
+
+| Cvar | Default | Meaning |
+|---|---|---|
+| `ges_ss_enable` | 1 | Allow local players to join |
+| `ges_ss_host_pad` | 1 | The first controller to press a button is player 1 (0: player 1 uses keyboard/mouse only) |
+| `ges_ss_dualscreen` | 2 | 0 never, 1 always, 2 auto-detect two monitors |
+| `ges_ss_look_yaw` / `ges_ss_look_pitch` | 200 / 140 | Look speed in degrees per second, before profile sensitivity |
+| `ges_ss_look_aim_scale` | 0.5 | Look speed multiplier in aim mode |
+| `ges_ss_padmouse` / `ges_ss_padmouse_speed` | 1 / 1100 | Mouse cursor from player 1's controller |
+| `ges_ss_pad_deadzone` | 0.22 | Stick dead zone |
+| `ges_ss_pad_backend` | auto | `sdl` or `xinput` |
+| `ge_wincondition` | 0 | 0 score, 1 kills, 2 kill/death ratio |
+| `ge_killlimit` | 0 | Kills that end the match with `ge_wincondition 1` (0 = none) |
+| `sv_ges_splitscreen` | 1 | Server allows split screen guests |
+| `sv_ges_splitscreen_maxguests` | 7 | Guests per client |
+
+`ges_ss_status` prints the players, controllers and layout.
+
+## Requirements and limitations
+
+- **Controllers**: the engine only exposes one joystick, so the mod reads controllers itself.
+  SDL2 is loaded at runtime for up to 8 controllers. Linux and macOS ship it with the engine.
+  On Windows, put `SDL2.dll` in the game or `gesource/bin` folder; without it, XInput is
+  used, which supports 4 controllers.
+- **Server slots**: guests use player slots, so `maxplayers` must leave room for them.
+- **Sound** is heard from player 1's position (the engine has one listener).
+- **Screen effects** that the engine applies to the whole screen (fades, flashes) are not per
+  viewport. GE's death blood is (it's each player's second viewmodel): it runs down the dying
+  player's own view, drawn in front of everything and filling wide views. A faint thin line can
+  show along the middle of the blood over very bright backgrounds (the edge of the blood texture).
+- **Guests see their own movement through normal entity interpolation** (`cl_interp`, about
+  100 ms). Looking around is instant because view angles are kept on the client.
+- **Performance**: each extra player renders the whole scene again.
+- **Areaportals**: entities in areas only a guest can see rely on the engine including areas
+  added with `AddOriginToPVS` when it checks what to send. Crates and stairs near guests now show
+  in their views (distance fades are worked out per view).
+- **Map changes**: the engine drops fake clients (the guests) when the map changes, for example
+  the next map after a match. Each guest's join request creates them again on the new map.
+- **Glass and monitor materials**: GoldenEye's Shader Editor (`bin/shadereditor.dll`, 2016) doesn't
+  load with the current engine (it imports a tier0 function the 2025 SDK removed), so its
+  `editor_shader` materials (glass, monitors, some walls) have no shaders. Drawing one crashed the
+  game inside `game_shader_generic_procshader.dll` (Stack, at the start of a match). The client now
+  gives those materials standard shaders (glass see-through): no crash, but no animated monitors or
+  reflections. A Shader Editor rebuilt for the current SDK would bring them back.
+
+## Changes (13 November)
+
+- **HUD**: the red/blue bars were replaced by GoldenEye's own health (left) and armour (right) dials
+  around each player's crosshair, sized for their view, shown on a hit and fading like the normal game.
+- **Death**: the blood runs down each dying player's whole view (it was frozen as a strip at the
+  top, also in normal games), in front of everything, and light beams and glows don't shine through.
+  The death music plays for guests too.
+- **Guns**: guests' first-person guns keep animating when they stand still, and their bob uses a
+  smoothed speed (it jittered). Player 1's own weapon no longer fires stray muzzle flashes when
+  switching. Tracers and first-person muzzle flashes show from the shooter's own gun: first person
+  in their view, the gun in their hand in everyone else's.
+- **Aim**: the aim-mode crosshair only shows in the aiming player's view.
+- **Controls**: player 1's right stick turns at the same speed as the guests' (it was applied once
+  per server tick). Only player 1's controller drives the Split Screen menu.
+- **Menu**: the "Local players" text on the Profiles page was replaced by a list in the top right of
+  the screen (gamepad with the player number, profile, character, state), shown on both pages.
+- **Scoreboard and match report**: guests are no longer shown as bots.
+- **Server**: grenade, rocket and mine explosions use GoldenEye's `ge_explosion` (`env_explosion`
+  isn't in this build and crashed the server). Testing commands: `ges_ss_debug_kill <player> [damage]`,
+  `ges_ss_debug_switch <player>`, client `ges_ss_debug_joined <n>`.
+
+## Changes (14 November)
+
+- **Guests' guns stay put**: a guest's first person gun is now placed with player 1's, before
+  entities simulate (`CViewRender::SetUpSplitScreenViews`). It used to be placed only when the
+  guest's view was drawn; anything that read the gun's attachments first that frame (firing,
+  muzzle flashes, particles) set up its bones at its old position, often the map origin, so the
+  gun jumped, showed at the edge of the view turned the wrong way, or vanished. Each guest's
+  camera is worked out once per frame, so the gun and the view always agree.
+- **Guests' guns keep their animation when firing**: the client played other players' third
+  person firing gestures on their weapon, which for a guest reached the guest's first person
+  gun: it got the wrong sequence (often its draw, so it dropped out of sight) or another
+  weapon's model, every shot. Our guests are skipped there (`hl2mp_playeranimstate.cpp`).
+- **Muzzle flashes**: effects created while firing use this frame's camera for the guest, and
+  the flash's light is moved back onto the guest's gun model.
+- Testing: `ges_ss_debug_vm <player>` logs where that player's gun is relative to their view
+  every frame (`before` / `placed` / `bones` / `draw`, and `STALE` if drawn with bones set up
+  elsewhere), `ges_ss_debug_look <player> <yaw/s> <pitch/s> [seconds]` turns a guest without a
+  controller, `ges_ss_vm_early 0` goes back to the old placement for comparison, and the server's
+  `ges_ss_debug_vmanim <entity index>` logs the gun animations it sends.
+
+## Changes (14 November, afternoon)
+
+- **Scoreboard**: the spare cell and the leaderboard page of the START menu show GoldenEye's own
+  scoreboard (`CGEScoreBoard`): its green background, Adventure Subtitles and Tahoma fonts, colours,
+  "Players (n)" / team sections, Identity, Score, Deaths and Ping columns, dead and developer icons,
+  server name, map, time left and game mode, laid out from `resource/ui/ScoreBoard.res` and scaled to
+  fit the view. The player's own row is highlighted on their START menu, and their health and
+  armour dials stay up while it's open (as holding TAB does), fading out after. The vgui panel
+  itself can't be used: it's one full-screen panel and its fonts don't scale. Suicides and the
+  kill goal aren't on it any more (the online scoreboard doesn't show them).
+- **Ammo**: each view shows GoldenEye's own ammo counter (`CGEHudAmmo`): the clip in AmmoNumbers, the
+  ammo type's icon, then the ammo left, in the bottom right, sized for the view. Hidden for weapons
+  without ammo; the Moonraker shows only its icon.
+- **Death view**: a dead player keeps looking through their body's eyes until they respawn. Player
+  1 no longer switches to the third person camera when the body falls against something, and a
+  guest whose body hasn't arrived yet keeps their view instead of dropping to the floor.
+- **Jumping**: a "Jumping allowed" option on the Match page (`ge_allowjump`, saved as `jump`). Like
+  the win condition, it stays set after the match.

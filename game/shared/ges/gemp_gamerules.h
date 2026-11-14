@@ -203,6 +203,9 @@ public:
 
 	virtual void HandleTimeLimitChange( void );
 
+	// Match win conditions (ge_wincondition / ge_killlimit)
+	bool HasReachedKillLimit();
+
 	virtual void SetupChangeLevel( const char *next_level = NULL );
 	virtual void GoToIntermission();
 
@@ -298,5 +301,16 @@ inline CGEMPRules* GEMPRules()
 {
 	return (CGEMPRules*) g_pGameRules;
 }
+
+// How a match is won (ge_wincondition)
+enum GEWinCondition_t
+{
+	GE_WIN_SCORE = 0,	// Timed, the scenario's score decides (default)
+	GE_WIN_KILLS,		// First player/team to ge_killlimit kills, or most kills when time runs out
+	GE_WIN_KDRATIO,		// Timed, best kill/death ratio wins
+};
+
+// Kill/death ratio with deaths floored at 1 so no deaths doesn't divide by zero
+inline float GE_KDRatio( int kills, int deaths ) { return (float) kills / (float)( deaths > 1 ? deaths : 1 ); }
 
 #endif //MC_GEMP_GAMERULES_H

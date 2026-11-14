@@ -25,6 +25,7 @@
 #include "ge_utils.h"
 
 #include "ge_teammenu.h"
+#include "ge_splitscreen_client.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -123,8 +124,9 @@ void CGETeamMenu::ShowPanel(bool bShow)
 	if ( BaseClass::IsVisible() == bShow )
 		return;
 
-	// Never show the team menu in SourceTV
-	if ( engine->IsHLTV() )
+	// Never show the team menu in SourceTV, or in a split screen game (players
+	// pick their profile and team in their own viewport instead)
+	if ( engine->IsHLTV() || ( bShow && GESS_ShouldSuppressGameMenus() ) )
 	{
 		SetVisible( false );
 		return;

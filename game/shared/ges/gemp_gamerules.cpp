@@ -30,6 +30,7 @@
 	#include "voice_gamemgr.h"
 
 	#include "gemp_player.h"
+	#include "ge_splitscreen_server.h"
 	#include "ge_weapon.h"
 	#include "grenade_gebase.h"
 	#include "team.h"
@@ -108,6 +109,8 @@ ConVar ge_roundtime	( "ge_roundtime", "0", FCVAR_REPLICATED, "Round time in seco
 ConVar ge_rounddelay( "ge_rounddelay", "10", FCVAR_GAMEDLL, "Delay, in seconds, between rounds.", true, 2, true, 40 );
 ConVar ge_roundcount( "ge_roundcount", "0", FCVAR_REPLICATED, "Number of rounds that should be held in the given match time (calculates ge_roundtime), use 0 to disable", GERoundCount_Callback );
 ConVar ge_teamplay	( "ge_teamplay", "0", FCVAR_REPLICATED, "Turns on team play if the current scenario supports it.", GETeamplay_Callback );
+ConVar ge_wincondition( "ge_wincondition", "0", FCVAR_REPLICATED|FCVAR_NOTIFY, "How the match is won: 0 = score (scenario rules, timed), 1 = kills (first to ge_killlimit, or most kills at the time limit), 2 = best kill/death ratio when time runs out.", true, 0, true, 2 );
+ConVar ge_killlimit( "ge_killlimit", "0", FCVAR_REPLICATED|FCVAR_NOTIFY, "Kills that end the match when ge_wincondition is 1 (per player, or per team in teamplay). 0 = no limit.", true, 0, true, 999 );
 ConVar ge_velocity	( "ge_velocity", "1.0", FCVAR_REPLICATED|FCVAR_NOTIFY, "Player movement velocity multiplier, applies in multiples of 0.25 [0.7 to 2.0]", true, 0.7, true, 2.0, GEVelocity_Callback );
 ConVar ge_infiniteammo( "ge_infiniteammo", "0", FCVAR_REPLICATED | FCVAR_NOTIFY, "Players never run out of ammo!", GEInfAmmo_Callback );
 ConVar ge_nextnextmap( "ge_nextnextmap", "", FCVAR_GAMEDLL, "Map to switch to immediately upon loading next map");
@@ -391,9 +394,37 @@ int g_iLastPlayerCount = 0;
 // -----------------------
 // CGEMPRules Implementation
 //
+#ifndef CLIENT_DLL
+// Split screen: the match waits while the local players take their screens one by
+// one (set by the split screen client on our own server). Timers are held and
+// nobody can move or fire; when it's cleared the clocks start from the beginning.
+ConVar ges_ss_pregame( "ges_ss_pregame", "0", FCVAR_GAMEDLL | FCVAR_DONTRECORD, "Split screen: 1 holds the match (timers stopped, players frozen) until all the local players have joined." );
+static bool s_bSSPregameHeld = false;
+static bool s_bSSMatchTimerWasRunning = false;
+static bool s_bSSRoundTimerWasRunning = false;
+
+static void GESS_FreezePlayers( bool bFreeze )
+{
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBasePlayer *pPlayer = UTIL_PlayerByIndex( i );
+		if ( !pPlayer )
+			continue;
+		if ( bFreeze )
+			pPlayer->AddFlag( FL_FROZEN );
+		else
+			pPlayer->RemoveFlag( FL_FROZEN );
+	}
+}
+#endif
+
 CGEMPRules::CGEMPRules()
 {
 #ifndef CLIENT_DLL
+	// A new map never starts held (the split screen client holds it again if needed)
+	ges_ss_pregame.SetValue( 0 );
+	s_bSSPregameHeld = false;
+
 	// Create the team managers
 	for ( int i = 0; i < ARRAYSIZE( sTeamNames ); i++ )
 	{
@@ -829,7 +860,32 @@ int CGEMPRules::GetRoundTeamWinner()
 	if ( m_iTeamWinner >= FIRST_GAME_TEAM && m_iTeamWinner < MAX_GE_TEAMS  && !game_over )
 		return m_iTeamWinner;
 
-	if ( game_over )
+	if ( game_over && ge_wincondition.GetInt() != GE_WIN_SCORE )
+	{
+		// Kills or kill/death ratio, summed over each team's players
+		int kills[MAX_GE_TEAMS] = { 0 }, deaths[MAX_GE_TEAMS] = { 0 };
+		FOR_EACH_MPPLAYER( pPlayer )
+			int team = pPlayer->GetTeamNumber();
+			if ( team >= FIRST_GAME_TEAM && team < MAX_GE_TEAMS )
+			{
+				kills[team] += pPlayer->GetMatchKills();
+				deaths[team] += pPlayer->GetMatchKDDeaths();
+			}
+		END_OF_PLAYER_LOOP()
+
+		float mi6 = kills[TEAM_MI6], janus = kills[TEAM_JANUS];
+		if ( ge_wincondition.GetInt() == GE_WIN_KDRATIO )
+		{
+			mi6 = GE_KDRatio( kills[TEAM_MI6], deaths[TEAM_MI6] );
+			janus = GE_KDRatio( kills[TEAM_JANUS], deaths[TEAM_JANUS] );
+		}
+
+		if ( mi6 > janus )
+			winnerid = TEAM_MI6;
+		else if ( janus > mi6 )
+			winnerid = TEAM_JANUS;
+	}
+	else if ( game_over )
 	{
 		if ( g_Teams[TEAM_MI6]->GetMatchScore() > g_Teams[TEAM_JANUS]->GetMatchScore() )
 			winnerid = TEAM_MI6;
@@ -856,6 +912,36 @@ int CGEMPRules::GetRoundWinner()
 
 	if ( UTIL_PlayerByIndex( m_iPlayerWinner ) && !game_over )
 		return m_iPlayerWinner;
+
+	// Kills or kill/death ratio decide the match winner
+	if ( game_over && ge_wincondition.GetInt() != GE_WIN_SCORE )
+	{
+		const bool bKD = ge_wincondition.GetInt() == GE_WIN_KDRATIO;
+		float best = -1.0f;
+		int bestKills = -1;
+
+		FOR_EACH_MPPLAYER( pPlayer )
+			if ( pPlayer->GetTeamNumber() == TEAM_SPECTATOR )
+				continue;
+
+			const int kills = pPlayer->GetMatchKills();
+			const float value = bKD ? GE_KDRatio( kills, pPlayer->GetMatchKDDeaths() ) : (float) kills;
+
+			// Ties on ratio go to whoever got more kills
+			if ( value > best || ( value == best && kills > bestKills ) )
+			{
+				best = value;
+				bestKills = kills;
+				winnerid = pPlayer->entindex();
+			}
+			else if ( value == best && kills == bestKills )
+			{
+				winnerid = 0;	// tie
+			}
+		END_OF_PLAYER_LOOP()
+
+		return winnerid;
+	}
 
 	FOR_EACH_MPPLAYER( pPlayer )
 
@@ -1050,6 +1136,33 @@ void CGEMPRules::Think()
 {
 	BaseClass::Think();
 
+#ifndef CLIENT_DLL
+	if ( ges_ss_pregame.GetBool() )
+	{
+		if ( !s_bSSPregameHeld )
+		{
+			s_bSSPregameHeld = true;
+			s_bSSMatchTimerWasRunning = IsMatchTimeRunning();
+			s_bSSRoundTimerWasRunning = IsRoundTimeRunning();
+		}
+		SetMatchTimerPaused( true );
+		SetRoundTimerPaused( true );
+		GESS_FreezePlayers( true );
+	}
+	else if ( s_bSSPregameHeld )
+	{
+		// Everyone is in: the match starts now, with full clocks
+		s_bSSPregameHeld = false;
+		GESS_FreezePlayers( false );
+		SetMatchTimerPaused( false );
+		SetRoundTimerPaused( false );
+		if ( s_bSSMatchTimerWasRunning && m_hMatchTimer.Get() )
+			m_hMatchTimer->Start( m_hMatchTimer->GetLength() );
+		if ( s_bSSRoundTimerWasRunning && m_hRoundTimer.Get() )
+			m_hRoundTimer->Start( m_hRoundTimer->GetLength() );
+	}
+#endif
+
 	// Let our gameplay think
 	Assert( GEGameplay() != NULL );
 	GEGameplay()->OnThink();
@@ -1128,6 +1241,9 @@ void CGEMPRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &info
 	}
 
 
+	// Killed by themselves, the world or a fall (before the kill is credited to someone else)
+	const bool bSuicide = !pKiller || !pKiller->IsPlayer() || pKiller == pVictim;
+
 	// Try to give credit for suicides to someone.
 	if ((!pKiller || !pKiller->IsPlayer() || pKiller == pVictim) && pLastAttacker)
 	{
@@ -1139,6 +1255,19 @@ void CGEMPRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &info
 
 	BaseClass::PlayerKilled( pVictim, modinfo );
 	GetScenario()->OnPlayerKilled( ToGEPlayer(pVictim), ToGEPlayer(modinfo.GetAttacker()), weap );
+
+	// Count real kills for the kills / kill-death ratio win conditions (no suicides or team kills)
+	CGEMPPlayer *pVictimPlayer = ToGEMPPlayer( pVictim );
+	if ( pVictimPlayer )
+	{
+		pVictimPlayer->AddMatchKDDeath();
+		if ( bSuicide )
+			pVictimPlayer->AddMatchSuicide();
+	}
+
+	CGEMPPlayer *pKillerPlayer = ToGEMPPlayer( modinfo.GetAttacker() );
+	if ( pKillerPlayer && pKillerPlayer != pVictim && pKillerPlayer->IsPlayer() && !( IsTeamplay() && pKillerPlayer->InSameTeam( pVictim ) ) )
+		pKillerPlayer->AddMatchKill();
 }
 
 
@@ -1174,6 +1303,9 @@ void CGEMPRules::ClientDisconnected( edict_t *pEntity )
 	CGEMPPlayer *player = (CGEMPPlayer*) CBaseEntity::Instance( pEntity );
 	if ( player )
 	{
+		// Take any split screen guests with this player (or forget this guest)
+		GESplitScreenServer()->OnClientDisconnected( player );
+
 		// If a player has this player as their last attacker, nullify it to prevent invalid pointer.
 		FOR_EACH_PLAYER(pPlayer)
 			if (pPlayer->GetLastAttacker() == player)
@@ -1371,6 +1503,35 @@ void CGEMPRules::GoToIntermission()
 {
 	// We should never get here since we are not using this function anymore
 	Assert( 0 );
+}
+
+bool CGEMPRules::HasReachedKillLimit()
+{
+	if ( ge_wincondition.GetInt() != GE_WIN_KILLS || ge_killlimit.GetInt() <= 0 )
+		return false;
+
+	const int limit = ge_killlimit.GetInt();
+	int teamKills[MAX_GE_TEAMS] = { 0 };
+
+	FOR_EACH_MPPLAYER( pPlayer )
+		if ( !IsTeamplay() && pPlayer->GetMatchKills() >= limit )
+			return true;
+
+		int team = pPlayer->GetTeamNumber();
+		if ( team >= 0 && team < MAX_GE_TEAMS )
+			teamKills[team] += pPlayer->GetMatchKills();
+	END_OF_PLAYER_LOOP()
+
+	if ( IsTeamplay() )
+	{
+		for ( int i = FIRST_GAME_TEAM; i < MAX_GE_TEAMS; i++ )
+		{
+			if ( teamKills[i] >= limit )
+				return true;
+		}
+	}
+
+	return false;
 }
 
 void CGEMPRules::ResetPlayerScores( bool resetmatch /* = false */ )

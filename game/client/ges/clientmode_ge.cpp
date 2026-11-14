@@ -47,6 +47,8 @@
 
 // An internal MP3 player for our levels
 #include "ge_panelhelper.h"
+#include "ge_splitscreen_client.h"
+#include <vgui/ISurface.h>
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -340,6 +342,15 @@ int	ClientModeGENormal::KeyInput( int down, ButtonCode_t keynum, const char *psz
 {
 	if ( engine->Con_IsVisible() )
 		return 1;
+
+	// Split screen match: keys and mouse buttons don't play, only controllers do.
+	// Esc and the console key still work, and menus (cursor showing) get input as
+	// usual. Releases go through so nothing stays held down.
+	if ( down && GESplitScreenClient()->IsControllerOnly() && !vgui::surface()->IsCursorVisible() && keynum != KEY_ESCAPE &&
+		!( pszCurrentBinding && ( !Q_stricmp( pszCurrentBinding, "toggleconsole" ) || !Q_stricmp( pszCurrentBinding, "cancelselect" ) ) ) )
+	{
+		return 0;
+	}
 	
 	// Should we start typing a message?
 	if ( pszCurrentBinding &&

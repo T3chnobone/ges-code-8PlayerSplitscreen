@@ -22,6 +22,7 @@ IMPLEMENT_SERVERCLASS_ST(CGEPlayerResource, DT_GEPlayerResource)
 	SendPropArray3( SENDINFO_ARRAY3(m_iDevStatus), SendPropInt( SENDINFO_ARRAY(m_iDevStatus), 8 ) ),
 	SendPropArray3( SENDINFO_ARRAY3(m_iCampingPercent), SendPropInt( SENDINFO_ARRAY(m_iCampingPercent), 8, SPROP_CHANGES_OFTEN ) ),
 	SendPropArray3( SENDINFO_ARRAY3(m_iFrags), SendPropInt( SENDINFO_ARRAY(m_iFrags) ) ),
+	SendPropArray3( SENDINFO_ARRAY3(m_iSuicides), SendPropInt( SENDINFO_ARRAY(m_iSuicides), 12, SPROP_UNSIGNED ) ),
 	SendPropArray3( SENDINFO_ARRAY3(m_iScoreBoardColor), SendPropInt( SENDINFO_ARRAY(m_iScoreBoardColor), 4 ) ),
 	SendPropArray3( SENDINFO_ARRAY3(m_bIsActive), SendPropBool( SENDINFO_ARRAY(m_bIsActive) ) ),
 END_SEND_TABLE()
@@ -42,6 +43,7 @@ void CGEPlayerResource::Spawn( void )
 		m_iDevStatus.Set( i, 0 );
 		m_iCampingPercent.Set( i, 0 );
 		m_iFrags.Set( i, 0 );
+		m_iSuicides.Set( i, 0 );
 		m_iScoreBoardColor.Set( i, SB_COLOR_NORMAL );
 	}
 
@@ -76,6 +78,7 @@ void CGEPlayerResource::UpdatePlayerData( void )
 			m_iDevStatus.Set( i, pPlayer->GetDevStatus() );
 			m_iCampingPercent.Set( i, pPlayer->GetCampingPercent() );
 			m_iFrags.Set( i, pPlayer->FragCount() );
+			m_iSuicides.Set( i, pPlayer->GetMatchSuicides() );
 			m_iScoreBoardColor.Set( i, pPlayer->GetScoreBoardColor() );
 			m_bIsActive.Set( i, pPlayer->IsActive() );
 

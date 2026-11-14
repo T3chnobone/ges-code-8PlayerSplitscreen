@@ -15,6 +15,9 @@
 	#include "enginesprite.h"
 	#include "iclientmode.h"
 	#include "c_baseviewmodel.h"
+#ifdef GE_DLL
+	#include "ge_splitscreen_client.h"
+#endif
 #	ifdef PORTAL
 		#include "c_prop_portal.h"
 #	endif //ifdef PORTAL
@@ -753,6 +756,12 @@ int CSprite::DrawModel( int flags )
 	//See if we should draw
 	if ( !IsVisible() || ( m_bReadyToDraw == false ) )
 		return 0;
+
+#ifdef GE_DLL
+	// Glows shone through a dead player's death blood
+	if ( GESS_ShouldHideLightsForCurrentView() )
+		return 0;
+#endif
 
 #ifdef PORTAL
 	if ( ( !g_pPortalRender->IsRenderingPortal() && !m_bDrawInMainRender ) || 

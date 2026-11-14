@@ -57,6 +57,10 @@
 // NVNT haptics system interface
 #include "haptics/ihaptics.h"
 
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -1958,6 +1962,13 @@ bool C_BasePlayer::ShouldDrawThisPlayer()
 	{
 		return true;
 	}
+#ifdef GE_DLL
+	// Split screen: other local players can see us; our own viewport hides us in DrawModel
+	if ( GESS_IsSplitActive() )
+	{
+		return true;
+	}
+#endif
 	if ( !UseVR() && cl_first_person_uses_world_model.GetBool() )
 	{
 		return true;
@@ -2892,6 +2903,13 @@ void C_BasePlayer::BuildFirstPersonMeathookTransformations( CStudioHdr *hdr, Vec
 	// Handle meathook mode. If we aren't rendering, just use last frame's transforms
 	if ( !InFirstPersonView() )
 		return;
+
+#ifdef GE_DLL
+	// Split screen: other players see us normally (with a head, standing on the
+	// floor), and our own viewport doesn't draw our body at all
+	if ( GESS_IsSplitActive() )
+		return;
+#endif
 
 	// If we're in third-person view, don't do anything special.
 	// If we're in first-person view rendering the main view and using the viewmodel, we shouldn't have even got here!

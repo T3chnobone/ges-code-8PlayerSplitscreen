@@ -575,7 +575,7 @@ CServerGameDLL g_ServerGameDLL;
 EXPOSE_SINGLE_INTERFACE_GLOBALVAR(CServerGameDLL, IServerGameDLL, INTERFACEVERSION_SERVERGAMEDLL, g_ServerGameDLL);
 
 // When bumping the version to this interface, check that our assumption is still valid and expose the older version in the same way
-COMPILE_TIME_ASSERT( INTERFACEVERSION_SERVERGAMEDLL_INT == 10 );
+COMPILE_TIME_ASSERT( INTERFACEVERSION_SERVERGAMEDLL_INT == 12 );
 
 bool CServerGameDLL::DLLInit( CreateInterfaceFn appSystemFactory, 
 		CreateInterfaceFn physicsFactory, CreateInterfaceFn fileSystemFactory, 
@@ -2012,6 +2012,14 @@ bool CServerGameDLL::IsManualMapChangeOkay( const char **pszReason )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: The engine asks for workshop maps (listmaps). GE:S has none.
+//-----------------------------------------------------------------------------
+bool CServerGameDLL::GetWorkshopMap( uint32 uIndex, WorkshopMapDesc_t *pDesc )
+{
+	return false;
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Called during a transition, to build a map adjacency list
 //-----------------------------------------------------------------------------
 void CServerGameDLL::BuildAdjacentMapList( void )
@@ -2673,6 +2681,7 @@ void CServerGameEnts::CheckTransmit( CCheckTransmitInfo *pInfo, const unsigned s
 CServerGameClients g_ServerGameClients;
 // INTERFACEVERSION_SERVERGAMECLIENTS_VERSION_3 is compatible with the latest since we're only adding things to the end, so expose that as well.
 EXPOSE_SINGLE_INTERFACE_GLOBALVAR(CServerGameClients, IServerGameClients003, INTERFACEVERSION_SERVERGAMECLIENTS_VERSION_3, g_ServerGameClients );
+EXPOSE_SINGLE_INTERFACE_GLOBALVAR(CServerGameClients, IServerGameClients004, INTERFACEVERSION_SERVERGAMECLIENTS_VERSION_4, g_ServerGameClients );
 EXPOSE_SINGLE_INTERFACE_GLOBALVAR(CServerGameClients, IServerGameClients, INTERFACEVERSION_SERVERGAMECLIENTS, g_ServerGameClients );
 
 
@@ -2751,6 +2760,13 @@ void CServerGameClients::ClientSpawned( edict_t *pPlayer )
 	{
 		g_pGameRules->ClientSpawned( pPlayer );
 	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Called by the engine when a player transmits voice
+//-----------------------------------------------------------------------------
+void CServerGameClients::ClientVoice( edict_t *pPlayer )
+{
 }
 
 #ifndef GE_DLL

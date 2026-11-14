@@ -1,5 +1,6 @@
 MACRO(ADD_MSVC_PRECOMPILED_HEADER PrecompiledHeader PrecompiledSource SourcesVar)
-  IF(MSVC)
+  # Off by default: game/server and game/client have no stdafx.h, so /Yu"stdafx.h" cannot work.
+  IF(MSVC AND GES_MSVC_PCH)
     GET_FILENAME_COMPONENT(PrecompiledBasename ${PrecompiledHeader} NAME_WE)
     SET(PrecompiledBinary "${CMAKE_CURRENT_BINARY_DIR}/${PrecompiledBasename}.pch")
     SET(Sources ${${SourcesVar}})

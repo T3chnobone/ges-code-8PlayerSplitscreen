@@ -31,8 +31,27 @@ if(CMAKE_HOST_UNIX)
 #    -Wno-sign-compare -Wno-reorder -Wno-invalid-offsetof -Wno-float-equal -Werror=return-type -Wno-attributes
 #    -fdiagnostics-show-option -Wformat -Wformat-security)
 else()
-  add_definitions(-DWIN32 -D_WIN32 -D_WINDOWS -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -D_DLL_EXT=.dll)
+  # Windows (MSVC, 32-bit). Settings follow vpc_scripts/source_dll_win32_release.vpc.
+  add_definitions(-DWIN32 -D_WIN32 -D_WINDOWS -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -D_DLL_EXT=.dll
+    -DCOMPILER_MSVC -DCOMPILER_MSVC32 -DNDEBUG -D_ALLOW_RUNTIME_LIBRARY_MISMATCH -D_ALLOW_ITERATOR_DEBUG_LEVEL_MISMATCH
+    -D_ALLOW_MSC_VER_MISMATCH -DNO_WARN_MBCS_MFC_DEPRECATION)
+  # Static CRT (/MT) like the VPC build
+  foreach(flag_var CMAKE_C_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELEASE CMAKE_C_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_RELWITHDEBINFO)
+    string(REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
+  endforeach()
+  add_compile_options(/MP /W0 /fp:fast /GR /Zc:forScope /Zm200 /Zc:threadSafeInit- /EHsc /Oy- /Z7 /permissive)
+  add_link_options(/SAFESEH:NO /DEBUG /OPT:REF /OPT:ICF
+    /NODEFAULTLIB:libc /NODEFAULTLIB:libcd /NODEFAULTLIB:libcmtd /NODEFAULTLIB:libcpmtd)
 endif()
+
+if(WIN32)
+  # Prebuilt dependencies: Boost headers + Boost.Python sources, and Python matching the game's python34.dll
+  set(GES_BOOST_ROOT "" CACHE PATH "Boost source tree (headers and libs/python/src)")
+  set(GES_PYTHON_ROOT "" CACHE PATH "Python 3.4 (32-bit) install with include/ and libs/")
+  include_directories("${GES_BOOST_ROOT}" "${GES_PYTHON_ROOT}/include" "${CMAKE_SOURCE_DIR}/cmake/msvc_compat")
+  link_directories("${GES_PYTHON_ROOT}/libs")
+  add_custom_target(python)
+else()
 
 # Boost package defines
 set(Boost_USE_STATIC_LIBS ON)
@@ -61,6 +80,7 @@ ExternalProject_Add(python
 
 include_directories("${CMAKE_BINARY_DIR}/python/include/python3.5/")
 link_directories("${CMAKE_BINARY_DIR}/python/lib/")
+endif()
 
 # Add in the projects
 add_subdirectory("thirdparty/boost-python")

@@ -63,6 +63,24 @@ public:
 	// Observer calcs overrides for bots
 	virtual Vector GetChaseCamViewOffset( CBaseEntity *target );
 
+	// Split screen guest info (see ge_splitscreen_shared.h)
+	bool IsSplitGuest() const				{ return m_iSplitOwner > 0; }
+	int  GetSplitOwnerIndex() const			{ return m_iSplitOwner; }
+	int  GetSplitSlot() const				{ return m_iSplitSlot; }
+	int  GetSplitAngleReset() const			{ return m_nSplitAngleReset; }
+	const QAngle &GetSplitResetAngles() const { return m_angSplitReset; }
+	int  GetSplitClip() const				{ return m_iSplitClip; }
+
+	// Our split screen guests' own sounds play at the listener (player 1), since
+	// there is only one listener and the guest may be far away from it
+	virtual bool GetSoundSpatialization( SpatializationInfo_t& info );
+	int  GetSplitAmmo() const				{ return m_iSplitAmmo; }
+
+	// Match kills and deaths for the kills / K:D win conditions
+	int  GetMatchKills() const				{ return m_iMatchKills; }
+	int  GetMatchKDDeaths() const			{ return m_iNetMatchDeaths; }
+	int  GetMatchSuicides() const			{ return m_iMatchSuicides; }
+
 private:
 	float m_flStartJumpZ;
 	float m_flNextJumpTime;
@@ -74,6 +92,16 @@ private:
 	int m_iSteamIDHash; // We need this to decode our save files.
 
 	int m_iWeaponSkinInUse[WEAPON_RANDOM];
+
+	int m_iSplitOwner;
+	int m_iSplitSlot;
+	int m_nSplitAngleReset;
+	QAngle m_angSplitReset;
+	int m_iSplitClip;
+	int m_iSplitAmmo;
+	int m_iMatchKills;
+	int m_iNetMatchDeaths;
+	int m_iMatchSuicides;
 };
 
 C_GEMPPlayer *ToGEMPPlayer( CBaseEntity *pEntity );

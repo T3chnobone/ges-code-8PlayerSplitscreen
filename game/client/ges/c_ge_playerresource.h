@@ -33,6 +33,7 @@ public:
 	virtual const int GetCampingPercent( int index );
 	virtual const int GetScoreBoardColor( int index );
 	virtual int GetFrags( int index );
+	int GetSuicides( int index )	{ return ( index >= 0 && index <= MAX_PLAYERS ) ? m_iSuicides[index] : 0; }
 	virtual const bool IsActive( int index );
 
 protected:
@@ -41,6 +42,7 @@ protected:
 	int		m_iDevStatus		[MAX_PLAYERS+1];
 	int		m_iCampingPercent	[MAX_PLAYERS+1];
 	int		m_iFrags			[MAX_PLAYERS+1];
+	int		m_iSuicides			[MAX_PLAYERS+1];
 	int		m_iScoreBoardColor	[MAX_PLAYERS+1];
 	bool	m_bIsActive			[MAX_PLAYERS+1];
 };

@@ -16,6 +16,127 @@
 // TF2 specific, need enough space for OBJ_LAST items from tf_shareddefs.h
 #define WEAPON_SUBTYPE_BITS	6
 
+#ifdef GE_DLL
+//-----------------------------------------------------------------------------
+// Split screen guest input serialization helpers
+//-----------------------------------------------------------------------------
+static void WriteWeaponCycle( bf_write *buf, signed char cycle )
+{
+	buf->WriteUBitLong( cycle > 0 ? 1 : ( cycle < 0 ? 2 : 0 ), 2 );
+}
+
+static signed char ReadWeaponCycle( bf_read *buf )
+{
+	int v = buf->ReadUBitLong( 2 );
+	return v == 1 ? 1 : ( v == 2 ? -1 : 0 );
+}
+
+static void WriteDeltaFloat( bf_write *buf, float to, float from, bool bDelta )
+{
+	if ( bDelta && to == from )
+	{
+		buf->WriteOneBit( 0 );
+	}
+	else
+	{
+		buf->WriteOneBit( 1 );
+		buf->WriteFloat( to );
+	}
+}
+
+static void WriteSplitGuests( bf_write *buf, const CUserCmd *to, const CUserCmd *from )
+{
+	WriteWeaponCycle( buf, to->hostweaponcycle );
+
+	int mask = 0;
+	for ( int i = 0; i < GES_SS_MAX_GUESTS; i++ )
+	{
+		if ( to->splitguests[i].active )
+			mask |= (1 << i);
+	}
+
+	if ( !mask )
+	{
+		buf->WriteOneBit( 0 );
+		return;
+	}
+
+	buf->WriteOneBit( 1 );
+	buf->WriteUBitLong( mask, GES_SS_MAX_GUESTS );
+
+	for ( int i = 0; i < GES_SS_MAX_GUESTS; i++ )
+	{
+		if ( !(mask & (1 << i)) )
+			continue;
+
+		const CGESplitGuestCmd &g = to->splitguests[i];
+		const CGESplitGuestCmd &f = from->splitguests[i];
+		const bool bDelta = f.active;
+
+		WriteDeltaFloat( buf, g.viewangles[PITCH], f.viewangles[PITCH], bDelta );
+		WriteDeltaFloat( buf, g.viewangles[YAW], f.viewangles[YAW], bDelta );
+		WriteDeltaFloat( buf, g.forwardmove, f.forwardmove, bDelta );
+		WriteDeltaFloat( buf, g.sidemove, f.sidemove, bDelta );
+
+		if ( bDelta && g.buttons == f.buttons )
+		{
+			buf->WriteOneBit( 0 );
+		}
+		else
+		{
+			buf->WriteOneBit( 1 );
+			buf->WriteUBitLong( g.buttons, 32 );
+		}
+
+		WriteWeaponCycle( buf, g.weaponcycle );
+		buf->WriteUBitLong( g.anglereset & GES_SS_ANGLERESET_MASK, GES_SS_ANGLERESET_BITS );
+	}
+}
+
+static void ReadSplitGuests( bf_read *buf, CUserCmd *move, CUserCmd *from )
+{
+	move->hostweaponcycle = ReadWeaponCycle( buf );
+
+	int mask = 0;
+	if ( buf->ReadOneBit() )
+		mask = buf->ReadUBitLong( GES_SS_MAX_GUESTS );
+
+	for ( int i = 0; i < GES_SS_MAX_GUESTS; i++ )
+	{
+		CGESplitGuestCmd &g = move->splitguests[i];
+
+		if ( !(mask & (1 << i)) )
+		{
+			g.Reset();
+			continue;
+		}
+
+		// Start from the previous command if it had this guest, otherwise from nothing
+		if ( from->splitguests[i].active )
+			g = from->splitguests[i];
+		else
+			g.Reset();
+
+		g.active = true;
+
+		if ( buf->ReadOneBit() )
+			g.viewangles[PITCH] = buf->ReadFloat();
+		if ( buf->ReadOneBit() )
+			g.viewangles[YAW] = buf->ReadFloat();
+		g.viewangles[ROLL] = 0;
+		if ( buf->ReadOneBit() )
+			g.forwardmove = buf->ReadFloat();
+		if ( buf->ReadOneBit() )
+			g.sidemove = buf->ReadFloat();
+		if ( buf->ReadOneBit() )
+			g.buttons = buf->ReadUBitLong( 32 );
+
+		g.weaponcycle = ReadWeaponCycle( buf );
+		g.anglereset = buf->ReadUBitLong( GES_SS_ANGLERESET_BITS );
+	}
+}
+#endif // GE_DLL
+
 //-----------------------------------------------------------------------------
 // Purpose: Write a delta compressed user command.
 // Input  : *buf - 
@@ -187,6 +308,10 @@ void WriteUsercmd( bf_write *buf, const CUserCmd *to, const CUserCmd *from )
 		buf->WriteOneBit( 0 );
 	}
 #endif
+
+#ifdef GE_DLL
+	WriteSplitGuests( buf, to, from );
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -302,5 +427,9 @@ void ReadUsercmd( bf_read *buf, CUserCmd *move, CUserCmd *from )
 			move->entitygroundcontact[i].maxheight = buf->ReadBitCoord( );
 		}
 	}
+#endif
+
+#ifdef GE_DLL
+	ReadSplitGuests( buf, move, from );
 #endif
 }

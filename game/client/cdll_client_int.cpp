@@ -453,6 +453,12 @@ public:
 	{
 		return UTIL_GetActiveHolidayString();
 	}
+
+	// SDK 2013 update: GE:S has no operations
+	const char *GetOperationString()
+	{
+		return NULL;
+	}
 };
 
 EXPOSE_SINGLE_INTERFACE( CGameClientExports, IGameClientExports, GAMECLIENTEXPORTS_INTERFACE_VERSION );
@@ -753,6 +759,10 @@ public:
 	void PrecacheMaterial( const char *pMaterialName );
 
 	virtual bool IsConnectedUserInfoChangeAllowed( IConVar *pCvar );
+
+	// SDK 2013 update
+	virtual bool BHaveChatSuspensionInCurrentMatch();
+	virtual void DisplayVoiceUnavailableMessage();
 
 private:
 	void UncacheAllMaterials( );
@@ -2659,6 +2669,18 @@ bool CHLClient::DisconnectAttempt( void )
 bool CHLClient::IsConnectedUserInfoChangeAllowed( IConVar *pCvar )
 {
 	return GameRules() ? GameRules()->IsConnectedUserInfoChangeAllowed( NULL ) : true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: SDK 2013 update. GE:S has no match chat suspensions.
+//-----------------------------------------------------------------------------
+bool CHLClient::BHaveChatSuspensionInCurrentMatch()
+{
+	return false;
+}
+
+void CHLClient::DisplayVoiceUnavailableMessage()
+{
 }
 
 #ifndef NO_STEAM

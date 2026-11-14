@@ -60,6 +60,10 @@
 #endif
 
 	
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 		  
@@ -777,6 +781,13 @@ void CViewRender::SetUpViews()
 		pPlayer->CalcViewModelView ( ViewModelOrigin, ViewModelAngles );
 	}
 
+#ifdef GE_DLL
+	// Split screen guests' views and guns, here with player 1's: before entities
+	// simulate (animation events, muzzle flashes and particles read the guns'
+	// attachments, which sets up and caches their bones for the frame)
+	SetUpSplitScreenViews( view );
+#endif
+
 	// Disable spatial partition access
 	partition->SuppressLists( PARTITION_ALL_CLIENT_EDICTS, true );
 
@@ -1080,6 +1091,12 @@ void CViewRender::Render( vrect_t *rect )
 	{
 		CViewSetup &view = GetView( eEye );
 
+#ifdef GE_DLL
+		// Split screen needs the FOV before it is widened for the full screen aspect ratio
+		const float flUnscaledFov = view.fov;
+		const float flUnscaledViewModelFov = view.fovViewmodel;
+#endif
+
 		#if 0 && defined( CSTRIKE_DLL )
 			const bool bPlayingBackReplay = g_pEngineClientReplay && g_pEngineClientReplay->IsPlayingReplayDemo();
 			if ( pPlayer && !bPlayingBackReplay )
@@ -1253,6 +1270,11 @@ void CViewRender::Render( vrect_t *rect )
 			flags |= RENDERVIEW_SUPPRESSMONITORRENDERING;
 		}
 
+#ifdef GE_DLL
+		if ( eEye == STEREO_EYE_MONO && GESS_IsSplitActive() )
+			RenderSplitScreen( view, flUnscaledFov, flUnscaledViewModelFov, nClearFlags, flags );
+		else
+#endif
 	    RenderView( view, nClearFlags, flags );
 
 		if ( UseVR() )
@@ -1311,6 +1333,209 @@ void CViewRender::Render( vrect_t *rect )
 
 
 
+
+#ifdef GE_DLL
+//-----------------------------------------------------------------------------
+// Purpose: Split screen: one player's view (camera, viewport, fields of view)
+//-----------------------------------------------------------------------------
+bool CViewRender::GetSplitScreenView( int slot, const CViewSetup &baseView, float flBaseFov, float flBaseViewModelFov, CViewSetup &out, bool &bDrawViewModel )
+{
+	CGESplitScreenClient *pSS = GESplitScreenClient();
+
+	GESSViewport_t vp;
+	if ( !pSS->GetViewport( slot, vp ) || vp.w <= 0 || vp.h <= 0 )
+		return false;
+
+	out = baseView;
+	bDrawViewModel = true;
+	float fov = flBaseFov;
+	float vmfov = flBaseViewModelFov;
+
+	if ( slot != 0 )
+	{
+		// This frame's view, worked out with player 1's (SetUpSplitScreenViews):
+		// the guest's gun was placed in it
+		Vector origin;
+		QAngle angles;
+		if ( !( GESS_PlaceGuestViewModelsEarly() && pSS->GetFrameGuestView( slot, origin, angles, fov ) ) &&
+			!pSS->GetGuestView( slot, origin, angles, fov ) )
+			return false;
+
+		out.origin = origin;
+		out.angles = angles;
+		vmfov = g_pClientMode->GetViewModelFOV() - ( default_fov.GetFloat() - fov );
+
+		C_BasePlayer *pGuest = pSS->GetSlotPlayer( slot );
+		bDrawViewModel = pGuest && !pGuest->IsObserver();
+	}
+
+	const float aspect = (float) vp.w / (float) vp.h;
+	// Wide views (2 players: top / bottom halves) keep a 16:9 field of view and
+	// crop vertically, instead of stretching it into a fisheye
+	const float fovAspect = Min( aspect, 16.0f / 9.0f );
+	out.x = vp.x;
+	out.y = vp.y;
+	out.width = vp.w;
+	out.height = vp.h;
+	out.m_nUnscaledX = vp.x;
+	out.m_nUnscaledY = vp.y;
+	out.m_nUnscaledWidth = vp.w;
+	out.m_nUnscaledHeight = vp.h;
+	out.m_flAspectRatio = aspect;
+	out.fov = ScaleFOVByWidthRatio( fov, fovAspect * 0.75f );
+	out.fovViewmodel = ScaleFOVByWidthRatio( vmfov, aspect * 0.75f );	// the gun keeps its normal framing
+	return true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Split screen: each guest's camera and first person gun for this frame,
+//			worked out with player 1's in SetUpViews. Entities simulate after this
+//			(animation events, muzzle flashes, particles), and they read the guns'
+//			attachments, which sets up the guns' bones for the rest of the frame.
+//			Guests' guns used to be placed only when their views were drawn: then
+//			any frame something read a guest gun's attachments first (firing, or
+//			its particles), it was drawn with bones from where it was before (last
+//			frame's view, or a stale interpolated position): jumping, at the edge
+//			of the view, turned, or out of sight.
+//-----------------------------------------------------------------------------
+void CViewRender::SetUpSplitScreenViews( const CViewSetup &baseView )
+{
+	if ( !GESS_IsSplitActive() )
+		return;
+
+	CGESplitScreenClient *pSS = GESplitScreenClient();
+	const bool bEarly = GESS_PlaceGuestViewModelsEarly();
+
+	for ( int slot = 1; slot < GES_SS_MAX_PLAYERS; slot++ )
+	{
+		GESSViewport_t vp;
+		if ( !pSS->GetViewport( slot, vp ) || vp.w <= 0 || vp.h <= 0 )
+			continue;
+
+		Vector origin;
+		QAngle angles;
+		float fov;
+		if ( !pSS->GetGuestView( slot, origin, angles, fov ) )
+			continue;
+		pSS->SetFrameGuestView( slot, origin, angles, fov );
+
+		C_BasePlayer *pGuest = pSS->GetSlotPlayer( slot );
+		if ( !pGuest || pGuest->IsObserver() )
+			continue;
+
+		if ( GESS_DebugViewModelActive() )
+			GESS_DebugViewModel( "before", pGuest->GetViewModel( 0, false ) );
+
+		if ( !bEarly )
+			continue;
+
+		pGuest->CalcViewModelView( origin, angles );
+		for ( int i = 0; i < MAX_VIEWMODELS; i++ )
+		{
+			// Anything that set up their bones earlier this frame did it in the wrong place
+			C_BaseViewModel *pVM = pGuest->GetViewModel( i, false );
+			if ( pVM )
+				pVM->InvalidateBoneCache();
+		}
+
+		if ( GESS_DebugViewModelActive() )
+			GESS_DebugViewModel( "placed", pGuest->GetViewModel( 0, false ) );
+	}
+
+	if ( !bEarly )
+		return;
+
+	// The cameras viewmodel attachments are worked out in: this frame's, not the
+	// last drawn (effects are created and move before the views are drawn)
+	for ( int slot = 0; slot < GES_SS_MAX_PLAYERS; slot++ )
+	{
+		CViewSetup v;
+		bool bDrawViewModel;
+		if ( GetSplitScreenView( slot, baseView, baseView.fov, baseView.fovViewmodel, v, bDrawViewModel ) )
+			pSS->SetSlotViewSetup( slot, v.origin, v.angles, v.fov, v.fovViewmodel );
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Split screen. Each local player gets their own view in a quarter of the
+//			screen (see CGESplitScreenClient::GetViewport). The HUD is painted once,
+//			full screen, after the last view; the split HUD panel draws per player.
+//-----------------------------------------------------------------------------
+void CViewRender::RenderSplitScreen( const CViewSetup &baseView, float flBaseFov, float flBaseViewModelFov, int nClearFlags, int whatToDraw )
+{
+	CGESplitScreenClient *pSS = GESplitScreenClient();
+
+	struct SplitView_t
+	{
+		int slot;
+		CViewSetup view;
+		int flags;
+	};
+
+	SplitView_t views[GES_SS_MAX_PLAYERS];
+	int numViews = 0;
+
+	for ( int slot = 0; slot < GES_SS_MAX_PLAYERS; slot++ )
+	{
+		SplitView_t &sv = views[numViews];
+		bool bDrawViewModel = false;
+		// Empty slots and players the server hasn't created yet are drawn by the split HUD
+		if ( !GetSplitScreenView( slot, baseView, flBaseFov, flBaseViewModelFov, sv.view, bDrawViewModel ) )
+			continue;
+
+		sv.slot = slot;
+		sv.flags = whatToDraw & ~RENDERVIEW_DRAWHUD;
+
+		if ( slot != 0 )
+		{
+			sv.flags |= RENDERVIEW_SUPPRESSMONITORRENDERING;
+			// Dead guests too: GE's death blood running down the screen is their
+			// second viewmodel, played in front of their (ragdoll's eyes) view
+			if ( bDrawViewModel )
+			{
+				sv.flags |= RENDERVIEW_DRAWVIEWMODEL;
+				// Normally placed in SetUpSplitScreenViews, before entities simulate
+				if ( !GESS_PlaceGuestViewModelsEarly() )
+				{
+					C_BasePlayer *pGuest = pSS->GetSlotPlayer( slot );
+					pGuest->CalcViewModelView( sv.view.origin, sv.view.angles );
+					if ( GESS_DebugViewModelActive() )
+						GESS_DebugViewModel( "late", pGuest->GetViewModel( 0, false ) );
+				}
+			}
+			else
+			{
+				sv.flags &= ~RENDERVIEW_DRAWVIEWMODEL;
+			}
+		}
+
+		// Viewmodel attachments (muzzle flashes, shells, tracers) are worked out in this camera
+		pSS->SetSlotViewSetup( slot, sv.view.origin, sv.view.angles, sv.view.fov, sv.view.fovViewmodel );
+
+		numViews++;
+	}
+
+	for ( int i = 0; i < numViews; i++ )
+	{
+		SplitView_t &sv = views[i];
+
+		// Paint the HUD once, over the whole screen, with the last view
+		if ( i == numViews - 1 )
+		{
+			sv.flags |= ( whatToDraw & RENDERVIEW_DRAWHUD );
+			sv.view.m_nUnscaledX = baseView.m_nUnscaledX;
+			sv.view.m_nUnscaledY = baseView.m_nUnscaledY;
+			sv.view.m_nUnscaledWidth = baseView.m_nUnscaledWidth;
+			sv.view.m_nUnscaledHeight = baseView.m_nUnscaledHeight;
+		}
+
+		pSS->SetRenderSlot( sv.slot );
+		RenderView( sv.view, nClearFlags | VIEW_CLEAR_COLOR, sv.flags );
+	}
+
+	pSS->SetRenderSlot( -1 );
+}
+#endif // GE_DLL
 
 static void GetPos( const CCommand &args, Vector &vecOrigin, QAngle &angles )
 {

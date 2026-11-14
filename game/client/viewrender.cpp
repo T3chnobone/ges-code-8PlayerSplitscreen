@@ -82,6 +82,10 @@
   #include "ShaderEditor/ShaderEditorSystem.h"
 #endif
 
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -967,13 +971,22 @@ bool CViewRender::ShouldDrawViewModel( bool bDrawViewmodel )
 	if ( !r_drawviewmodel.GetBool() )
 		return false;
 
-	if ( C_BasePlayer::ShouldDrawLocalPlayer() )
+#ifdef GE_DLL
+	// A split screen guest's view: player 1's camera (third person, spectating,
+	// view entity) doesn't matter, the guest is always in first person
+	C_BaseEntity *pViewer = GESS_GetRenderViewer();
+	const bool bGuestView = pViewer && pViewer != C_BasePlayer::GetLocalPlayer();
+#else
+	const bool bGuestView = false;
+#endif
+
+	if ( !bGuestView && C_BasePlayer::ShouldDrawLocalPlayer() )
 		return false;
 
 	if ( !ShouldDrawEntities() )
 		return false;
 
-	if ( render->GetViewEntity() > gpGlobals->maxClients )
+	if ( !bGuestView && render->GetViewEntity() > gpGlobals->maxClients )
 		return false;
 
 	return true;
@@ -1059,6 +1072,11 @@ void CViewRender::DrawViewModels( const CViewSetup &view, bool drawViewmodel )
 	viewModelSetup.zFar = view.zFarViewmodel;
 	viewModelSetup.fov = view.fovViewmodel;
 	viewModelSetup.m_flAspectRatio = engine->GetScreenAspectRatio();
+#ifdef GE_DLL
+	// Split screen views are not the shape of the screen
+	if ( GESS_IsSplitActive() && view.height > 0 )
+		viewModelSetup.m_flAspectRatio = (float) view.width / (float) view.height;
+#endif
 
 	ITexture *pRTColor = NULL;
 	ITexture *pRTDepth = NULL;
@@ -1122,6 +1140,54 @@ void CViewRender::DrawViewModels( const CViewSetup &view, bool drawViewmodel )
 			}
 		}
 
+#ifdef GE_DLL
+		// Only draw the viewmodels of whoever this view belongs to. Split screen guests'
+		// viewmodels are sent to us too, they must not show up in someone else's view.
+		{
+			C_BaseEntity *pViewer = GESS_GetRenderViewer();
+			if ( !pViewer )
+				pViewer = C_BasePlayer::GetLocalPlayer();
+
+			CUtlVector< IClientRenderable * > *lists[2] = { &opaqueViewModelList, &translucentViewModelList };
+			for ( int l = 0; l < 2; l++ )
+			{
+				for ( int i = lists[l]->Count() - 1; i >= 0; --i )
+				{
+					C_BaseEntity *pEnt = (*lists[l])[i]->GetIClientUnknown()->GetBaseEntity();
+					C_BaseViewModel *pVM = pEnt ? dynamic_cast<C_BaseViewModel*>( pEnt ) : NULL;
+					if ( pVM && pVM->GetOwner() && pVM->GetOwner() != pViewer )
+						lists[l]->FastRemove( i );
+				}
+			}
+		}
+
+		// GE's death blood (viewmodel 1) is a full screen overlay. It's drawn on its
+		// own after the other viewmodels: at depth 0, so nothing in the world covers
+		// it (things right at a dead player's camera, like a torch, cut through it),
+		// and in split views wider than 16:9 (2 players: top / bottom halves) with the
+		// field of view a 16:9 screen has across, so it fills the width (it's made for
+		// 16:9; a wider view only had it in the middle).
+		CUtlVector< IClientRenderable * > bloodLists[2];
+		const float flWide = 16.0f / 9.0f;
+		const bool bWideSplit = GESS_IsSplitActive() && viewModelSetup.m_flAspectRatio > flWide + 0.01f;
+		{
+			CUtlVector< IClientRenderable * > *lists[2] = { &opaqueViewModelList, &translucentViewModelList };
+			for ( int l = 0; l < 2; l++ )
+			{
+				for ( int i = lists[l]->Count() - 1; i >= 0; --i )
+				{
+					C_BaseEntity *pEnt = (*lists[l])[i]->GetIClientUnknown()->GetBaseEntity();
+					C_BaseViewModel *pVM = pEnt ? dynamic_cast<C_BaseViewModel*>( pEnt ) : NULL;
+					if ( pVM && pVM->ViewModelIndex() == 1 )
+					{
+						bloodLists[l].AddToTail( (*lists[l])[i] );
+						lists[l]->FastRemove( i );
+					}
+				}
+			}
+		}
+#endif
+
 		if ( !UpdateRefractIfNeededByList( opaqueViewModelList ) )
 		{
 			UpdateRefractIfNeededByList( translucentViewModelList );
@@ -1129,6 +1195,52 @@ void CViewRender::DrawViewModels( const CViewSetup &view, bool drawViewmodel )
 
 		DrawRenderablesInList( opaqueViewModelList );
 		DrawRenderablesInList( translucentViewModelList, STUDIO_TRANSPARENCY );
+
+#ifdef GE_DLL
+		if ( bloodLists[0].Count() || bloodLists[1].Count() )
+		{
+			CViewSetup bloodSetup( viewModelSetup );
+			if ( bWideSplit )
+			{
+				const float halfTan = tanf( DEG2RAD( viewModelSetup.fov ) * 0.5f ) * flWide / viewModelSetup.m_flAspectRatio;
+				bloodSetup.fov = RAD2DEG( 2.0f * atanf( halfTan ) );
+			}
+			render->PopView( GetFrustum() );
+			render->Push3DView( bloodSetup, 0, pRTColor, GetFrustum(), pRTDepth );
+			// In front of everything (pushing the view also reset the depth range)
+			pRenderContext->DepthRange( 0.0f, 0.0f );
+
+			// The blood model is two halves with a hair-thin crack between them,
+			// which showed bright things behind. Mark what the blood covers in the
+			// stencil, then fill only the unmarked pixels (the crack) with a copy
+			// drawn slightly turned. The blood itself looks exactly as before.
+			pRenderContext->ClearStencilBufferRectangle( view.x, view.y, view.x + view.width, view.y + view.height, 0 );
+			pRenderContext->SetStencilEnable( true );
+			pRenderContext->SetStencilWriteMask( 1 );
+			pRenderContext->SetStencilTestMask( 1 );
+			pRenderContext->SetStencilReferenceValue( 1 );
+			pRenderContext->SetStencilCompareFunction( STENCILCOMPARISONFUNCTION_ALWAYS );
+			pRenderContext->SetStencilPassOperation( STENCILOPERATION_REPLACE );
+			pRenderContext->SetStencilFailOperation( STENCILOPERATION_KEEP );
+			pRenderContext->SetStencilZFailOperation( STENCILOPERATION_KEEP );
+			DrawRenderablesInList( bloodLists[0] );
+			DrawRenderablesInList( bloodLists[1], STUDIO_TRANSPARENCY );
+
+			render->PopView( GetFrustum() );
+			CViewSetup fillSetup( bloodSetup );
+			// (turned a fraction of a degree, so its own crack is a few pixels away)
+			fillSetup.angles[YAW] += 0.25f;
+			fillSetup.angles[PITCH] += 0.25f;
+			render->Push3DView( fillSetup, 0, pRTColor, GetFrustum(), pRTDepth );
+			pRenderContext->DepthRange( 0.0f, 0.0f );
+			pRenderContext->SetStencilReferenceValue( 0 );
+			pRenderContext->SetStencilCompareFunction( STENCILCOMPARISONFUNCTION_EQUAL );
+			pRenderContext->SetStencilPassOperation( STENCILOPERATION_KEEP );
+			DrawRenderablesInList( bloodLists[0] );
+			DrawRenderablesInList( bloodLists[1], STUDIO_TRANSPARENCY );
+			pRenderContext->SetStencilEnable( false );
+		}
+#endif
 	}
 
 	// Reset the depth range to the original values
@@ -2594,7 +2706,7 @@ void CViewRender::DrawWorldAndEntities( bool bDrawSkybox, const CViewSetup &view
 	{		     
 		tmZone( TELEMETRY_LEVEL0, TMZF_NONE, "bCheapWater" );
 		cplane_t glassReflectionPlane;
-		if ( IsReflectiveGlassInView( viewIn, glassReflectionPlane ) )
+		if ( !GESS_IsSplitActive() && IsReflectiveGlassInView( viewIn, glassReflectionPlane ) )	// split screen: the mirror passes cut away the world behind the mirror in the views
 		{								    
 			CRefPtr<CReflectiveGlassView> pGlassReflectionView = new CReflectiveGlassView( this );
 			pGlassReflectionView->Setup( viewIn, VIEW_CLEAR_DEPTH | VIEW_CLEAR_COLOR, bDrawSkybox, fogVolumeInfo, info, glassReflectionPlane );
@@ -2795,7 +2907,7 @@ void CViewRender::ViewDrawScene_PortalStencil( const CViewSetup &viewIn, ViewCus
 	if ( waterInfo.m_bCheapWater )
 	{		     
 		cplane_t glassReflectionPlane;
-		if ( IsReflectiveGlassInView( viewIn, glassReflectionPlane ) )
+		if ( !GESS_IsSplitActive() && IsReflectiveGlassInView( viewIn, glassReflectionPlane ) )	// split screen: the mirror passes cut away the world behind the mirror in the views
 		{								    
 			CRefPtr<CReflectiveGlassView> pGlassReflectionView = new CReflectiveGlassView( this );
 			pGlassReflectionView->Setup( viewIn, VIEW_CLEAR_DEPTH | VIEW_CLEAR_COLOR | VIEW_CLEAR_OBEY_STENCIL, drawSkybox, fogInfo, waterInfo, glassReflectionPlane );
@@ -5171,6 +5283,10 @@ bool CBaseWorldView::AdjustView( float waterHeight )
 		x = y = 0;
 		width = pTexture->GetActualWidth();
 		height = pTexture->GetActualHeight();
+		// The whole render target (split screen views are only part of the screen)
+		m_nUnscaledX = m_nUnscaledY = 0;
+		m_nUnscaledWidth = width;
+		m_nUnscaledHeight = height;
 
 		return true;
 	}
@@ -5192,6 +5308,10 @@ bool CBaseWorldView::AdjustView( float waterHeight )
 		x = y = 0;
 		width = pTexture->GetActualWidth();
 		height = pTexture->GetActualHeight();
+		// The whole render target (split screen views are only part of the screen)
+		m_nUnscaledX = m_nUnscaledY = 0;
+		m_nUnscaledWidth = width;
+		m_nUnscaledHeight = height;
 		angles[0] = -angles[0];
 		angles[2] = -angles[2];
 		origin[2] -= 2.0f * ( origin[2] - (waterHeight));
@@ -6187,6 +6307,10 @@ bool CReflectiveGlassView::AdjustView( float flWaterHeight )
 	x = y = 0;
 	width = pTexture->GetActualWidth();
 	height = pTexture->GetActualHeight();
+	// The whole render target (split screen views are only part of the screen)
+	m_nUnscaledX = m_nUnscaledY = 0;
+	m_nUnscaledWidth = width;
+	m_nUnscaledHeight = height;
 
 	// Reflect the camera origin + vectors around the reflection plane 
 	float flDist = DotProduct( origin, m_ReflectionPlane.normal ) - m_ReflectionPlane.dist;
@@ -6268,6 +6392,10 @@ bool CRefractiveGlassView::AdjustView( float flWaterHeight )
 	x = y = 0;
 	width = pTexture->GetActualWidth();
 	height = pTexture->GetActualHeight();
+	// The whole render target (split screen views are only part of the screen)
+	m_nUnscaledX = m_nUnscaledY = 0;
+	m_nUnscaledWidth = width;
+	m_nUnscaledHeight = height;
 	return true;
 }
 

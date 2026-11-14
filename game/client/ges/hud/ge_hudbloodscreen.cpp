@@ -25,6 +25,7 @@
 #include "vgui_controls/AnimationController.h"
 #include "vgui_controls/Panel.h"
 #include "ge_CreditsText.h"
+#include "ge_splitscreen_client.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -177,6 +178,7 @@ void CHudBloodScreen::PlayDeathMusic( void )
 	CSingleUserRecipientFilter user( pPlayer );
 
 	pPlayer->EmitSound( user, pPlayer->entindex(), DEATHMUSIC_SOUND );
+	DevMsg( "Death music: %s\n", DEATHMUSIC_SOUND );
 
 	IGameEvent *event = gameeventmanager->CreateEvent( "specialmusic_setup" );
 	if ( event )
@@ -296,6 +298,17 @@ void CHudBloodScreen::FireGameEvent( IGameEvent *event )
 	if ( !pLocal )
 		return;
 
+	// A split screen guest of ours died: their own death music (their blood runs
+	// down their view as their viewmodel; this full screen overlay is player 1's)
+	if ( event->GetInt("userid") != pLocal->GetUserID() && !Q_stricmp( event->GetName(), "player_death" ) )
+	{
+		C_BasePlayer *pDead = UTIL_PlayerByUserId( event->GetInt("userid") );
+		if ( pDead && GESS_IsLocalGuest( pDead ) )
+		{
+			PlayDeathMusic();
+			return;
+		}
+	}
 	if ( event->GetInt("userid") != pLocal->GetUserID() )
 	{
 		// Check if the person we are observing died

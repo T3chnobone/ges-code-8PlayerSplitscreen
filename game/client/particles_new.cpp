@@ -16,6 +16,9 @@
 #include "model_types.h"
 #include "vprof.h"
 #include "input.h"
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
 
 extern ConVar cl_particleeffect_aabb_buffer;
 
@@ -516,7 +519,14 @@ int CNewParticleEffect::DrawModel( int flags )
 	{
 		return 0;
 	}
-	
+
+#ifdef GE_DLL
+	// Split screen: effects on someone's first person gun only in their view, and
+	// none on what the viewer can't see of themselves
+	if ( GESS_ShouldHideParticlesForCurrentView( GetOwner() ) )
+		return 0;
+#endif
+
 	// do distance cull check here. We do it here instead of in particles so we can easily only do
 	// it for root objects, not bothering to cull children individually
 	CMatRenderContextPtr pRenderContext( materials );

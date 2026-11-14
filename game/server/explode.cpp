@@ -389,6 +389,16 @@ void ExplosionCreate( const Vector &center, const QAngle &angles,
 	CBaseEntity *pOwner, int magnitude, int radius, int nSpawnFlags, float flExplosionForce, CBaseEntity *pInflictor, int iCustomDamageType,
 	const EHANDLE *ignoredEntity , Class_T ignoredClass )
 {
+#ifdef GE_USE_ROLLINGEXP
+	// GoldenEye uses its own explosion (ge_explosion); env_explosion isn't registered in
+	// this build, so creating one returned NULL and every grenade / rocket / mine
+	// explosion crashed the server. Owner = who gets the credit, activator = what blew up.
+	CBaseEntity *pAttacker = pOwner ? pOwner : ( pInflictor ? pInflictor : GetContainingEntity( INDEXENT( 0 ) ) );
+	const float flDamage = ( nSpawnFlags & SF_ENVEXPLOSION_NODAMAGE ) ? 0.0f : (float) magnitude;
+	const float flRadius = radius ? (float) radius : magnitude * 2.5f;
+	Create_GEExplosion( pAttacker, pInflictor, center, flDamage, flRadius );
+	return;
+#else
 	char			buf[128];
 
 	CEnvExplosion *pExplosion = (CEnvExplosion*)CBaseEntity::Create( "env_explosion", center, angles, pOwner );
@@ -424,6 +434,7 @@ void ExplosionCreate( const Vector &center, const QAngle &angles,
 	pExplosion->m_iClassIgnore = ignoredClass;
 
 	pExplosion->AcceptInput( "Explode", NULL, NULL, emptyVariant, 0 );
+#endif
 }
 
 

@@ -23,6 +23,9 @@
 #include "datacache/imdlcache.h"
 #include "view.h"
 #include "viewrender.h"
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -1396,7 +1399,13 @@ void CClientLeafSystem::ComputeTranslucentRenderLeaf( int count, const LeafIndex
 		while (idx != m_RenderablesInLeaf.InvalidIndex())
 		{
 			RenderableInfo_t& info = m_Renderables[m_RenderablesInLeaf.Element(idx)];
+			// (split screen: every player's view is the same view type in the same
+			// frame, but fades from somewhere else, so work it out for each view)
+#ifdef GE_DLL
+			if ( info.m_TranslucencyCalculated != globalFrameCount || info.m_TranslucencyCalculatedView != viewID || GESS_IsSplitActive() )
+#else
 			if ( info.m_TranslucencyCalculated != globalFrameCount || info.m_TranslucencyCalculatedView != viewID )
+#endif
 			{ 
 				// Compute translucency
 				if ( bThreaded )

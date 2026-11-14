@@ -30,7 +30,7 @@ CBaseEntity *pyGetEntByUniqueId( int serial )
 
 	// Extract the ent index and serial number from the serial given
 	int iEntity = serial & ((1 << MAX_EDICT_BITS) - 1);
-	int iSerialNum = serial >> NUM_ENT_ENTRY_BITS;
+	int iSerialNum = serial >> NUM_SERIAL_NUM_SHIFT_BITS;
 	EHANDLE hEnt( iEntity, iSerialNum );
 
 	return hEnt.Get();

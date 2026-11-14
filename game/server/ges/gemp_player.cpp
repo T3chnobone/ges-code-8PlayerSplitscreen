@@ -32,6 +32,7 @@
 #include "gemp_gamerules.h"
 
 #include "gemp_player.h"
+#include "ge_splitscreen_server.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -51,6 +52,15 @@ IMPLEMENT_SERVERCLASS_ST(CGEMPPlayer, DT_GEMP_Player)
 	SendPropInt( SENDINFO( m_flRunCode )),
 	SendPropInt( SENDINFO( m_iSteamIDHash )),
 	SendPropArray3( SENDINFO_ARRAY3(m_iWeaponSkinInUse), SendPropInt(SENDINFO_ARRAY(m_iWeaponSkinInUse))),
+	SendPropInt( SENDINFO( m_iSplitOwner ), MAX_EDICT_BITS, SPROP_UNSIGNED ),
+	SendPropInt( SENDINFO( m_iSplitSlot ), GES_SS_SLOT_BITS, SPROP_UNSIGNED ),
+	SendPropInt( SENDINFO( m_nSplitAngleReset ), GES_SS_ANGLERESET_BITS, SPROP_UNSIGNED ),
+	SendPropQAngles( SENDINFO( m_angSplitReset ), 32 ),	// 32 = exact floats (0 bits divides by zero: infinite angles on the client)
+	SendPropInt( SENDINFO( m_iSplitClip ), 10 ),
+	SendPropInt( SENDINFO( m_iSplitAmmo ), 11 ),
+	SendPropInt( SENDINFO( m_iMatchKills ), 12, SPROP_UNSIGNED ),
+	SendPropInt( SENDINFO( m_iNetMatchDeaths ), 12, SPROP_UNSIGNED ),
+	SendPropInt( SENDINFO( m_iMatchSuicides ), 12, SPROP_UNSIGNED ),
 END_SEND_TABLE()
 
 BEGIN_DATADESC( CGEMPPlayer )
@@ -85,6 +95,18 @@ CGEMPPlayer::CGEMPPlayer()
 	m_flTeamJoinTime = 0.0f;
 
 	m_iSteamIDHash = 0;
+	m_iSplitOwner = 0;
+	m_bSplitHost = false;
+	m_szSplitHostChar[0] = '\0';
+	m_flSplitHostCharTime = 0;
+	m_iSplitSlot = 0;
+	m_nSplitAngleReset = 0;
+	m_angSplitReset.Init();
+	m_iSplitClip = 0;
+	m_iSplitAmmo = 0;
+	m_iMatchKills = 0;
+	m_iNetMatchDeaths = 0;
+	m_iMatchSuicides = 0;
 	m_iDevStatus = 0;
 	m_iSkinsCode = 0;
 	m_iClientSkinsCode = 0;
@@ -658,11 +680,18 @@ void CGEMPPlayer::SetPlayerModel( const char* szCharName, int iCharSkin /*=0*/, 
 	{
 		if ( !GEGameplay()->GetScenario()->CanPlayerChangeChar(this, selCharName) )
 		{
+			// Split screen host: no character menu, the game mode picks one for them
+			if ( IsSplitHost() && Q_stricmp( szCharName, CHAR_RANDOM_IDENT ) )
+			{
+				SetPlayerModel( CHAR_RANDOM_IDENT, iCharSkin, bNoSelOverride );
+				return;
+			}
+
 			// Gameplay denied their selection, show the selection panel again
 			ShowViewPortPanel( PANEL_CHARSELECT );
 			return;
 		}
-		else if ( gpGlobals->curtime < m_flNextModelChangeTime )
+		else if ( gpGlobals->curtime < m_flNextModelChangeTime && !IsSplitHost() && !IsSplitGuest() )
 		{
 			// Don't allow switching characters too fast
 			UTIL_SayText("You must wait a few seconds to change your character again...\n", this);
@@ -718,8 +747,14 @@ void CGEMPPlayer::SetPlayerTeamModel()
 
 void CGEMPPlayer::ChangeTeam( int iTeam, bool bWasForced /* = false */ )
 {
+	// Split screen players always play, they never become spectators once they're in
+	// (spectate, jointeam 1, ...). Joining the server still starts as a spectator.
+	const bool bSplitPlayer = IsSplitHost() || IsSplitGuest();
+	if ( bSplitPlayer && iTeam == TEAM_SPECTATOR && !bWasForced && !m_bPreSpawn )
+		iTeam = GERules()->IsTeamplay() ? MAX_GE_TEAMS : TEAM_UNASSIGNED;
+
 	// If we haven't waited our change time tell them to slow down
-	if ( gpGlobals->curtime < m_flNextTeamChangeTime && !bWasForced ) {
+	if ( gpGlobals->curtime < m_flNextTeamChangeTime && !bWasForced && !bSplitPlayer ) {
 		UTIL_SayText("You must wait a few seconds to change your team again...\n", this);
 		return;
 	}
@@ -732,8 +767,9 @@ void CGEMPPlayer::ChangeTeam( int iTeam, bool bWasForced /* = false */ )
 
 	if ( GERules()->IsTeamplay() )
 	{
-		// Only suicide the player if they are switching teams and not observing and not forced to switch
-		if (GetTeamNumber() != TEAM_UNASSIGNED && !IsObserver() && !bWasForced)
+		// Only suicide the player if they are switching teams and not observing and not forced to switch.
+		// Split screen players pick their team from their profile menu: no suicide (or lost point) for that.
+		if (GetTeamNumber() != TEAM_UNASSIGNED && !IsObserver() && !bWasForced && !bSplitPlayer)
 			bKill = true;
 
 		// The player is trying to Auto Join a team so set them up!
@@ -749,7 +785,7 @@ void CGEMPPlayer::ChangeTeam( int iTeam, bool bWasForced /* = false */ )
 				iTeam = random->RandomInt( TEAM_MI6, TEAM_JANUS );
 		}
 	}
-	else if ( GetTeamNumber() == TEAM_UNASSIGNED && !m_bPreSpawn && IsAlive() && !bWasForced ) //Use alternate rules for non-teamplay.
+	else if ( GetTeamNumber() == TEAM_UNASSIGNED && !m_bPreSpawn && IsAlive() && !bWasForced && !bSplitPlayer ) //Use alternate rules for non-teamplay.
 		bKill = true;
 	
 	// Coming on spectator we end pre spawn, but going from spectator
@@ -812,8 +848,9 @@ void CGEMPPlayer::ChangeTeam( int iTeam, bool bWasForced /* = false */ )
 			}
 		}
 
-		// Give us a chance to select our character
-		if ( !IsBot() )
+		// Give us a chance to select our character (split screen players already have
+		// one for the new team and respawn straight away, never as an observer)
+		if ( !IsBot() && !bSplitPlayer )
 			SetPreSpawn();
 
 		// Kill us if we were told to by above criteria (respawn will occur later)
@@ -824,6 +861,12 @@ void CGEMPPlayer::ChangeTeam( int iTeam, bool bWasForced /* = false */ )
 		else
 			ForceRespawn();
 	}
+
+	// A split screen host doesn't get the character menu (after any team change,
+	// including coming back from spectating): unless their client sends a
+	// character right away (joinclass), use their profile's
+	if ( iTeam != TEAM_SPECTATOR && IsSplitHost() && !IsBot() )
+		m_flSplitHostCharTime = gpGlobals->curtime + 0.5f;
 }
 
 void CGEMPPlayer::ShowTeamNotice( const char *title, const char *msg, const char *img )
@@ -1091,6 +1134,10 @@ bool CGEMPPlayer::ClientCommand( const CCommand &args )
 {
 	const char* cmd = args[0];
 
+	// Split screen guest management (ges_ss_join, ges_ss_leave, ges_ss_setchar)
+	if ( GESplitScreenServer()->ClientCommand( this, args ) )
+		return true;
+
 	if ( Q_stricmp( cmd, "joinclass" ) == 0 )
 	{
 		if ( args.ArgC() < 2 )
@@ -1297,6 +1344,14 @@ bool CGEMPPlayer::ClientCommand( const CCommand &args )
 
 void CGEMPPlayer::PreThink()
 {
+	// Split screen host still waiting for a character after a team change
+	if ( m_flSplitHostCharTime > 0 && gpGlobals->curtime >= m_flSplitHostCharTime )
+	{
+		m_flSplitHostCharTime = 0;
+		if ( IsSplitHost() && m_bPreSpawn && GetTeamNumber() != TEAM_SPECTATOR )
+			ApplySplitHostCharacter();
+	}
+
 	// Keep checking this until we get a valid Steam ID return
 	if ( m_iSteamIDHash == 0  && GERules()->HaveStatusListsUpdated() && !(GetFlags() & FL_FAKECLIENT) )
 	{
@@ -1739,6 +1794,133 @@ void CGEMPPlayer::FinishClientPutInServer()
 	// Show the player the scenario help
 	ShowViewPortPanel( PANEL_SCENARIOHELP, true, new KeyValues("data","pane","-1") );
 	ShowViewPortPanel( PANEL_TEAM );
+}
+
+//-----------------------------------------------------------------------------
+// Split screen
+//-----------------------------------------------------------------------------
+void CGEMPPlayer::SetSplitHost( bool bHost, const char *character )
+{
+	m_bSplitHost = bHost;
+	Q_strncpy( m_szSplitHostChar, ( character && character[0] ) ? character : CHAR_RANDOM_IDENT, sizeof( m_szSplitHostChar ) );
+	if ( !bHost )
+		m_flSplitHostCharTime = 0;
+}
+
+void CGEMPPlayer::ApplySplitHostCharacter()
+{
+	// The profile's character, or a random one when it doesn't fit the team
+	const char *character = m_szSplitHostChar[0] ? m_szSplitHostChar : CHAR_RANDOM_IDENT;
+	const CGECharData *pChar = GECharacters()->Get( character );
+	if ( !pChar || ( GERules()->IsTeamplay() && pChar->iTeam != GetTeamNumber() ) )
+		character = CHAR_RANDOM_IDENT;
+
+	SetPlayerModel( character );
+}
+
+// Used by CBasePlayer::ShowViewPortPanel
+bool GESS_IsSplitHostPlayer( CBasePlayer *pPlayer )
+{
+	CGEMPPlayer *pGEPlayer = ToGEMPPlayer( pPlayer );
+	return pGEPlayer && pGEPlayer->IsSplitHost() && !pGEPlayer->IsSplitGuest();
+}
+
+void CGEMPPlayer::SetSplitGuest( int iOwnerEntIndex, int iSlot )
+{
+	// A guest always has an owner index > 0 while bound, keep slot even if the owner is gone
+	if ( m_iSplitOwner != iOwnerEntIndex )
+		m_iSplitOwner = iOwnerEntIndex > 0 ? iOwnerEntIndex : m_iSplitOwner;
+	if ( m_iSplitSlot != iSlot )
+		m_iSplitSlot = iSlot;
+}
+
+void CGEMPPlayer::UpdateSplitGuestState()
+{
+	if ( !IsSplitGuest() )
+		return;
+
+	// Fake clients never receive their fixangle, so pass forced angles to our owner instead
+	// and let them flow back through the owner's usercmds.
+	if ( pl.fixangle != FIXANGLE_NONE )
+	{
+		m_angSplitReset = pl.v_angle;
+		m_nSplitAngleReset = ( m_nSplitAngleReset + 1 ) & GES_SS_ANGLERESET_MASK;
+		pl.fixangle = FIXANGLE_NONE;
+	}
+
+	CBaseCombatWeapon *pWeapon = GetActiveWeapon();
+	int clip = 0, ammo = 0;
+	if ( pWeapon )
+	{
+		clip = pWeapon->UsesClipsForAmmo1() ? pWeapon->Clip1() : -1;
+		ammo = pWeapon->GetPrimaryAmmoType() >= 0 ? GetAmmoCount( pWeapon->GetPrimaryAmmoType() ) : -1;
+	}
+
+	if ( m_iSplitClip != clip )
+		m_iSplitClip = clip;
+	if ( m_iSplitAmmo != ammo )
+		m_iSplitAmmo = ammo;
+}
+
+void CGEMPPlayer::ProcessUsercmds( CUserCmd *cmds, int numcmds, int totalcmds, int dropped_packets, bool paused )
+{
+	BaseClass::ProcessUsercmds( cmds, numcmds, totalcmds, dropped_packets, paused );
+
+	// Real clients carry the input of their split screen guests inside their own commands
+	if ( !IsSplitGuest() && !IsFakeClient() )
+		GESplitScreenServer()->ProcessHostUsercmds( this, cmds, numcmds, totalcmds, dropped_packets, paused );
+}
+
+void CGEMPPlayer::PlayerRunCommand( CUserCmd *ucmd, IMoveHelper *moveHelper )
+{
+	// Controller weapon cycling (used by split screen players)
+	if ( ucmd->hostweaponcycle != 0 && IsAlive() )
+		SplitCycleWeapon( ucmd->hostweaponcycle );
+
+	BaseClass::PlayerRunCommand( ucmd, moveHelper );
+}
+
+void CGEMPPlayer::SetupVisibility( CBaseEntity *pViewEntity, unsigned char *pvs, int pvssize )
+{
+	BaseClass::SetupVisibility( pViewEntity, pvs, pvssize );
+
+	// Our split screen guests need to see (and be sent) what is around them too
+	GESplitScreenServer()->AddGuestsToPVS( this );
+}
+
+void CGEMPPlayer::SplitCycleWeapon( int dir )
+{
+	CBaseCombatWeapon *pActive = GetActiveWeapon();
+	const int activeKey = pActive ? ( pActive->GetSlot() * 100 + pActive->GetPosition() ) : -1;
+
+	CBaseCombatWeapon *pBest = NULL, *pWrap = NULL;
+	int bestKey = 0, wrapKey = 0;
+
+	for ( int i = 0; i < MAX_WEAPONS; i++ )
+	{
+		CBaseCombatWeapon *pWeapon = GetWeapon( i );
+		if ( !pWeapon || pWeapon == pActive || !pWeapon->HasAnyAmmo() || !pWeapon->CanDeploy() )
+			continue;
+
+		const int key = pWeapon->GetSlot() * 100 + pWeapon->GetPosition();
+
+		if ( dir > 0 )
+		{
+			// Smallest key above the active one, else wrap to the smallest overall
+			if ( key > activeKey && ( !pBest || key < bestKey ) ) { pBest = pWeapon; bestKey = key; }
+			if ( !pWrap || key < wrapKey ) { pWrap = pWeapon; wrapKey = key; }
+		}
+		else
+		{
+			// Largest key below the active one, else wrap to the largest overall
+			if ( key < activeKey && ( !pBest || key > bestKey ) ) { pBest = pWeapon; bestKey = key; }
+			if ( !pWrap || key > wrapKey ) { pWrap = pWeapon; wrapKey = key; }
+		}
+	}
+
+	CBaseCombatWeapon *pSwitch = pBest ? pBest : pWrap;
+	if ( pSwitch )
+		Weapon_Switch( pSwitch );
 }
 
 void CGEMPPlayer::OnGameplayEvent( GPEvent event )

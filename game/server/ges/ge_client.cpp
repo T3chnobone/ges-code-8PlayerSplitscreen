@@ -22,6 +22,8 @@
 #include "cdll_int.h"
 
 #include "tier0/vprof.h"
+#include "gemp_player.h"
+#include "ge_splitscreen_server.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -66,12 +68,18 @@ void ClientPutInServer( edict_t *pEdict, const char *playername )
 
 	CGEPlayer *pPlayer = NULL;
 
-	if ( plInfo.fakeplayer && !Q_stristr( plInfo.name, "oldbot" ) )
+	// Split screen guests are fake clients but play as normal players driven by their owner
+	const bool bSplitGuest = plInfo.fakeplayer && GESplitScreenServer()->OnClientPutInServer( pEdict );
+
+	if ( plInfo.fakeplayer && !bSplitGuest && !Q_stristr( plInfo.name, "oldbot" ) )
 		pPlayer = CGEPlayer::CreatePlayer( "bot_player", pEdict );
 	else
 		pPlayer = CGEPlayer::CreatePlayer( "player", pEdict );
 
 	pPlayer->SetPlayerName( playername );
+
+	if ( bSplitGuest )
+		GESplitScreenServer()->OnGuestCreated( ToGEMPPlayer( pPlayer ) );
 }
 
 void ClientActive( edict_t *pEdict, bool bLoadGame )

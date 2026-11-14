@@ -9,6 +9,9 @@
 #include "recipientfilter.h"
 #include "team.h"
 #include "ipredictionsystem.h"
+#ifdef GE_DLL
+#include "ges/gemp_player.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -272,6 +275,26 @@ void CRecipientFilter::AddRecipientsByPAS( const Vector& origin )
 		CBitVec< ABSOLUTE_PLAYER_LIMIT > playerbits;
 		engine->Message_DetermineMulticastRecipients( true, origin, playerbits );
 		AddPlayersFromBitMask( playerbits );
+
+#ifdef GE_DLL
+		// Split screen guests have no client of their own: their owner's client plays
+		// the sounds they hear. Add the owner when a guest can hear this sound.
+		unsigned char pvs[MAX_MAP_CLUSTERS / 8];
+		const int cluster = engine->GetClusterForOrigin( origin );
+		engine->GetPVSForCluster( cluster, sizeof( pvs ), pvs );
+		for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+		{
+			CGEMPPlayer *pGuest = ToGEMPPlayer( UTIL_PlayerByIndex( i ) );
+			if ( !pGuest || !pGuest->IsSplitGuest() )
+				continue;
+			CBasePlayer *pOwner = UTIL_PlayerByIndex( pGuest->GetSplitOwnerIndex() );
+			if ( !pOwner || pOwner->IsFakeClient() )
+				continue;
+			const Vector ear = pGuest->EarPosition();
+			if ( ear.DistToSqr( origin ) < 1500.0f * 1500.0f || engine->CheckOriginInPVS( ear, pvs, sizeof( pvs ) ) )
+				AddRecipient( pOwner );
+		}
+#endif
 	}
 }
 
@@ -406,6 +429,15 @@ void CPASAttenuationFilter::Filter( const Vector& origin, float attenuation /*= 
 
 		VectorSubtract( player->EarPosition(), origin, vecRelative );
 		distance = VectorLength( vecRelative );
+#ifdef GE_DLL
+		// A client with split screen guests hears from whichever of its players is closest
+		for ( int g = 1; g <= gpGlobals->maxClients; g++ )
+		{
+			CGEMPPlayer *pGuest = ToGEMPPlayer( UTIL_PlayerByIndex( g ) );
+			if ( pGuest && pGuest->IsSplitGuest() && pGuest->GetSplitOwnerIndex() == player->entindex() )
+				distance = MIN( distance, ( pGuest->EarPosition() - origin ).Length() );
+		}
+#endif
 		maxAudible = ( 2 * SOUND_NORMAL_CLIP_DIST ) / attenuation;
 		if ( distance <= maxAudible )
 			continue;

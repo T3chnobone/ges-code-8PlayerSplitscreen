@@ -12,6 +12,7 @@
 #include "ShaderEditor/IVShaderEditor.h"
 #include "ShaderEditor/SEdit_ModelRender.h"
 #include "ivrenderview.h"
+#include "materialsystem/imaterialvar.h"
 #include "iviewrender.h"
 #include "viewrender.h"
 #include "view.h"
@@ -80,7 +81,12 @@ bool ShaderEditorHandler::Init()
 #endif
 
 	char modulePath[MAX_PATH*4];
-#ifdef SWARM_DLL
+#ifdef GE_DLL
+	// GoldenEye ships it as bin/shadereditor.dll (the 5.0.6 client loads that name).
+	// It doesn't load with the current engine (it imports a tier0 function the 2025
+	// SDK dropped); see GESS_ReplaceEditorMaterials for what happens then.
+	Q_snprintf( modulePath, sizeof( modulePath ), "%s/bin/shadereditor.dll", engine->GetGameDirectory() );
+#elif defined( SWARM_DLL )
 	Q_snprintf( modulePath, sizeof( modulePath ), "%s/bin/shadereditor_swarm.dll", engine->GetGameDirectory() );
 #elif SOURCE_2006
 	Q_snprintf( modulePath, sizeof( modulePath ), "%s/bin/shadereditor_2006.dll", engine->GetGameDirectory() );
@@ -157,8 +163,61 @@ void ShaderEditorHandler::Update( float frametime )
 
 CThreadMutex m_Lock;
 
+#ifdef GE_DLL
+//-----------------------------------------------------------------------------
+// Without the Shader Editor (its shadereditor.dll doesn't load with the current
+// engine), GoldenEye's "editor_shader" materials (glass, monitors, some walls)
+// have no shaders compiled for them, and drawing one crashed the game inside
+// game_shader_generic_procshader.dll (Stack's glass, as soon as the map is drawn).
+// Give those materials a standard shader instead, with their own textures: models
+// VertexLitGeneric, the world LightmappedGeneric. Checked whenever the number of
+// loaded materials changes (maps and models load more).
+//-----------------------------------------------------------------------------
+static void GESS_ReplaceEditorMaterials()
+{
+	static int s_iLastCount = -1;
+	const int count = materials->GetNumMaterials();
+	if ( count == s_iLastCount )
+		return;
+	s_iLastCount = count;
+
+	int replaced = 0;
+	for ( MaterialHandle_t h = materials->FirstMaterial(); h != materials->InvalidMaterial(); h = materials->NextMaterial( h ) )
+	{
+		IMaterial *pMat = materials->GetMaterial( h );
+		if ( !pMat || pMat->IsErrorMaterial() )
+			continue;
+		const char *pszShader = pMat->GetShaderName();
+		if ( !pszShader || Q_stricmp( pszShader, "editor_shader" ) )
+			continue;
+		const bool bModel = !Q_strnicmp( pMat->GetName(), "models/", 7 ) || !Q_strnicmp( pMat->GetName(), "models\\", 7 );
+		pMat->SetShader( bModel ? "VertexLitGeneric" : "LightmappedGeneric" );
+
+		// Glass: see-through, not a solid sheet of its reflection texture
+		if ( Q_stristr( pMat->GetName(), "glass" ) )
+		{
+			pMat->SetMaterialVarFlag( MATERIAL_VAR_TRANSLUCENT, true );
+			bool bFound = false;
+			IMaterialVar *pAlpha = pMat->FindVar( "$alpha", &bFound, false );
+			if ( pAlpha && bFound )
+				pAlpha->SetFloatValue( 0.2f );
+			else
+				pMat->AlphaModulate( 0.2f );
+		}
+		replaced++;
+	}
+	if ( replaced )
+		DevMsg( "Shader Editor not loaded: %d editor_shader material(s) drawn with standard shaders\n", replaced );
+}
+#endif
+
 void ShaderEditorHandler::PreRender()
 {
+#ifdef GE_DLL
+	if ( !IsReady() )
+		GESS_ReplaceEditorMaterials();
+#endif
+
 	if ( IsReady() && view )
 	{
 		// make sure the class matches

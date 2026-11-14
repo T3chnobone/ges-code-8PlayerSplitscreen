@@ -9,6 +9,13 @@ hundreds and thousands of PC gamers for Eight long years and running.
 
 Visit our [website](http://www.geshl2.com) and [forums](http://forums.geshl2.com)!
 
+## Local split screen (this branch)
+This `ges-splitscreen` branch adds local split screen: up to 8 players with controllers on one PC,
+on one or two monitors, built for the current Source SDK Base 2013 Multiplayer.
+
+- Installing it, controls and troubleshooting, and how to build it: [INSTALL_SPLITSCREEN.md](INSTALL_SPLITSCREEN.md)
+- How it works and every option: [SPLITSCREEN.md](SPLITSCREEN.md)
+
 ## Current State
 The last major public release of GES was v5.0 on August 12, 2016 using the 2007 Source SDK. 
 

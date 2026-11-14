@@ -19,6 +19,9 @@
 
 #ifdef GE_DLL
 #include "ge_shareddefs.h"
+#ifdef CLIENT_DLL
+#include "ge_splitscreen_client.h"
+#endif
 #endif
 
 #define HL2MP_RUN_SPEED				320.0f
@@ -304,8 +307,14 @@ void CHL2MPPlayerAnimState::DoAnimationEvent( PlayerAnimEvent_t event, int nData
 #ifdef CLIENT_DLL
 	// Make the weapon play the animation as well
 #ifdef GE_DLL
+	// Not for our split screen guests either: their weapon plays its animations
+	// on their first person gun (their viewmodel, which the server animates).
+	// This sent the third person gesture's sequence number to it, and put the
+	// weapon's model back on it: their gun played the wrong animation (often its
+	// draw, so it dropped out of sight) or showed another weapon, every shot.
 	C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
-	if ( iGestureActivity != ACT_INVALID && GetBasePlayer() != pLocalPlayer && GetBasePlayer() != pLocalPlayer->GetObserverTarget() )
+	if ( iGestureActivity != ACT_INVALID && GetBasePlayer() != pLocalPlayer && GetBasePlayer() != pLocalPlayer->GetObserverTarget() &&
+		!GESS_IsLocalGuest( GetBasePlayer() ) )
 #endif
 	{
 		CBaseCombatWeapon *pWeapon = GetHL2MPPlayer()->GetActiveWeapon();

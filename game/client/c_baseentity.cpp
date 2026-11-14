@@ -40,6 +40,9 @@
 #include "cdll_bounded_cvars.h"
 #include "inetchannelinfo.h"
 #include "proto_version.h"
+#ifdef GE_DLL
+#include "ge_splitscreen_client.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -3318,8 +3321,16 @@ void C_BaseEntity::SetThinkHandle( ClientThinkHandle_t hThink )
 void C_BaseEntity::ComputeFxBlend( void )
 {
 	// Don't recompute if we've already computed this frame
+#ifdef GE_DLL
+	// ...except in split screen, where each player's view is drawn in the same
+	// frame from somewhere else: distance fades (crates, props, stairs) are per view,
+	// and the first view's result made things vanish in the others
+	if ( m_nFXComputeFrame == gpGlobals->framecount && !GESS_IsSplitActive() )
+		return;
+#else
 	if ( m_nFXComputeFrame == gpGlobals->framecount )
 		return;
+#endif
 
 	MDLCACHE_CRITICAL_SECTION();
 	int blend=0;

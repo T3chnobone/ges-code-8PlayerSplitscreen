@@ -223,6 +223,13 @@ void GECreditsText::Paint()
 
 	if (!m_TextStream.Count())
 		return;
+
+	// RichText's line break functions aren't virtual, so when the base class
+	// rebuilds m_LineBreaks itself our per-line heights fall out of step
+	// (and are empty before our first recalculation). Rebuild them together.
+	if ( m_bRecalcLineBreaks || m_LineBreaksHeight.Count() < m_LineBreaks.Count() )
+		ForceRecalculateLineBreaks();
+
 	int lineBreakIndexIndex = 0;
 	int startIndex = GetStartDrawIndex(lineBreakIndexIndex);
 	_currentTextClickable = false;

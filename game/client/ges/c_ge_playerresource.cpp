@@ -22,6 +22,7 @@ IMPLEMENT_CLIENTCLASS_DT(C_GEPlayerResource, DT_GEPlayerResource, CGEPlayerResou
 	RecvPropArray3( RECVINFO_ARRAY(m_iDevStatus), RecvPropInt( RECVINFO(m_iDevStatus[0]))),
 	RecvPropArray3( RECVINFO_ARRAY(m_iCampingPercent), RecvPropInt( RECVINFO(m_iCampingPercent[0]))),
 	RecvPropArray3( RECVINFO_ARRAY(m_iFrags), RecvPropInt( RECVINFO(m_iFrags[0]))),
+	RecvPropArray3( RECVINFO_ARRAY(m_iSuicides), RecvPropInt( RECVINFO(m_iSuicides[0]))),
 	RecvPropArray3( RECVINFO_ARRAY(m_iScoreBoardColor), RecvPropInt( RECVINFO(m_iScoreBoardColor[0]))),
 	RecvPropArray3( RECVINFO_ARRAY(m_bIsActive), RecvPropBool( RECVINFO(m_bIsActive[0]))),
 END_RECV_TABLE()
@@ -44,6 +45,7 @@ C_GEPlayerResource::C_GEPlayerResource()
 	memset( m_szCharIdent, '\0', sizeof(m_szCharIdent) );
 	memset( m_iCampingPercent, 0, sizeof(m_iCampingPercent) );
 	memset( m_iScoreBoardColor, 0, sizeof(m_iScoreBoardColor) );
+	memset( m_iSuicides, 0, sizeof(m_iSuicides) );
 
 	m_Colors[TEAM_JANUS]		=	COLOR_JANUS;
 	m_Colors[TEAM_MI6]			=	COLOR_MI6;

@@ -44,6 +44,7 @@
 #include "vcollide_parse.h"
 #include "player_command.h"
 #include "vehicle_base.h"
+#include "viewport_panel_names.h"
 #include "AI_Criteria.h"
 #include "globals.h"
 #include "usermessages.h"
@@ -2114,8 +2115,23 @@ void CBasePlayer::SetSwimSoundTime( float flSwimSoundTime )
 	m_flSwimSoundTime = flSwimSoundTime;
 }
 
+#ifdef GE_DLL
+extern bool GESS_IsSplitHostPlayer( CBasePlayer *pPlayer );
+#endif
+
 void CBasePlayer::ShowViewPortPanel( const char * name, bool bShow, KeyValues *data )
 {
+#ifdef GE_DLL
+	// Split screen hosts get their team and character from their profiles:
+	// GoldenEye's own team / character menus are never opened for them
+	if ( bShow && name && ( !Q_stricmp( name, PANEL_TEAM ) || !Q_stricmp( name, PANEL_CHARSELECT ) ) && GESS_IsSplitHostPlayer( this ) )
+	{
+		if ( data )
+			data->deleteThis();
+		return;
+	}
+#endif
+
 	CSingleUserRecipientFilter filter( this );
 	filter.MakeReliable();
 
