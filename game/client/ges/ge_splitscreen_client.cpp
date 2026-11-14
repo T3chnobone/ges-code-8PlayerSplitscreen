@@ -1221,7 +1221,7 @@ void CGESplitScreenClient::Update( float frametime )
 // them can only be used with a pointer.
 //-----------------------------------------------------------------------------
 static ConVar ges_ss_menu_pad_nav( "ges_ss_menu_pad_nav", "1", FCVAR_ARCHIVE, "Player 1's controller drives the game's own menus (main menu, pause menu, dialogs): D-pad / left stick, A (Cross) to choose, B (Circle) to go back." );
-static ConVar ges_ss_menu_hide_mouse( "ges_ss_menu_hide_mouse", "1", FCVAR_ARCHIVE, "While a controller is connected, hide the mouse cursor on the main menu and in the Split Screen menu, and ignore the mouse there." );
+static ConVar ges_ss_menu_hide_mouse( "ges_ss_menu_hide_mouse", "0", FCVAR_ARCHIVE, "1: while a controller is connected, hide the mouse cursor on the main menu and in the Split Screen menu, and ignore the mouse there." );
 
 // The window that has the keyboard focus (the popup holding the focused panel)
 static const char *GESS_FocusWindowName()
@@ -1413,9 +1413,11 @@ void CGESplitScreenClient::UpdatePadMouse( float dt )
 		m_bCursorWasVisible = true;
 	}
 
-	// Either stick moves the cursor, with a curve for fine control
-	float sx = clamp( pad.lx + pad.rx, -1.0f, 1.0f );
-	float sy = clamp( pad.ly + pad.ry, -1.0f, 1.0f );
+	// A stick moves the cursor, with a curve for fine control: the right one where
+	// the left stick moves through the game's menus (UpdateMenuPadNav), else either
+	const bool bLeftNavigates = m_iMenuNavPad >= 0;
+	float sx = clamp( ( bLeftNavigates ? 0.0f : pad.lx ) + pad.rx, -1.0f, 1.0f );
+	float sy = clamp( ( bLeftNavigates ? 0.0f : pad.ly ) + pad.ry, -1.0f, 1.0f );
 	sx *= fabsf( sx );
 	sy *= fabsf( sy );
 

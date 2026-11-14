@@ -219,12 +219,24 @@ the next round" in that player's own view.
 
 **The game's own menus with a controller**: player 1's controller (any kind: Xbox, PlayStation,
 Switch Pro...) drives the main menu, the pause menu and their dialogs like a console: D-pad or left
-stick to move (held: repeats), A / Cross to choose, B / Circle to go back or close a dialog. While a
-controller is connected, the main menu and the Split Screen menu hide the mouse cursor and ignore
-the mouse (`ges_ss_menu_hide_mouse 0` keeps it). Dialogs such as Options, Create Server or Find
-Servers still show the cursor, because parts of them need a pointer: there, player 1's sticks move
-it and the right trigger is the left mouse button. When the last controller is unplugged, the mouse
-works everywhere again. `ges_ss_menu_pad_nav 0` turns the controller menu keys off.
+stick to move (held: repeats), A / Cross to choose, B / Circle to go back or close a dialog. The
+mouse keeps working alongside it; player 1's right stick moves the cursor and the right trigger is
+the left mouse button. `ges_ss_menu_hide_mouse 1` hides the cursor and ignores the mouse on the main
+menu and in the Split Screen menu while a controller is connected (dialogs such as Options keep
+it). `ges_ss_menu_pad_nav 0` turns the controller menu keys off.
+
+**Stick dead zones**: each controller's sticks are measured automatically
+(`ges_ss_pad_deadzone_auto 1`). While a stick rests in the menus (nothing pressed), its resting point
+and how far it wanders are measured over a second and a half; the dead zone is that wander plus a
+margin (0.06 to 0.35) around the resting point. The first measurement after a controller is plugged
+in replaces the saved one; later ones only make it wider, so a stick that starts drifting doesn't
+creep. The furthest a stick has gone from its resting point counts as 100%, so worn sticks still
+reach full speed, and movement starts smoothly from the dead zone's edge. Results are saved per
+controller (SDL's GUID plus its serial number when SDL can read one, else plus its name; two
+identical controllers without serials share one entry) in `cfg/ges_splitscreen_pads.txt`. The
+Profiles page shows each controller's values and has a **Recalibrate controllers** button
+(`ges_ss_pad_recalibrate`); `ges_ss_pad_calibration` prints them. With `ges_ss_pad_deadzone_auto 0`
+every stick uses the fixed `ges_ss_pad_deadzone`, as do sticks not measured yet.
 
 ## Second screen (players 5 to 8)
 
@@ -246,7 +258,9 @@ screens: the first "players per display" players go on the left half and the res
 | `ges_ss_look_yaw` / `ges_ss_look_pitch` | 200 / 140 | Look speed in degrees per second, before profile sensitivity |
 | `ges_ss_look_aim_scale` | 0.5 | Look speed multiplier in aim mode |
 | `ges_ss_padmouse` / `ges_ss_padmouse_speed` | 1 / 1100 | Mouse cursor from player 1's controller |
-| `ges_ss_pad_deadzone` | 0.22 | Stick dead zone |
+| `ges_ss_pad_deadzone_auto` | 1 | Measure each controller's stick dead zones (see Stick dead zones) |
+| `ges_ss_pad_deadzone` | 0.22 | Fixed stick dead zone (when not measured, or with auto off) |
+| `ges_ss_menu_pad_nav` / `ges_ss_menu_hide_mouse` | 1 / 0 | Controller drives the game's menus / hide the mouse there |
 | `ges_ss_pad_backend` | auto | `sdl` or `xinput` |
 | `ge_wincondition` | 0 | 0 score, 1 kills, 2 kill/death ratio |
 | `ge_killlimit` | 0 | Kills that end the match with `ge_wincondition 1` (0 = none) |
@@ -350,8 +364,16 @@ screens: the first "players per display" players go on the left half and the res
   main menu, the pause menu and their dialogs: player 1's D-pad / left stick, A / Cross and B /
   Circle are sent to the menus as an Xbox pad's keys. Nothing did before: the engine's own joystick
   input is off while split screen reads the controllers, and it only knew Xbox pads.
-- **Mouse**: hidden and ignored on the main menu and in the Split Screen menu while a controller is
+- **Mouse**: (later changed: the mouse stays by default, see the next section) hidden and ignored on the main menu and in the Split Screen menu while a controller is
   connected (`ges_ss_menu_hide_mouse`); dialogs keep it.
 - Testing: `ges_ss_debug_menubutton up|down|left|right|a|b` sends a menu key; with no argument it
   says which window has the focus and whether the mouse is hidden. `ges_ss_debug_menunav 1` logs
   the menu keys player 1's controller sends.
+
+## Changes (14 November, night)
+
+- **Mouse back in the menus**: `ges_ss_menu_hide_mouse` now defaults to 0. The cursor and mouse
+  work on the main menu and in the Split Screen menu with controllers connected, and the controller
+  still navigates. Player 1's left stick navigates; the right stick moves the cursor.
+- **Automatic stick dead zones** per controller, saved in `cfg/ges_splitscreen_pads.txt`, with a
+  Recalibrate button and readout on the Profiles page (see Stick dead zones).

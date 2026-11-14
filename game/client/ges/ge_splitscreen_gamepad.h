@@ -88,9 +88,55 @@ public:
 	// Clear pressed/released edges (used when a menu consumes them)
 	void ConsumeEdges( int index );
 
+	// ---- Automatic stick dead zones (ges_ss_pad_deadzone_auto) ----
+	// Each stick's resting point and drift are measured while it's left alone, and
+	// how far it reaches while it's pushed; saved per controller in
+	// cfg/ges_splitscreen_pads.txt.
+	struct StickCal_t
+	{
+		float	cx, cy;		// Resting point (subtracted)
+		float	noise;		// How far it wanders from there at rest
+		float	inner;		// Dead zone radius around the resting point
+		float	reach;		// Furthest it has gone from the resting point (0 = not learned)
+		bool	measured;	// Rest measured (else the fixed ges_ss_pad_deadzone is used)
+	};
+	const char *GetPadName( int index ) const;
+	const char *GetPadId( int index ) const;
+	const StickCal_t &GetStickCal( int index, int stick ) const;	// stick 0 left, 1 right
+	float GetStickOuter( int index, int stick ) const;			// The reach used as 100%
+	void Recalibrate();				// Forget the connected controllers' calibration, measure again
+	void SaveCalibration();
+
 private:
+	struct PadCal_t
+	{
+		char		id[128];
+		char		name[64];
+		StickCal_t	stick[2];
+	};
+	// While a stick rests: samples of where it sits
+	struct RestWindow_t
+	{
+		int		count;
+		double	start;
+		float	sumX, sumY, minX, maxX, minY, maxY, lastX, lastY;
+		bool	sessionMeasured;	// Measured since it was plugged in (later ones only widen)
+	};
+	void LoadCalibration();
+	int  FindCal( const char *id, const char *name, bool bCreate );
+	void UpdateCalibration( int index, int stick, float x, float y, bool bIdle );
+	void ApplyStick( int index, int stick, float &x, float &y ) const;
+
 	IGESSPadBackend *m_pBackend;
 	GESSPadState_t m_Pads[GES_SS_MAX_PADS];
+	char		m_szPadId[GES_SS_MAX_PADS][128];
+	char		m_szPadName[GES_SS_MAX_PADS][64];
+	int			m_iPadCal[GES_SS_MAX_PADS];		// Index in m_Cals, -1 = none
+	RestWindow_t m_Rest[GES_SS_MAX_PADS][2];
+	CUtlVector<PadCal_t> m_Cals;
+	bool		m_bCalLoaded;
+	bool		m_bCalDirty;
+	double		m_flNextCalSave;
 };
 
 CGESSGamepads *GESSGamepads();

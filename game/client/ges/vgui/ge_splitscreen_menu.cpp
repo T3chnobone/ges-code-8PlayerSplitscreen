@@ -1659,6 +1659,11 @@ private:
 	CheckButton	*m_pInvited;
 	Label		*m_pHelp;
 	Button		*m_pSaveButton;
+	// The controllers' measured stick dead zones, and a button to measure again
+	Button		*m_pRecalibrate;
+	Label		*m_pPadCal;
+	float		m_flNextPadCalText;
+	void		UpdatePadCalText();
 	CGESSPlayerList *m_pPlayerList;	// Top right of the screen, on every page
 
 	// Match
@@ -1753,13 +1758,17 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pHelp->SetWrap( true );
 	m_pHelp->SetContentAlignment( Label::a_northwest );
 	m_pSaveButton = new Button( this, "SaveButton", "Save", this, "save" );
+	m_pRecalibrate = new Button( this, "Recalibrate", "Recalibrate controllers", this, "recalibrate" );
+	m_pPadCal = new Label( this, "PadCalibration", "" );
+	m_pPadCal->SetContentAlignment( Label::a_northwest );
+	m_flNextPadCalText = 0;
 
 	// The local players: its own panel so it can sit in the screen's corner
 	m_pPlayerList = new CGESSPlayerList( parent );
 	m_pPlayerList->SetMenu( this );
 
 	Panel *profPanels[] = { m_pProfileList, m_pNewButton, m_pDeleteButton, m_pNameLabel, m_pName, m_pCharLabel, m_pCharButton, m_pCharPortrait,
-		m_pSensLabel, m_pSensitivity, m_pSensValue, m_pInvert, m_pInvited, m_pHelp, m_pSaveButton };
+		m_pSensLabel, m_pSensitivity, m_pSensValue, m_pInvert, m_pInvited, m_pHelp, m_pSaveButton, m_pRecalibrate, m_pPadCal };
 	for ( int i = 0; i < ARRAYSIZE( profPanels ); i++ )
 		prof.AddToTail( profPanels[i] );
 
@@ -1836,6 +1845,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pSensitivity, GESS_NAV_SLIDER, GESS_PAGE_PROFILES );
 	AddNav( m_pInvert, GESS_NAV_CHECK, GESS_PAGE_PROFILES );
 	AddNav( m_pInvited, GESS_NAV_CHECK, GESS_PAGE_PROFILES );
+	AddNav( m_pRecalibrate, GESS_NAV_BUTTON, GESS_PAGE_PROFILES );
 	AddNav( m_pSaveButton, GESS_NAV_BUTTON, GESS_PAGE_PROFILES );
 	AddNav( m_pMap, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pMode, GESS_NAV_COMBO, GESS_PAGE_MATCH );
@@ -2006,6 +2016,10 @@ void CGESplitScreenMenu::PerformLayout()
 	m_pInvited->SetBounds( fieldX - 4, y, fieldW, 24 );
 	y += 40;
 	m_pHelp->SetBounds( x, y, W - 40, 44 );
+	y += 48;
+	// Controllers' stick dead zones (measured automatically)
+	m_pRecalibrate->SetBounds( x, y, 190, 24 );
+	m_pPadCal->SetBounds( x, y + 30, W - 40, H - 76 - ( y + 30 ) );
 
 	// ---- Match ----
 	y = 76;
@@ -2297,11 +2311,59 @@ void CGESplitScreenMenu::UpdateCharacterButton()
 	m_pCharPortrait->SetImage( image );
 }
 
+// One line per controller: its stick dead zones (and drift) and how far each reaches
+void CGESplitScreenMenu::UpdatePadCalText()
+{
+	if ( !m_pPadCal )
+		return;
+
+	static ConVarRef ges_ss_pad_deadzone_auto( "ges_ss_pad_deadzone_auto" );
+	if ( ges_ss_pad_deadzone_auto.IsValid() && !ges_ss_pad_deadzone_auto.GetBool() )
+	{
+		m_pPadCal->SetText( "Automatic dead zones are off (ges_ss_pad_deadzone_auto 0)." );
+		return;
+	}
+
+	char szText[1024] = "";
+	CGESSGamepads *pPads = GESSGamepads();
+	for ( int i = 0; i < GES_SS_MAX_PADS; i++ )
+	{
+		if ( !pPads->GetPad( i ).connected )
+			continue;
+		char szLine[256];
+		char szName[24];
+		Q_strncpy( szName, pPads->GetPadName( i ), sizeof( szName ) );
+		int len = Q_snprintf( szLine, sizeof( szLine ), "%d. %s:", i + 1, szName );
+		for ( int s = 0; s < 2; s++ )
+		{
+			const CGESSGamepads::StickCal_t &sc = pPads->GetStickCal( i, s );
+			if ( sc.measured )
+				len += Q_snprintf( szLine + len, sizeof( szLine ) - len, "   %s %.2f (drift %.2f, reach %.2f)", s == 0 ? "left" : "right",
+					sc.inner, sc.noise, pPads->GetStickOuter( i, s ) );
+			else
+				len += Q_snprintf( szLine + len, sizeof( szLine ) - len, "   %s measuring...", s == 0 ? "left" : "right" );
+		}
+		Q_strncat( szLine, "\n", sizeof( szLine ), COPY_ALL_CHARACTERS );
+		Q_strncat( szText, szLine, sizeof( szText ), COPY_ALL_CHARACTERS );
+	}
+	if ( !szText[0] )
+		Q_strncpy( szText, "No controllers connected.", sizeof( szText ) );
+	else
+		Q_strncat( szText, "Measured while the sticks rest in the menus. Push each stick all the way round once to set its reach.", sizeof( szText ), COPY_ALL_CHARACTERS );
+	m_pPadCal->SetText( szText );
+}
+
 void CGESplitScreenMenu::OnThink()
 {
 	BaseClass::OnThink();
 
 	HandlePads();
+
+	if ( gpGlobals->realtime >= m_flNextPadCalText )
+	{
+		m_flNextPadCalText = gpGlobals->realtime + 0.5f;
+		UpdatePadCalText();
+	}
 
 	// A player joined or left: players per display follows
 	if ( GESS_PerDisplayLimit() != m_iPerDisplayLimit || ( m_pPadCount && GESS_MenuPadCount() != m_iShownPadCount ) )
@@ -2683,6 +2745,11 @@ void CGESplitScreenMenu::OnCommand( const char *command )
 	{
 		GESSProfiles()->Remove( m_iEditing );
 		RefreshProfileList( m_iEditing - 1 );
+	}
+	else if ( !Q_stricmp( command, "recalibrate" ) )
+	{
+		GESSGamepads()->Recalibrate();
+		m_flNextPadCalText = 0;
 	}
 	else if ( !Q_stricmp( command, "save" ) )
 	{
