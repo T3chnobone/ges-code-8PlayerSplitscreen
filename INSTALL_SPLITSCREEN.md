@@ -64,7 +64,10 @@ Two monitors (players 5 to 8 on the second): run `ges_ss_span_monitors` in the c
 
 ### Controller quick start
 
-1. On the main menu, press any button on a controller: that controller is player 1.
+1. On the main menu, press any button on a controller: that controller is player 1. It drives the
+   menus: D-pad or left stick to move, A / Cross to choose, B / Circle to go back. While a
+   controller is connected the main menu hides the mouse cursor (dialogs like Options still show
+   it, and the stick moves it there).
 2. Open **SPLIT SCREEN**. On **Profiles**, set each player's name, character and look speed.
 3. On **Match**, pick the map, game mode, weapons, team game, jumping, win condition, time
    and kill limits, and how many players share each display.
@@ -92,6 +95,8 @@ work.
 
 ### Troubleshooting
 
+- **I want the mouse on the main menu with a controller plugged in**: `ges_ss_menu_hide_mouse 0`
+  in the console. `ges_ss_menu_pad_nav 0` stops the controller from driving the game's menus.
 - **Nothing happens when I press START / only 4 controllers work**: `SDL2.dll` must be in
   `gesource\bin`. `ges_ss_status` in the console lists the controllers and who has which.
 - **The game freezes and I can't get to Task Manager**: in exclusive fullscreen a frozen game can

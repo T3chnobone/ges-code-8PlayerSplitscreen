@@ -296,6 +296,21 @@ private:
 	bool	m_bPadMouseDown;
 	bool	m_bCursorWasVisible;
 
+	// The game's own menus (main menu, pause menu, dialogs) driven by player 1's
+	// controller: key presses sent to vgui like an Xbox pad's
+	void UpdateMenuPadNav( float frametime );
+	bool ShouldHideMenuMouse() const;
+	void SendMenuKey( int code, bool bDown );
+	int		m_iMenuNavPad;			// Controller that drove it last frame (-1 = none)
+	int		m_iMenuNavDir;			// Direction key held (-1 = none)
+	float	m_flMenuNavRepeat;		// When the held direction repeats
+	bool	m_bMenuNavADown, m_bMenuNavBDown;
+	bool	m_bMenuMouseHidden;
+public:
+	// Testing: what a controller button does in the game's own menus
+	void DebugMenuButton( const char *pszButton );
+private:
+
 	// Player 1's profile name is put in the name cvar while playing, and
 	// their own name is put back when they leave the game
 	bool	m_bApplyHostProfile;
@@ -327,6 +342,8 @@ bool GESS_ShouldHideLightsForCurrentView();
 C_BaseEntity *GESS_GetRenderViewer();
 // True in a split screen game: GoldenEye's own team / character menus stay closed
 bool GESS_ShouldSuppressGameMenus();
+// The Split Screen menu is open (it reads the controllers itself)
+bool GESS_IsSplitScreenMenuOpen();
 // A split screen guest of this client (their gun is drawn with their viewmodel)
 bool GESS_IsLocalGuest( C_BaseEntity *pEntity );
 // The camera a player's view was last drawn with (split screen only). Viewmodel

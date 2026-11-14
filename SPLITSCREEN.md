@@ -217,9 +217,14 @@ the next round" in that player's own view.
 | Back | Nothing (the leaderboard is on START) |
 | Start | Join / leaderboard and menu |
 
-**Mouse from player 1's controller**: whenever the mouse cursor is visible (main menu, pause menu,
-team/character select), player 1's controller's sticks move the cursor and its right trigger is the
-left mouse button.
+**The game's own menus with a controller**: player 1's controller (any kind: Xbox, PlayStation,
+Switch Pro...) drives the main menu, the pause menu and their dialogs like a console: D-pad or left
+stick to move (held: repeats), A / Cross to choose, B / Circle to go back or close a dialog. While a
+controller is connected, the main menu and the Split Screen menu hide the mouse cursor and ignore
+the mouse (`ges_ss_menu_hide_mouse 0` keeps it). Dialogs such as Options, Create Server or Find
+Servers still show the cursor, because parts of them need a pointer: there, player 1's sticks move
+it and the right trigger is the left mouse button. When the last controller is unplugged, the mouse
+works everywhere again. `ges_ss_menu_pad_nav 0` turns the controller menu keys off.
 
 ## Second screen (players 5 to 8)
 
@@ -336,3 +341,17 @@ screens: the first "players per display" players go on the left half and the res
   guest whose body hasn't arrived yet keeps their view instead of dropping to the floor.
 - **Jumping**: a "Jumping allowed" option on the Match page (`ge_allowjump`, saved as `jump`). Like
   the win condition, it stays set after the match.
+
+## Changes (14 November, evening)
+
+- **Stack crash**: Shader Editor materials fall back to standard shaders (see Requirements and
+  limitations).
+- **Menus with any controller**: PlayStation and Switch Pro pads (and every Xbox pad) now drive the
+  main menu, the pause menu and their dialogs: player 1's D-pad / left stick, A / Cross and B /
+  Circle are sent to the menus as an Xbox pad's keys. Nothing did before: the engine's own joystick
+  input is off while split screen reads the controllers, and it only knew Xbox pads.
+- **Mouse**: hidden and ignored on the main menu and in the Split Screen menu while a controller is
+  connected (`ges_ss_menu_hide_mouse`); dialogs keep it.
+- Testing: `ges_ss_debug_menubutton up|down|left|right|a|b` sends a menu key; with no argument it
+  says which window has the focus and whether the mouse is hidden. `ges_ss_debug_menunav 1` logs
+  the menu keys player 1's controller sends.

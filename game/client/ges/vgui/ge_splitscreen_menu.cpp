@@ -2711,6 +2711,11 @@ void CGESplitScreenMenu::OnCommand( const char *command )
 //-----------------------------------------------------------------------------
 // Commands
 //-----------------------------------------------------------------------------
+bool GESS_IsSplitScreenMenuOpen()
+{
+	return g_GESplitScreenMenu.GetNativePanel() && g_GESplitScreenMenu->IsVisible();
+}
+
 static void GESS_ToggleMenu( int page )
 {
 	if ( !g_GESplitScreenMenu.GetNativePanel() )

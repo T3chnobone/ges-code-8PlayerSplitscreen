@@ -384,6 +384,11 @@ CGESplitScreenClient::CGESplitScreenClient() : CAutoGameSystemPerFrame( "CGESpli
 	m_flCursorX = m_flCursorY = 0;
 	m_bPadMouseDown = false;
 	m_bCursorWasVisible = false;
+	m_iMenuNavPad = -1;
+	m_iMenuNavDir = -1;
+	m_flMenuNavRepeat = 0;
+	m_bMenuNavADown = m_bMenuNavBDown = false;
+	m_bMenuMouseHidden = false;
 	m_bApplyHostProfile = false;
 	m_bHostRenamed = false;
 	m_bHostChosen = false;
@@ -1185,6 +1190,7 @@ void CGESplitScreenClient::Update( float frametime )
 	GESSGamepads()->Poll();
 
 	UpdatePadAssignment();
+	UpdateMenuPadNav( dt );
 	UpdatePadMouse( dt );
 	UpdateHostLook( dt );
 	UpdatePregame();
@@ -1198,11 +1204,190 @@ void CGESplitScreenClient::Update( float frametime )
 	UpdateLayout();
 }
 
+//-----------------------------------------------------------------------------
+// The game's own menus with a controller
+//
+// The engine's joystick input is turned off while we read the controllers (see
+// Update), and it only ever knew Xbox pads anyway, so nothing drove the main
+// menu, the pause menu or their dialogs with a PlayStation or Switch pad.
+// Player 1's controller (any kind SDL or XInput reads) now sends vgui the keys
+// an Xbox pad would: D-pad / left stick = KEY_XBUTTON_UP..RIGHT (held: repeats),
+// A / Cross = KEY_XBUTTON_A, B / Circle = KEY_XBUTTON_B. vgui's menus, buttons
+// and dialogs already understand those.
+//
+// While a controller is connected, the main menu (with no dialog over it) and
+// the Split Screen menu hide the mouse cursor and ignore the mouse. Dialogs such
+// as Options or Create Server keep the cursor (and the stick moves it): parts of
+// them can only be used with a pointer.
+//-----------------------------------------------------------------------------
+static ConVar ges_ss_menu_pad_nav( "ges_ss_menu_pad_nav", "1", FCVAR_ARCHIVE, "Player 1's controller drives the game's own menus (main menu, pause menu, dialogs): D-pad / left stick, A (Cross) to choose, B (Circle) to go back." );
+static ConVar ges_ss_menu_hide_mouse( "ges_ss_menu_hide_mouse", "1", FCVAR_ARCHIVE, "While a controller is connected, hide the mouse cursor on the main menu and in the Split Screen menu, and ignore the mouse there." );
+
+// The window that has the keyboard focus (the popup holding the focused panel)
+static const char *GESS_FocusWindowName()
+{
+	vgui::VPANEL p = vgui::input()->GetFocus();
+	while ( p && !vgui::ipanel()->IsPopup( p ) )
+		p = vgui::ipanel()->GetParent( p );
+	return p ? vgui::ipanel()->GetName( p ) : "";
+}
+
+// A GameUI dialog (Options, Create Server, the server browser, the console...)
+// is in front of the main menu: it has the keyboard focus
+static bool GESS_IsGameUIDialogOpen()
+{
+	const char *pszName = GESS_FocusWindowName();
+	return pszName[0] && Q_stricmp( pszName, "GameMenu" ) && Q_stricmp( pszName, "GESSPlayerList" ) &&
+		Q_stricmp( pszName, "GESSPadHint" ) && Q_stricmp( pszName, "GESplitScreenMenu" );
+}
+
+bool CGESplitScreenClient::ShouldHideMenuMouse() const
+{
+	if ( !ges_ss_menu_hide_mouse.GetBool() || !HasAnyPadConnected() || !engine->IsActiveApp() )
+		return false;
+	if ( GESS_IsSplitScreenMenuOpen() )
+		return true;
+	return enginevgui->IsGameUIVisible() && !GESS_IsGameUIDialogOpen();
+}
+
+void CGESplitScreenClient::SendMenuKey( int code, bool bDown )
+{
+	if ( !g_InputInternal )
+		return;
+	const vgui::KeyCode key = (vgui::KeyCode) code;
+	g_InputInternal->SetKeyCodeState( key, bDown );
+	if ( bDown )
+	{
+		g_InputInternal->InternalKeyCodePressed( key );
+		g_InputInternal->InternalKeyCodeTyped( key );
+	}
+	else
+	{
+		g_InputInternal->InternalKeyCodeReleased( key );
+	}
+}
+
+static ConVar ges_ss_debug_menunav( "ges_ss_debug_menunav", "0", FCVAR_DONTRECORD, "Testing: log the menu keys player 1's controller sends." );
+
+void CGESplitScreenClient::UpdateMenuPadNav( float dt )
+{
+	// The mouse: hidden and parked in a corner where nothing can be clicked
+	m_bMenuMouseHidden = ShouldHideMenuMouse();
+	if ( m_bMenuMouseHidden )
+	{
+		int w, h;
+		vgui::surface()->GetScreenSize( w, h );
+		int cx, cy;
+		vgui::input()->GetCursorPos( cx, cy );
+		if ( cx != w - 1 || cy != h - 1 )
+		{
+			vgui::input()->SetCursorPos( w - 1, h - 1 );
+			if ( g_InputInternal )
+				g_InputInternal->InternalCursorMoved( w - 1, h - 1 );
+		}
+		vgui::surface()->SetCursor( vgui::dc_none );
+	}
+
+	static const int s_DirKeys[4] = { KEY_XBUTTON_UP, KEY_XBUTTON_DOWN, KEY_XBUTTON_LEFT, KEY_XBUTTON_RIGHT };
+	const int padIndex = GetSlotPad( 0 );
+	const GESSPadState_t &pad = GESSGamepads()->GetPad( padIndex );
+	const bool bActive = ges_ss_menu_pad_nav.GetBool() && g_InputInternal && enginevgui->IsGameUIVisible() &&
+		!GESS_IsSplitScreenMenuOpen() && padIndex >= 0 && pad.connected;
+
+	if ( !bActive || padIndex != m_iMenuNavPad )
+	{
+		// Let go of anything held. A controller that just became player 1 starts
+		// next frame: the press that claimed it does nothing else.
+		if ( m_iMenuNavDir >= 0 )
+			SendMenuKey( s_DirKeys[m_iMenuNavDir], false );
+		if ( m_bMenuNavADown )
+			SendMenuKey( KEY_XBUTTON_A, false );
+		if ( m_bMenuNavBDown )
+			SendMenuKey( KEY_XBUTTON_B, false );
+		m_iMenuNavDir = -1;
+		m_bMenuNavADown = m_bMenuNavBDown = false;
+		m_iMenuNavPad = bActive ? padIndex : -1;
+		return;
+	}
+
+	// Direction: D-pad, else the left stick
+	int dir = -1;
+	if ( pad.IsDown( GESS_PAD_DPAD_UP ) )			dir = 0;
+	else if ( pad.IsDown( GESS_PAD_DPAD_DOWN ) )	dir = 1;
+	else if ( pad.IsDown( GESS_PAD_DPAD_LEFT ) )	dir = 2;
+	else if ( pad.IsDown( GESS_PAD_DPAD_RIGHT ) )	dir = 3;
+	else if ( fabsf( pad.ly ) >= 0.6f && fabsf( pad.ly ) >= fabsf( pad.lx ) )	dir = pad.ly > 0 ? 0 : 1;
+	else if ( fabsf( pad.lx ) >= 0.6f )			dir = pad.lx < 0 ? 2 : 3;
+
+	const float now = gpGlobals->realtime;
+	if ( dir != m_iMenuNavDir )
+	{
+		if ( m_iMenuNavDir >= 0 )
+			SendMenuKey( s_DirKeys[m_iMenuNavDir], false );
+		if ( dir >= 0 )
+		{
+			SendMenuKey( s_DirKeys[dir], true );
+			m_flMenuNavRepeat = now + 0.45f;
+		}
+		m_iMenuNavDir = dir;
+	}
+	else if ( dir >= 0 && now >= m_flMenuNavRepeat )
+	{
+		SendMenuKey( s_DirKeys[dir], false );
+		SendMenuKey( s_DirKeys[dir], true );
+		m_flMenuNavRepeat = now + 0.12f;
+	}
+
+	// A / Cross chooses, B / Circle goes back
+	const bool bA = pad.IsDown( GESS_PAD_A ), bB = pad.IsDown( GESS_PAD_B );
+	if ( bA != m_bMenuNavADown )
+	{
+		SendMenuKey( KEY_XBUTTON_A, bA );
+		m_bMenuNavADown = bA;
+	}
+	if ( bB != m_bMenuNavBDown )
+	{
+		SendMenuKey( KEY_XBUTTON_B, bB );
+		m_bMenuNavBDown = bB;
+	}
+
+	if ( ges_ss_debug_menunav.GetBool() && ( pad.pressed || pad.released ) )
+		Msg( "menu nav: controller %d buttons %04x dir %d A %d B %d\n", padIndex + 1, pad.buttons, dir, bA, bB );
+}
+
+void CGESplitScreenClient::DebugMenuButton( const char *pszButton )
+{
+	static const struct { const char *name; int key; } s_Buttons[] =
+	{
+		{ "up", KEY_XBUTTON_UP }, { "down", KEY_XBUTTON_DOWN }, { "left", KEY_XBUTTON_LEFT },
+		{ "right", KEY_XBUTTON_RIGHT }, { "a", KEY_XBUTTON_A }, { "b", KEY_XBUTTON_B },
+	};
+	for ( int i = 0; i < ARRAYSIZE( s_Buttons ); i++ )
+	{
+		if ( Q_stricmp( pszButton, s_Buttons[i].name ) )
+			continue;
+		SendMenuKey( s_Buttons[i].key, true );
+		SendMenuKey( s_Buttons[i].key, false );
+		return;
+	}
+
+	// List what's open, to see what counts as a dialog
+	Msg( "GameUI visible %d, focus in \"%s\", dialog open %d, mouse hidden %d, Split Screen menu %d, menu controller %d\n",
+		enginevgui->IsGameUIVisible(), GESS_FocusWindowName(), GESS_IsGameUIDialogOpen(), m_bMenuMouseHidden,
+		GESS_IsSplitScreenMenuOpen(), m_iMenuNavPad + 1 );
+}
+
+CON_COMMAND_F( ges_ss_debug_menubutton, "Testing: ges_ss_debug_menubutton up|down|left|right|a|b sends the game's menus a controller button; no argument lists the open popups", FCVAR_DONTRECORD )
+{
+	GESplitScreenClient()->DebugMenuButton( args.ArgC() > 1 ? args[1] : "" );
+}
+
 void CGESplitScreenClient::UpdatePadMouse( float dt )
 {
 	// Player 1's controller moves the cursor
 	const GESSPadState_t &pad = GESSGamepads()->GetPad( GetSlotPad( 0 ) );
-	const bool bCursor = ges_ss_padmouse.GetBool() && pad.connected && vgui::surface()->IsCursorVisible();
+	// (not where the mouse is hidden: the menus there are driven like a console's)
+	const bool bCursor = ges_ss_padmouse.GetBool() && pad.connected && vgui::surface()->IsCursorVisible() && !m_bMenuMouseHidden;
 
 	if ( !bCursor )
 	{
