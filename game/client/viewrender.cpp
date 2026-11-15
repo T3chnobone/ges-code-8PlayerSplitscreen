@@ -2081,7 +2081,7 @@ void CViewRender::RenderView( const CViewSetup &view, int nClearFlags, int whatT
 
 #if defined(GE_DLL) && defined(_WIN32)
 		// Biohazard's shader editor
-		g_ShaderEditorSystem->UpdateSkymask();
+		g_ShaderEditorSystem->UpdateSkymask( false, view.x, view.y, view.width, view.height );
 #endif
 
 		g_bRenderingView = true;
@@ -2182,7 +2182,7 @@ void CViewRender::RenderView( const CViewSetup &view, int nClearFlags, int whatT
 
 #if defined(GE_DLL) && defined(_WIN32)
 		// Biohazard's shader editor
-		g_ShaderEditorSystem->UpdateSkymask( bDrew3dSkybox );
+		g_ShaderEditorSystem->UpdateSkymask( bDrew3dSkybox, view.x, view.y, view.width, view.height );
 #endif
 
 		DrawUnderwaterOverlay();

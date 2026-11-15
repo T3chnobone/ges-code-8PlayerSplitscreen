@@ -1,0 +1,39 @@
+diff --git a/src/materialsystem/procshader/procshader.cpp b/src/materialsystem/procshader/procshader.cpp
+index 1180742..f4b87a6 100644
+--- a/src/materialsystem/procshader/procshader.cpp
++++ b/src/materialsystem/procshader/procshader.cpp
+@@ -288,7 +288,7 @@ int CalcShaderIndex( CBaseVSShader *pShader, IShaderShadow* pShaderShadow, IShad
+ #ifndef SHADER_EDITOR_DLL_2006
+ 		case HLSLCOMBO_LIGHT_STATIC:
+ 			Assert( pShaderAPI );
+-			localCombo = lState.m_bStaticLight ? 1 : 0;
++			localCombo = lState.m_bStaticLightVertex ? 1 : 0;
+ 			break;
+ 		case HLSLCOMBO_LIGHT_DYNAMIC:
+ 			Assert( pShaderAPI );
+diff --git a/src/shadereditor/interface/dll_init.cpp b/src/shadereditor/interface/dll_init.cpp
+index 2f4fd7f..46d4b1a 100644
+--- a/src/shadereditor/interface/dll_init.cpp
++++ b/src/shadereditor/interface/dll_init.cpp
+@@ -162,7 +162,7 @@ bool ShaderEditorInterface::Init( CreateInterfaceFn appSystemFactory, CGlobalVar
+ 	const char *pszModuleName = "game_shader_generic_eshader_2006.dll";
+ #elif SHADER_EDITOR_DLL_2013
+ 	//const char *pszModuleName = "game_shader_generic_eshader_2013.dll";
+-	const char *pszModuleName = "game_shader_dx6.dll";
++	const char *pszModuleName = "game_shader_generic_procshader.dll";
+ #elif SHADER_EDITOR_DLL_PORTAL2
+ 	const char *pszModuleName = "game_shader_generic_eshader_PORTAL2.dll";
+ #else
+diff --git a/src/vgui_editor/perforcefileexplorer.cpp b/src/vgui_editor/perforcefileexplorer.cpp
+index 7765545..9bf590c 100644
+--- a/src/vgui_editor/perforcefileexplorer.cpp
++++ b/src/vgui_editor/perforcefileexplorer.cpp
+@@ -102,7 +102,7 @@ void PerforceFileExplorer::SetCurrentDirectory( const char *pFullPath )
+ 
+ 	m_CurrentDirectory = pFullPath;
+ 	m_CurrentDirectory.StripTrailingSlash();
+-	Q_FixSlashes( m_CurrentDirectory.Get() );
++	m_CurrentDirectory.FixSlashes();
+ 
+ 	PopulateFileList();
+ 	PopulateDriveList();

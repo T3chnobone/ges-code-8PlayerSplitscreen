@@ -291,12 +291,11 @@ screens: the first "players per display" players go on the left half and the res
   in their views (distance fades are worked out per view).
 - **Map changes**: the engine drops fake clients (the guests) when the map changes, for example
   the next map after a match. Each guest's join request creates them again on the new map.
-- **Glass and monitor materials**: GoldenEye's Shader Editor (`bin/shadereditor.dll`, 2016) doesn't
-  load with the current engine (it imports a tier0 function the 2025 SDK removed), so its
-  `editor_shader` materials (glass, monitors, some walls) have no shaders. Drawing one crashed the
-  game inside `game_shader_generic_procshader.dll` (Stack, at the start of a match). The client now
-  gives those materials standard shaders (glass see-through): no crash, but no animated monitors or
-  reflections. A Shader Editor rebuilt for the current SDK would bring them back.
+- **Glass and monitor materials**: GoldenEye's Shader Editor draws glass, monitor screens and
+  some walls (`editor_shader` materials). Its 2016 DLLs don't load with the current engine; this
+  build ships both rebuilt from source (see [shadereditor/README.md](shadereditor/README.md)). If
+  `bin/shadereditor.dll` still fails to load, the client gives those materials standard shaders
+  (glass see-through, no reflection, monitors still) instead of crashing.
 
 ## Changes (13 November)
 
@@ -395,3 +394,13 @@ screens: the first "players per display" players go on the left half and the res
   movement code's jump only called an empty `SetAnimation`. It now sends the jump animation event
   from `CGameMovement::CheckJumpButton`, online and in split screen (guests' jumps reach the other
   views), and landing ends it as before.
+
+## Changes (15 November, afternoon)
+
+- **Shader Editor**: glass reflections and moving monitor screens are back (Stack's
+  glass, Bunker's map and screens, Silo's and Aztec's screens, Complex's walls). `shadereditor.dll`
+  and `game_shader_generic_procshader.dll` are rebuilt from Biohazard90's Source Shader Editor
+  source for the current engine (the 2016 ones failed to load), and the client uses the current
+  editor interface. The editor's sky mask now gets each view's rectangle, so it works per split
+  screen view. Build steps: [shadereditor/README.md](shadereditor/README.md). The standard-shader
+  fallback stays for when the editor doesn't load.

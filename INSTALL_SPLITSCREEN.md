@@ -27,6 +27,8 @@ backups described below.
 | `bin\client.dll` | `bin\client.dll` |
 | `bin\server.dll` | `bin\server.dll` |
 | `bin\SDL2.dll` (SDL 2.30.12) | `bin\SDL2.dll` |
+| `bin\shadereditor.dll` | `bin\shadereditor.dll` |
+| `bin\game_shader_generic_procshader.dll` | `bin\game_shader_generic_procshader.dll` |
 | `resource\GameMenu.res` | `resource\GameMenu.res` |
 | `resource\ClientScheme.res` | `resource\ClientScheme.res` |
 | `gameinfo.txt` | `gameinfo.txt` |
@@ -108,10 +110,11 @@ work.
 - **The game freezes and I can't get to Task Manager**: in exclusive fullscreen a frozen game can
   sit on top of everything. Use **Fullscreen (windowed)** or **Windowed** in Video options, or
   launch with `-windowed -noborder`. Ctrl+Shift+Esc then opens Task Manager over it.
-- **Stack's glass, monitors, some Complex walls look plain**: GoldenEye's Shader Editor
-  (`bin\shadereditor.dll`) doesn't load on the current engine. Drawing its materials used to crash
-  the game (for example on Stack, as soon as the match started). This build draws them with normal
-  shaders instead: glass is see-through but has no reflection, monitors don't animate.
+- **Glass, monitors and some Complex walls look plain**: they use GoldenEye's Shader Editor. Check
+  that `bin\shadereditor.dll` and `bin\game_shader_generic_procshader.dll` are the ones from this
+  zip (the 2016 ones that come with 5.0.6 don't load on the current engine). If the editor can't
+  load, the game draws those materials with normal shaders instead (glass see-through but without
+  reflection, monitors still) rather than crashing.
 - **The second screen stays black**: the window must span both monitors (see Launch).
 - **Guests can't join**: the server needs free player slots. Matches started from the Split Screen
   menu use `maxplayers 16`.
@@ -182,6 +185,12 @@ Building the whole solution also works.
 Copy the two DLLs to `sourcemods\gesource\bin`. Keep the `.pdb` files next to your build to read
 crash dumps.
 
+### Shader Editor DLLs
+
+`bin\shadereditor.dll` and `bin\game_shader_generic_procshader.dll` (glass, monitor screens) are
+built separately, from Biohazard90's Source Shader Editor source with a small patch, after the
+main build: see [shadereditor/README.md](shadereditor/README.md).
+
 ### Source map
 
 - Split screen: `game/client/ges/ge_splitscreen_*`, `game/client/ges/hud/ge_splitscreen_hud.cpp`,
@@ -190,5 +199,6 @@ crash dumps.
   and `CViewRender::RenderSplitScreen` / `SetUpSplitScreenViews` in `game/client/view.cpp`.
 - Engine update and Windows build fixes: `CMakeLists.txt`, `game/CMakeLists.txt`, `cmake/`,
   `public/` (above), `game/client/ges/ge_fmodex.*`.
+- Shader Editor: `game/client/ShaderEditor/` (client side) and `shadereditor/` (the two DLLs).
 - Optional standalone launcher: `launcher/` (see its README).
 - Resource files for the release: `splitscreen_resources/` (same layout as `gesource`).

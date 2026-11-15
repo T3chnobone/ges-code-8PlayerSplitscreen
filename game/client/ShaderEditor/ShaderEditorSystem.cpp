@@ -82,9 +82,11 @@ bool ShaderEditorHandler::Init()
 
 	char modulePath[MAX_PATH*4];
 #ifdef GE_DLL
-	// GoldenEye ships it as bin/shadereditor.dll (the 5.0.6 client loads that name).
-	// It doesn't load with the current engine (it imports a tier0 function the 2025
-	// SDK dropped); see GESS_ReplaceEditorMaterials for what happens then.
+	// GoldenEye ships it as bin/shadereditor.dll (the 5.0.6 client loads that name), next to
+	// its shader DLL bin/game_shader_generic_procshader.dll. The 2016 builds don't load with
+	// the current engine (CThread changed in tier0); this branch rebuilds both from the Source
+	// Shader Editor source (see shadereditor/README.md). If it still fails to load,
+	// GESS_ReplaceEditorMaterials draws its materials with standard shaders.
 	Q_snprintf( modulePath, sizeof( modulePath ), "%s/bin/shadereditor.dll", engine->GetGameDirectory() );
 #elif defined( SWARM_DLL )
 	Q_snprintf( modulePath, sizeof( modulePath ), "%s/bin/shadereditor_swarm.dll", engine->GetGameDirectory() );
@@ -249,10 +251,10 @@ void ShaderEditorHandler::CustomViewRender( int *viewId, const VisibleFogVolumeI
 	if ( IsReady() )
 		shaderEdit->OnSceneRender();
 }
-void ShaderEditorHandler::UpdateSkymask( bool bCombineMode )
+void ShaderEditorHandler::UpdateSkymask( bool bCombineMode, int x, int y, int w, int h )
 {
 	if ( IsReady() )
-		shaderEdit->OnUpdateSkymask( bCombineMode );
+		shaderEdit->OnUpdateSkymask( bCombineMode, x, y, w, h );
 }
 void ShaderEditorHandler::CustomPostRender()
 {
