@@ -71,7 +71,7 @@ Two monitors (players 5 to 8 on the second): run `ges_ss_span_monitors` in the c
    The stick dead zones of every controller are measured automatically while the sticks rest in
    the menus; push each stick all the way round once so it learns its full reach. The Profiles page
    shows the values and has a **Recalibrate controllers** button.
-3. On **Match**, pick the map, game mode, weapons, team game, jumping, win condition, time
+3. On **Match**, pick the map, game mode, weapons, team game, jumping, radar, win condition, time
    and kill limits, and how many players share each display.
 4. Other players press **START** to join and **LB / RB** to pick their profile.
 5. **Start match**. When the map loads, each screen asks for its player: press the **right
@@ -116,7 +116,7 @@ work.
 - **Guests can't join**: the server needs free player slots. Matches started from the Split Screen
   menu use `maxplayers 16`.
 - **Hosting a normal online game after split screen**: the match settings are server settings and
-  stay set. Before hosting online, set `ge_wincondition 0` and `ge_allowjump 1`.
+  stay set. Before hosting online, set `ge_wincondition 0`, `ge_allowjump 1` and `ge_allowradar 1`.
 - **Crash dumps**: Windows writes them to `%LOCALAPPDATA%\CrashDumps`. Include the newest
   `hl2.exe.*.dmp` and `gesource\console.log` (launch with `-condebug`) in a bug report.
 

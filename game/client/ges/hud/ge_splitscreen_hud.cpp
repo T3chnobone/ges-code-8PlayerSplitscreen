@@ -38,6 +38,8 @@
 
 using namespace vgui;
 
+void GESS_PaintRadar( int slot, C_BasePlayer *pViewer, int vx, int vy, int vw, int vh );
+
 ConVar ges_ss_hud_hint( "ges_ss_hud_hint", "1", FCVAR_ARCHIVE, "Show 'press START to join' when controllers are connected." );
 
 class CGESplitScreenHud : public CHudElement, public vgui::Panel
@@ -1081,6 +1083,9 @@ void CGESplitScreenHud::PaintPlayerHud( int slot, C_BasePlayer *pPlayer, const G
 	}
 	if ( barAlpha > 0.0f && pGE )
 		PaintLifeDials( pGE, vp, barAlpha );
+
+	// GoldenEye's radar, centred on this player (ge_hudradar.cpp), when the match allows it
+	GESS_PaintRadar( slot, pPlayer, vp.x, vp.y, vp.w, vp.h );
 
 	// Ammo: GoldenEye's own counter, bottom right
 	(void) pMP;

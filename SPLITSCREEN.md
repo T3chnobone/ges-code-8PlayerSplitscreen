@@ -97,6 +97,8 @@ On the Match page you pick:
   games (for example the Golden Gun is never a team game, Capture the Key always is).
 - **Jumping allowed**: `ge_allowjump` for everyone in the match (guests too). Jump is the right
   stick click.
+- **Radar**: `ge_allowradar` for everyone in the match. Each player sees GoldenEye's own radar in
+  their view (see Changes, 15 November). A game mode that forces the radar on still shows it.
 - **Win condition**:
   - *Timed, highest score*: the mode's normal scoring when the time limit runs out.
   - *First to N kills*: the match ends as soon as a player (or team) reaches the kill limit.
@@ -377,3 +379,19 @@ screens: the first "players per display" players go on the left half and the res
   still navigates. Player 1's left stick navigates; the right stick moves the cursor.
 - **Automatic stick dead zones** per controller, saved in `cfg/ges_splitscreen_pads.txt`, with a
   Recalibrate button and readout on the Profiles page (see Stick dead zones).
+
+## Changes (15 November)
+
+- **Radar**: a Radar option on the Match page (`ge_allowradar`, saved as `radar`). Each player's
+  view shows GoldenEye's own radar (`CGERadar`, the same element as online, with its contacts kept
+  per player): its textures, team backgrounds and colours, blips, tokens, above/below icons, campers,
+  range and the game mode's radar rules (`ge_radar_range`, `ge_radar_showenemyteam`, forced radar,
+  custom icons). It's centred on that player and turns with their view, where `cl_ge_radarpos` puts
+  the normal radar (bottom centre by default), sized for the view. Hidden while dead, in
+  intermission, or when the radar isn't allowed. Like jumping, `ge_allowradar` stays set after the
+  match.
+- **Jump animation**: players now visibly jump (the third person `ACT_MP_JUMP`, which the weapons
+  turn into GoldenEye's `ACT_GES_JUMP_*`, crouched `ACT_GES_CJUMP_*`). Nothing used to start it: the
+  movement code's jump only called an empty `SetAnimation`. It now sends the jump animation event
+  from `CGameMovement::CheckJumpButton`, online and in split screen (guests' jumps reach the other
+  views), and landing ends it as before.

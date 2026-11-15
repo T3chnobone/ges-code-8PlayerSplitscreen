@@ -23,6 +23,7 @@
 #include "c_gemp_player.h"
 #include "c_team.h"
 #include "materialsystem/imaterial.h"
+#include "ge_splitscreen_client.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -78,7 +79,18 @@ public:
 	static Color	s_ColorJanus;
 	static Color	s_ColorMI6;
 
+	// Split screen: the same radar for one player's view, centred on them and
+	// drawn at x, y (screen) with this size, its contacts kept per view
+	void PaintSplitView( int slot, C_BasePlayer *pViewer, int x, int y, int size );
+	// Allowed to show at all (server / gameplay rules, the player's setting)
+	bool IsRadarAllowed() const;
+
 private:
+	// Who the radar is centred on: the local player, or a split screen player
+	C_BasePlayer *GetViewer() const { return m_hViewer.Get() ? m_hViewer.Get() : C_BasePlayer::GetLocalPlayer(); }
+	void UpdateContacts();
+	void PaintContents( int bgAlpha );
+
 	void WorldToRadar( CGERadarContact *contact );
 
 	bool IsContactCamping( int iEntSerial );
@@ -95,8 +107,14 @@ private:
 	void DrawIconOnRadar( CGERadarContact *contact, Color col );
 
 private:
-	CGERadarContact	m_radarContacts[ MAX_NET_RADAR_ENTS ];
-	int				m_iNumContacts;
+	// Contacts per view: 0 the normal radar, 1-8 split screen players' views
+	enum { GERADAR_VIEWS = 9 };
+	CGERadarContact	m_ViewContacts[ GERADAR_VIEWS ][ MAX_NET_RADAR_ENTS ];
+	int				m_iViewNumContacts[ GERADAR_VIEWS ];
+	float			m_flViewNextThink[ GERADAR_VIEWS ];
+	int				m_iView;
+	CHandle<C_BasePlayer> m_hViewer;
+	int				m_iDrawX, m_iDrawY;		// Where a split screen view's radar is drawn
 
 	float			m_flNextThink;
 
@@ -118,6 +136,10 @@ private:
 
 	void ThinkAdvance( float delay = 0.025f ) { m_flNextThink = gpGlobals->curtime + delay; }
 };
+
+// The current view's contacts (see m_iView)
+#define m_radarContacts	m_ViewContacts[m_iView]
+#define m_iNumContacts	m_iViewNumContacts[m_iView]
 
 // Static colors definitions!
 Color CGERadar::s_ColorDM( 0, 185, 0, 255 );
@@ -200,6 +222,15 @@ CGERadar::CGERadar( const char *pElementName ) :
 	m_iSideBuff = 8;
 	m_flRadarDiameter = 1.0f;
 
+	m_iView = 0;
+	m_iDrawX = m_iDrawY = 0;
+	for ( int v = 0; v < GERADAR_VIEWS; v++ )
+	{
+		m_iViewNumContacts[v] = 0;
+		m_flViewNextThink[v] = 0;
+	}
+	m_flNextThink = 0;
+
 	ListenForGameEvent( "round_start" );
 	ListenForGameEvent( "player_team" );
 }
@@ -261,8 +292,11 @@ void CGERadar::FireGameEvent( IGameEvent *event )
 {
 	if ( !Q_strcmp( event->GetName(), "round_start" ) )
 	{
-		// Purge all our contacts at the start of a round
-		ClearAllContacts();
+		// Purge all our contacts at the start of a round (every view's)
+		const int view = m_iView;
+		for ( m_iView = 0; m_iView < GERADAR_VIEWS; m_iView++ )
+			ClearAllContacts();
+		m_iView = view;
 	}
 	else if ( !Q_strcmp( event->GetName(), "player_team" ) )
 	{
@@ -327,7 +361,18 @@ void CGERadar::OnThink( void )
 		return;
 	}
 
-	CBasePlayer *pLocalPlayer = CBasePlayer::GetLocalPlayer();
+	// (split screen views update in PaintSplitView)
+	m_iView = 0;
+	m_hViewer = NULL;
+	UpdateContacts();
+	ThinkAdvance( 0.025f );
+}
+
+void CGERadar::UpdateContacts()
+{
+	CBasePlayer *pLocalPlayer = GetViewer();
+	if ( !pLocalPlayer || !g_RR )
+		return;
 
 	// Go through our Radar Resource to get any new entities / updates to existing ones
 	int iEntSerial;
@@ -366,8 +411,6 @@ void CGERadar::OnThink( void )
 	}
 
 	ValidateContacts();
-
-	ThinkAdvance( 0.025f );
 }
 
 //---------------------------------------------------------
@@ -415,7 +458,7 @@ void CGERadar::ValidateContacts()
 		return;
 
 	bool bRemove = false;
-	CBasePlayer *pLocalPlayer = CBasePlayer::GetLocalPlayer();
+	CBasePlayer *pLocalPlayer = GetViewer();
 	CGERadarContact *pContact;
 	int index = -1;
 
@@ -467,7 +510,7 @@ void CGERadar::WorldToRadar( CGERadarContact *contact )
 	if ( !IsContactInRange( contact ) )
 		return;
 
-	C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+	C_BasePlayer *pLocalPlayer = GetViewer();
 	if ( !pLocalPlayer )
 		return;
 
@@ -496,6 +539,16 @@ void CGERadar::WorldToRadar( CGERadarContact *contact )
 		flPlayerY = (pLocalPlayer->GetLocalAngles().y * M_PI) * 0.0055555f;
 	else
 		flPlayerY = (pLocalPlayer->LocalEyeAngles().y * M_PI) * 0.0055555f;
+
+	// A split screen guest: the way their own view faces (kept on our client)
+	if ( GESS_IsLocalGuest( pLocalPlayer ) )
+	{
+		Vector viewOrigin;
+		QAngle viewAngles;
+		float fov, fovViewmodel;
+		if ( GESS_GetPlayerViewSetup( pLocalPlayer, viewOrigin, viewAngles, fov, fovViewmodel ) )
+			flPlayerY = ( viewAngles.y * M_PI ) * 0.0055555f;
+	}
 
 	// Always add because atan will return neg angle w/ neg coeff
 	if ( x_diff < 0 )
@@ -535,12 +588,21 @@ void CGERadar::Paint()
 	if ( !m_Background )
 		Init();
 
+	m_iView = 0;
+	m_hViewer = NULL;
+	m_iDrawX = m_iDrawY = 0;
+
 	// Draw the radar background.
 	int bgAlpha = 225;
-	if ( C_BasePlayer::GetLocalPlayer() && C_BasePlayer::GetLocalPlayer()->IsObserver() )
+	if ( GetViewer() && GetViewer()->IsObserver() )
 		bgAlpha = 255;
 
-	m_Background->DrawSelf(m_iSideBuff, m_iSideBuff, m_flRadarDiameter, m_flRadarDiameter, Color(255,255,255,bgAlpha));
+	PaintContents( bgAlpha );
+}
+
+void CGERadar::PaintContents( int bgAlpha )
+{
+	m_Background->DrawSelf(m_iDrawX + m_iSideBuff, m_iDrawY + m_iSideBuff, m_flRadarDiameter, m_flRadarDiameter, Color(255,255,255,bgAlpha));
 
 	// Now go through the list of radar targets and represent them on the radar screen
 	// by drawing their icons on top of the background.
@@ -557,7 +619,7 @@ void CGERadar::Paint()
 
 			if ( GEMPRules()->IsTeamplay() )
 			{
-				CBasePlayer *pLocalPlayer = CBasePlayer::GetLocalPlayer();
+				CBasePlayer *pLocalPlayer = GetViewer();
 				int team = GEPlayerRes()->GetTeam( pContact->GetEntindex() );
 
 				// Set the color to their team
@@ -669,6 +731,8 @@ void CGERadar::DrawIconOnRadar( CGERadarContact *contact, Color col )
 		// Center the icon around its position.
 		x -= (width >> 1);
 		y -= (height >> 1);
+		x += m_iDrawX;
+		y += m_iDrawY;
 
 		vgui::surface()->DrawSetColor( col[0], col[1], col[2], col[3]*contact->m_flAlphaMod );
 		vgui::surface()->DrawSetTexture( icon->textureId );
@@ -684,7 +748,7 @@ bool CGERadar::IsContactCamping( int iEntSerial )
 
 bool CGERadar::IsContactInRange( const Vector location )
 {
-	C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+	C_BasePlayer *pLocalPlayer = GetViewer();
 	if ( !pLocalPlayer )
 		return false;
 
@@ -701,7 +765,7 @@ bool CGERadar::IsContactInRange( CGERadarContact *contact )
 
 float CGERadar::GetContactRange( const Vector location )
 {
-	C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+	C_BasePlayer *pLocalPlayer = GetViewer();
 	if ( !pLocalPlayer )
 		return false;
 	Vector dist = pLocalPlayer->GetAbsOrigin() - location;
@@ -719,7 +783,7 @@ Vector CGERadar::GetContactPosition( CGERadarContact *contact )
 
 float CGERadar::GetRadarRange( void )
 {
-	CBasePlayer *pLocalPlayer = CBasePlayer::GetLocalPlayer();
+	CBasePlayer *pLocalPlayer = GetViewer();
 	float flMod = g_RR->GetRangeModifier( g_RR->FindEntityIndex( pLocalPlayer->GetRefEHandle().ToInt() ) );
 	return ge_radar_range.GetFloat() * flMod;
 }
@@ -871,4 +935,95 @@ void CGERadar::ResetContact( int pos )
 	m_radarContacts[pos].m_vScaledPos = vec3_origin;
 	m_radarContacts[pos].m_flAlphaMod = 1.0f;
 	m_radarContacts[pos].m_flBlinkMod = 0;
+}
+
+//---------------------------------------------------------
+// Split screen: each player's own radar in their view
+//---------------------------------------------------------
+bool CGERadar::IsRadarAllowed() const
+{
+	if ( !g_RR )
+		return false;
+	if ( ( ge_allowradar.GetInt() == 0 || cl_ge_showradar.GetInt() == 0 ) && !g_RR->ForceRadarOn() )
+		return false;
+	return !( GEMPRules() && GEMPRules()->IsIntermission() );
+}
+
+void CGERadar::PaintSplitView( int slot, C_BasePlayer *pViewer, int x, int y, int size )
+{
+	if ( slot < 0 || slot + 1 >= GERADAR_VIEWS || !pViewer || !IsRadarAllowed() )
+		return;
+	if ( !m_Background )
+		VidInit();
+	if ( !m_Background || !m_IconBlip )
+		return;
+
+	// This view's geometry, worked out like Reset() does for the screen
+	const float flScaleX = m_flScaleX, flScaleY = m_flScaleY, flDiameter = m_flRadarDiameter;
+	const int iSideBuff = m_iSideBuff;
+	CHudTexture *pBackground = m_Background;
+
+	m_iView = slot + 1;
+	m_hViewer = pViewer;
+	m_iDrawX = x;
+	m_iDrawY = y;
+	m_iSideBuff = MAX( 1, size / 10 );		// 8 of 80 units
+	m_flRadarDiameter = size - m_iSideBuff * 2;
+	m_flScaleX = (float) size / m_Background->Width();
+	m_flScaleY = (float) size / m_Background->Height();
+
+	// Their team's background
+	const int team = pViewer->GetTeamNumber();
+	CHudTexture *pTeamBg = team == TEAM_MI6 ? gHUD.GetIcon( "ge_radar_bg_mi6" ) : ( team == TEAM_JANUS ? gHUD.GetIcon( "ge_radar_bg_janus" ) : gHUD.GetIcon( "ge_radar_bg" ) );
+	if ( pTeamBg )
+		m_Background = pTeamBg;
+
+	// Their contacts, kept up to date as often as the normal radar's
+	if ( m_flViewNextThink[m_iView] <= gpGlobals->curtime )
+	{
+		UpdateContacts();
+		m_flViewNextThink[m_iView] = gpGlobals->curtime + 0.025f;
+	}
+	else
+	{
+		// Positions follow their view every frame
+		for ( int i = 0; i < m_iNumContacts; i++ )
+			WorldToRadar( &m_radarContacts[i] );
+	}
+
+	PaintContents( pViewer->IsObserver() ? 255 : 225 );
+
+	// Back to the normal radar's
+	m_Background = pBackground;
+	m_flScaleX = flScaleX;
+	m_flScaleY = flScaleY;
+	m_flRadarDiameter = flDiameter;
+	m_iSideBuff = iSideBuff;
+	m_iView = 0;
+	m_hViewer = NULL;
+	m_iDrawX = m_iDrawY = 0;
+}
+
+// The split screen HUD draws each player's radar in their view, where the normal
+// radar sits on the screen (cl_ge_radarpos), sized for the view
+void GESS_PaintRadar( int slot, C_BasePlayer *pViewer, int vx, int vy, int vw, int vh )
+{
+	CGERadar *pRadar = GET_HUDELEMENT( CGERadar );
+	if ( !pRadar || !pViewer || !pRadar->IsRadarAllowed() )
+		return;
+	if ( !pViewer->IsAlive() && !pViewer->IsObserver() )
+		return;	// hidden while dead, like the normal radar
+
+	// 80 x 80 units of a 640 x 480 screen, at cl_ge_radarpos's place
+	const float s = MIN( vh / 480.0f, vw / 640.0f );
+	const int size = (int)( 80 * s );
+	int x = vx + vw / 2 - size / 2, y = vy + (int)( 378 * s );
+	switch ( clamp( cl_ge_radarpos.GetInt(), 0, (int) ARRAYSIZE( GERadarPos ) - 1 ) )
+	{
+	case 1: x = vx; y = vy + vh / 2 - size / 2; break;
+	case 2: x = vx + vw / 2 - size / 2; y = vy; break;
+	case 3: x = vx + vw - size; y = vy; break;
+	case 4: x = vx + vw - size; y = vy + vh / 2 - size / 2; break;
+	}
+	pRadar->PaintSplitView( slot, pViewer, x, y, size );
 }

@@ -1675,6 +1675,7 @@ private:
 	ComboBox	*m_pWeapons;
 	CheckButton	*m_pTeams;
 	CheckButton	*m_pJump;			// ge_allowjump
+	CheckButton	*m_pRadar;			// ge_allowradar
 	bool		m_bTeamsChoice;		// What the player picked (modes that force teams on/off don't change it)
 	Label		*m_pWinLabel;
 	ComboBox	*m_pWin;
@@ -1783,6 +1784,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pWeapons = new ComboBox( this, "Weapons", 15, false );
 	m_pTeams = new CheckButton( this, "Teams", "Team game (MI6 vs Janus)" );
 	m_pJump = new CheckButton( this, "Jump", "Jumping allowed (right stick click)" );
+	m_pRadar = new CheckButton( this, "Radar", "Radar" );
 
 	m_pWinLabel = new Label( this, "WinLabel", "Win condition" );
 	m_pWin = new ComboBox( this, "WinCondition", ARRAYSIZE( s_WinConditionNames ), false );
@@ -1812,7 +1814,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pSummary->SetContentAlignment( Label::a_northwest );
 	m_pStartButton = new Button( this, "StartButton", "Start match", this, "start" );
 
-	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pTeams, m_pJump, m_pWinLabel, m_pWin,
+	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pWinLabel, m_pWin,
 		m_pTimeLabel, m_pTime, m_pKillsLabel, m_pKills, m_pPerDisplayLabel, m_pPerDisplay, m_pPadCount, m_pDiagram, m_pSummary, m_pStartButton };
 	for ( int i = 0; i < ARRAYSIZE( matchPanels ); i++ )
 		match.AddToTail( matchPanels[i] );
@@ -1830,7 +1832,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 
 	// Every control reports changes to us
 	Panel *signalPanels[] = { m_pProfileList, m_pName, m_pCharacter, m_pSensitivity, m_pInvert, m_pInvited,
-		m_pMap, m_pMode, m_pWeapons, m_pTeams, m_pJump, m_pWin, m_pTime, m_pKills, m_pPerDisplay };
+		m_pMap, m_pMode, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pWin, m_pTime, m_pKills, m_pPerDisplay };
 	for ( int i = 0; i < ARRAYSIZE( signalPanels ); i++ )
 		signalPanels[i]->AddActionSignalTarget( this );
 
@@ -1852,6 +1854,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pWeapons, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pTeams, GESS_NAV_CHECK, GESS_PAGE_MATCH );
 	AddNav( m_pJump, GESS_NAV_CHECK, GESS_PAGE_MATCH );
+	AddNav( m_pRadar, GESS_NAV_CHECK, GESS_PAGE_MATCH );
 	AddNav( m_pWin, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pTime, GESS_NAV_NUMBER, GESS_PAGE_MATCH, 0, GESS_MATCH_TIME_MAX );
 	AddNav( m_pKills, GESS_NAV_NUMBER, GESS_PAGE_MATCH, 1, GESS_MATCH_KILLS_MAX );
@@ -2034,7 +2037,8 @@ void CGESplitScreenMenu::PerformLayout()
 	y += 30;
 	m_pTeams->SetBounds( fieldX - 4, y, fieldW, 24 );
 	y += 28;
-	m_pJump->SetBounds( fieldX - 4, y, fieldW, 24 );
+	m_pJump->SetBounds( fieldX - 4, y, fieldW / 2 + 40, 24 );
+	m_pRadar->SetBounds( fieldX - 4 + fieldW / 2 + 50, y, fieldW / 2 - 50, 24 );
 	y += 36;
 	m_pWinLabel->SetBounds( x, y, labelW, 24 );
 	m_pWin->SetBounds( fieldX, y, fieldW, 24 );
@@ -2505,6 +2509,7 @@ void CGESplitScreenMenu::LoadMatchIntoControls()
 	m_pTeams->SetSelected( set.teams );
 	m_bTeamsChoice = set.teams;
 	m_pJump->SetSelected( set.jump );
+	m_pRadar->SetSelected( set.radar );
 	m_pWin->ActivateItemByRow( clamp( set.wincondition, 0, ARRAYSIZE( s_WinConditionNames ) - 1 ) );
 	m_pTime->SetText( VarArgs( "%d", set.timelimit ) );
 	m_pKills->SetText( VarArgs( "%d", set.killlimit ) );
@@ -2568,6 +2573,7 @@ void CGESplitScreenMenu::StoreControlsIntoMatch()
 
 	set.teams = m_pTeams->IsSelected();
 	set.jump = m_pJump->IsSelected();
+	set.radar = m_pRadar->IsSelected();
 	set.timelimit = GetEntryInt( m_pTime, set.timelimit );
 	set.killlimit = GetEntryInt( m_pKills, set.killlimit );
 
@@ -2709,7 +2715,7 @@ void CGESplitScreenMenu::OnCheckButtonChecked( vgui::Panel *panel )
 		return;
 	}
 
-	if ( panel == m_pJump )
+	if ( panel == m_pJump || panel == m_pRadar )
 	{
 		StoreControlsIntoMatch();
 		UpdateMatchControls();

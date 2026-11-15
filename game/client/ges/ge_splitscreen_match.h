@@ -50,6 +50,7 @@ struct GESSMatchSettings_t
 	char weaponset[64];	// ge_weaponset value, GESS_WEAPONSET_RANDOM for a random set each round
 	bool teams;
 	bool jump;		// ge_allowjump: players can jump
+	bool radar;		// ge_allowradar: the radar shows
 	int  wincondition;	// GEWinCondition_t: 0 score, 1 kills, 2 kill/death ratio
 	int  timelimit;		// Minutes, 0 = no limit (only allowed with the kills win condition)
 	int  killlimit;		// Kills to win with wincondition 1

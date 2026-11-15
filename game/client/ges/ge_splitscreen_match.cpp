@@ -51,6 +51,7 @@ CGESplitScreenMatch::CGESplitScreenMatch()
 	Q_strncpy( m_Settings.weaponset, GESS_WEAPONSET_RANDOM, sizeof( m_Settings.weaponset ) );
 	m_Settings.teams = false;
 	m_Settings.jump = true;
+	m_Settings.radar = true;
 	m_Settings.wincondition = 0;
 	m_Settings.timelimit = 10;
 	m_Settings.killlimit = 20;
@@ -74,6 +75,7 @@ void CGESplitScreenMatch::Load()
 		Q_strncpy( m_Settings.weaponset, pKV->GetString( "weaponset", m_Settings.weaponset ), sizeof( m_Settings.weaponset ) );
 		m_Settings.teams = pKV->GetBool( "teams", m_Settings.teams );
 		m_Settings.jump = pKV->GetBool( "jump", m_Settings.jump );
+		m_Settings.radar = pKV->GetBool( "radar", m_Settings.radar );
 		m_Settings.wincondition = pKV->GetInt( "wincondition", m_Settings.wincondition );
 		m_Settings.timelimit = pKV->GetInt( "timelimit", m_Settings.timelimit );
 		m_Settings.killlimit = pKV->GetInt( "killlimit", m_Settings.killlimit );
@@ -97,6 +99,7 @@ void CGESplitScreenMatch::Save()
 	pKV->SetString( "weaponset", m_Settings.weaponset );
 	pKV->SetBool( "teams", m_Settings.teams );
 	pKV->SetBool( "jump", m_Settings.jump );
+	pKV->SetBool( "radar", m_Settings.radar );
 	pKV->SetInt( "wincondition", m_Settings.wincondition );
 	pKV->SetInt( "timelimit", m_Settings.timelimit );
 	pKV->SetInt( "killlimit", m_Settings.killlimit );
@@ -316,6 +319,9 @@ void CGESplitScreenMatch::ApplyCvars( bool bMode )
 	// Jumping on or off, for everyone: it's the server's movement rule, so the
 	// guests obey it too
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowjump %d\n", m_Settings.jump ? 1 : 0 ) );
+
+	// The radar, for everyone (the server's setting; a game mode can still force it on)
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowradar %d\n", m_Settings.radar ? 1 : 0 ) );
 }
 
 void CGESplitScreenMatch::Start()

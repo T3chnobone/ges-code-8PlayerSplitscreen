@@ -2710,6 +2710,15 @@ bool CGameMovement::CheckJumpButton( void )
 	player->PlayStepSound( (Vector &)mv->GetAbsOrigin(), player->m_pSurfaceData, 1.0, true );
 	
 	MoveHelper()->PlayerSetAnimation( PLAYER_JUMP );
+#ifdef GE_DLL
+	// The third person jump (the weapons' ACT_GES_JUMP_* / ACT_GES_CJUMP_*). Nothing
+	// started it: CHL2MP_Player::SetAnimation is empty and nobody sent the jump
+	// event, so players never visibly jumped. The server sends it to everyone who
+	// sees this player (split screen guests' jumps reach their owner's client);
+	// the jumping player's own client plays it from prediction.
+	if ( player->IsPlayer() )
+		static_cast<CGEPlayer*>( player )->DoAnimationEvent( PLAYERANIMEVENT_JUMP );
+#endif
 
 	float flGroundFactor = 1.0f;
 	if (player->m_pSurfaceData)
