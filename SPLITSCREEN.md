@@ -404,3 +404,16 @@ screens: the first "players per display" players go on the left half and the res
   editor interface. The editor's sky mask now gets each view's rectangle, so it works per split
   screen view. Build steps: [shadereditor/README.md](shadereditor/README.md). The standard-shader
   fallback stays for when the editor doesn't load.
+
+## Changes (15 November, evening)
+
+- **Menus with a controller**: one press now does one thing. Each controller press used to reach
+  the game's menus twice (as "pressed" and as "typed"), and the two halves were handled by
+  different parts of vgui: one D-pad press moved two highlights on the main menu, and one A press
+  chose two items (opening Split Screen also opened Create Server). The main and pause menus now
+  get only "typed" (B returns to the game from the pause menu). Dialogs get press and release:
+  A presses the focused button, B cancels a confirmation box (and closes other dialogs as
+  before), and the D-pad moves between the dialog's buttons like Tab / Shift+Tab, so the quit
+  confirmation's Cancel can be reached. Dialogs without a name, like the quit confirmation, now
+  count as dialogs (the mouse is never hidden over them), and the Split Screen menu no longer comes
+  to the front over a confirmation box. Disconnect has no confirmation in this engine.

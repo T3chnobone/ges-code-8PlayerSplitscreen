@@ -67,7 +67,8 @@ Two monitors (players 5 to 8 on the second): run `ges_ss_span_monitors` in the c
 ### Controller quick start
 
 1. On the main menu, press any button on a controller: that controller is player 1. It drives the
-   menus: D-pad or left stick to move, A / Cross to choose, B / Circle to go back. The mouse
+   menus: D-pad or left stick to move, A / Cross to choose, B / Circle to go back. In a dialog
+   (for example "Quit game? / Cancel") the D-pad moves between its buttons. The mouse
    works too (the right stick moves the cursor, the right trigger clicks).
 2. Open **SPLIT SCREEN**. On **Profiles**, set each player's name, character and look speed.
    The stick dead zones of every controller are measured automatically while the sticks rest in

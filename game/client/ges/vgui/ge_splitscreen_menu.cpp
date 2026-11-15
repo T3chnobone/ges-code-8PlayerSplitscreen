@@ -1287,7 +1287,7 @@ public:
 		if ( bShow != IsVisible() )
 		{
 			SetVisible( bShow );
-			if ( bShow )
+			if ( bShow && !vgui::input()->GetAppModalSurface() )
 				MoveToFront();
 		}
 		if ( bShow )
@@ -2877,7 +2877,7 @@ public:
 		if ( bShow != IsVisible() )
 		{
 			SetVisible( bShow );
-			if ( bShow )
+			if ( bShow && !vgui::input()->GetAppModalSurface() )
 				MoveToFront();
 		}
 

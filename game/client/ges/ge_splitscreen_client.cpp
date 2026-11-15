@@ -1223,22 +1223,53 @@ void CGESplitScreenClient::Update( float frametime )
 static ConVar ges_ss_menu_pad_nav( "ges_ss_menu_pad_nav", "1", FCVAR_ARCHIVE, "Player 1's controller drives the game's own menus (main menu, pause menu, dialogs): D-pad / left stick, A (Cross) to choose, B (Circle) to go back." );
 static ConVar ges_ss_menu_hide_mouse( "ges_ss_menu_hide_mouse", "0", FCVAR_ARCHIVE, "1: while a controller is connected, hide the mouse cursor on the main menu and in the Split Screen menu, and ignore the mouse there." );
 
+// (windows.h renames these; the vgui methods are meant here)
+#undef GetClassName
+#undef SendMessage
+
 // The window that has the keyboard focus (the popup holding the focused panel)
-static const char *GESS_FocusWindowName()
+static vgui::VPANEL GESS_FocusWindow()
 {
 	vgui::VPANEL p = vgui::input()->GetFocus();
 	while ( p && !vgui::ipanel()->IsPopup( p ) )
 		p = vgui::ipanel()->GetParent( p );
+	return p;
+}
+
+static const char *GESS_FocusWindowName()
+{
+	vgui::VPANEL p = GESS_FocusWindow();
 	return p ? vgui::ipanel()->GetName( p ) : "";
 }
 
-// A GameUI dialog (Options, Create Server, the server browser, the console...)
-// is in front of the main menu: it has the keyboard focus
+// A GameUI dialog (Options, Create Server, the server browser, the console, the
+// quit confirmation...) is in front of the main menu: it has the keyboard focus.
+// (Some, like the quit confirmation, have no name.)
 static bool GESS_IsGameUIDialogOpen()
 {
-	const char *pszName = GESS_FocusWindowName();
-	return pszName[0] && Q_stricmp( pszName, "GameMenu" ) && Q_stricmp( pszName, "GESSPlayerList" ) &&
+	if ( vgui::input()->GetAppModalSurface() )
+		return true;
+	vgui::VPANEL p = GESS_FocusWindow();
+	if ( !p )
+		return false;
+	const char *pszName = vgui::ipanel()->GetName( p );
+	return Q_stricmp( pszName, "GameMenu" ) && Q_stricmp( pszName, "GESSPlayerList" ) &&
 		Q_stricmp( pszName, "GESSPadHint" ) && Q_stricmp( pszName, "GESplitScreenMenu" );
+}
+
+// Where player 1's controller buttons go: the main / pause menu (a vgui Menu,
+// also a combo box's drop-down list) or a dialog
+enum { GESS_NAV_NONE, GESS_NAV_MENU, GESS_NAV_DIALOG };
+static int GESS_MenuNavTarget()
+{
+	vgui::VPANEL p = GESS_FocusWindow();
+	if ( !p )
+		return GESS_NAV_NONE;
+	const char *pszClass = vgui::ipanel()->GetClassName( p );
+	if ( !Q_stricmp( vgui::ipanel()->GetName( p ), "GameMenu" ) || !Q_stricmp( pszClass, "CGameMenu" ) ||
+		!Q_stricmp( pszClass, "Menu" ) )
+		return GESS_NAV_MENU;
+	return GESS_NAV_DIALOG;
 }
 
 bool CGESplitScreenClient::ShouldHideMenuMouse() const
@@ -1250,21 +1281,74 @@ bool CGESplitScreenClient::ShouldHideMenuMouse() const
 	return enginevgui->IsGameUIVisible() && !GESS_IsGameUIDialogOpen();
 }
 
+//-----------------------------------------------------------------------------
+// One controller press = one action. vgui handles a key twice: menus move and
+// choose on the "typed" event, while its controller navigation (and buttons)
+// act on the "pressed" event. Sending both made one D-pad press move two
+// highlights on the main menu, and one A press choose two items (Split Screen
+// also opened Create Server). So:
+//  - main / pause menu, drop-down lists: "typed" only (B returns to the game from
+//    the pause menu, and does nothing on the main menu)
+//  - dialogs: the D-pad moves between controls (Tab / Shift+Tab), A presses the
+//    focused button (it clicks on release), B cancels a confirmation box (and
+//    closes other dialogs as before)
+//-----------------------------------------------------------------------------
 void CGESplitScreenClient::SendMenuKey( int code, bool bDown )
 {
 	if ( !g_InputInternal )
 		return;
+	static bool s_bPressSent[2] = { false, false };	// A, B: a dialog got the press, send it the release
 	const vgui::KeyCode key = (vgui::KeyCode) code;
-	g_InputInternal->SetKeyCodeState( key, bDown );
-	if ( bDown )
+	const int ab = code == KEY_XBUTTON_A ? 0 : ( code == KEY_XBUTTON_B ? 1 : -1 );
+
+	if ( !bDown )
 	{
-		g_InputInternal->InternalKeyCodePressed( key );
+		g_InputInternal->SetKeyCodeState( key, false );
+		if ( ab >= 0 && s_bPressSent[ab] )
+		{
+			s_bPressSent[ab] = false;
+			g_InputInternal->InternalKeyCodeReleased( key );
+		}
+		return;
+	}
+
+	const int target = GESS_MenuNavTarget();
+	if ( target == GESS_NAV_NONE )
+		return;
+
+	if ( target == GESS_NAV_MENU )
+	{
+		if ( ab == 1 )
+		{
+			// B: back to the game from the pause menu
+			if ( engine->IsInGame() && !engine->IsLevelMainMenuBackground() )
+				engine->ClientCmd_Unrestricted( "gameui_hide" );
+			return;
+		}
+		g_InputInternal->SetKeyCodeState( key, true );
 		g_InputInternal->InternalKeyCodeTyped( key );
+		return;
 	}
-	else
+
+	if ( ab < 0 )
 	{
-		g_InputInternal->InternalKeyCodeReleased( key );
+		const bool bBack = code == KEY_XBUTTON_UP || code == KEY_XBUTTON_LEFT;
+		if ( bBack )
+			g_InputInternal->SetKeyCodeState( KEY_LSHIFT, true );
+		g_InputInternal->SetKeyCodeState( KEY_TAB, true );
+		g_InputInternal->InternalKeyCodeTyped( KEY_TAB );
+		g_InputInternal->SetKeyCodeState( KEY_TAB, false );
+		if ( bBack )
+			g_InputInternal->SetKeyCodeState( KEY_LSHIFT, false );
+		return;
 	}
+
+	const bool bConfirmBox = vgui::input()->GetAppModalSurface() != 0;
+	g_InputInternal->SetKeyCodeState( key, true );
+	g_InputInternal->InternalKeyCodePressed( key );
+	s_bPressSent[ab] = true;
+	if ( ab == 1 && !bConfirmBox )
+		g_InputInternal->InternalKeyCodeTyped( key );
 }
 
 static ConVar ges_ss_debug_menunav( "ges_ss_debug_menunav", "0", FCVAR_DONTRECORD, "Testing: log the menu keys player 1's controller sends." );
@@ -1371,15 +1455,78 @@ void CGESplitScreenClient::DebugMenuButton( const char *pszButton )
 		return;
 	}
 
+	// "click <x> <y>": a left click there, the way vgui gets one from the mouse
+	int cx, cy;
+	if ( sscanf( pszButton, "click %d %d", &cx, &cy ) == 2 && g_InputInternal )
+	{
+		vgui::input()->SetCursorPos( cx, cy );
+		g_InputInternal->InternalCursorMoved( cx, cy );
+		g_InputInternal->SetMouseCodeState( MOUSE_LEFT, vgui::BUTTON_PRESSED );
+		g_InputInternal->InternalMousePressed( MOUSE_LEFT );
+		g_InputInternal->SetMouseCodeState( MOUSE_LEFT, vgui::BUTTON_RELEASED );
+		g_InputInternal->InternalMouseReleased( MOUSE_LEFT );
+		vgui::VPANEL over = vgui::input()->GetMouseOver();
+		Msg( "clicked %d %d on %s\n", cx, cy, over ? vgui::ipanel()->GetName( over ) : "nothing" );
+		return;
+	}
+
+	// "gameui:<command>": send GameUI's panels a command (for example gameui:Quit opens the
+	// quit confirmation), to test its dialogs
+	if ( !Q_strnicmp( pszButton, "gameui:", 7 ) )
+	{
+		vgui::VPANEL root = enginevgui->GetPanel( PANEL_GAMEUIDLL );
+		for ( int i = 0; root && i < vgui::ipanel()->GetChildCount( root ); i++ )
+		{
+			vgui::VPANEL child = vgui::ipanel()->GetChild( root, i );
+			Msg( "GameUI child %d: %s (%s)\n", i, vgui::ipanel()->GetName( child ), vgui::ipanel()->GetClassName( child ) );
+			if ( !Q_stricmp( vgui::ipanel()->GetName( child ), "BaseGameUIPanel" ) )
+				vgui::ipanel()->SendMessage( child, new KeyValues( "Command", "command", pszButton + 7 ), NULL );
+		}
+		return;
+	}
+
 	// List what's open, to see what counts as a dialog
 	Msg( "GameUI visible %d, focus in \"%s\", dialog open %d, mouse hidden %d, Split Screen menu %d, menu controller %d\n",
 		enginevgui->IsGameUIVisible(), GESS_FocusWindowName(), GESS_IsGameUIDialogOpen(), m_bMenuMouseHidden,
 		GESS_IsSplitScreenMenuOpen(), m_iMenuNavPad + 1 );
+	vgui::VPANEL modal = vgui::input()->GetAppModalSurface();
+	Msg( "  app modal surface: %s (%s)\n", modal ? vgui::ipanel()->GetName( modal ) : "none", modal ? vgui::ipanel()->GetClassName( modal ) : "" );
+	if ( modal )
+	{
+		for ( int i = 0; i < vgui::ipanel()->GetChildCount( modal ); i++ )
+		{
+			vgui::VPANEL c = vgui::ipanel()->GetChild( modal, i );
+			int x, y, w, h;
+			vgui::ipanel()->GetAbsPos( c, x, y );
+			vgui::ipanel()->GetSize( c, w, h );
+			Msg( "    child %s (%s) %d,%d %dx%d%s%s%s\n", vgui::ipanel()->GetName( c ), vgui::ipanel()->GetClassName( c ), x, y, w, h,
+				vgui::ipanel()->IsVisible( c ) ? "" : " hidden", vgui::ipanel()->IsMouseInputEnabled( c ) ? "" : " no-mouse",
+				vgui::ipanel()->IsEnabled( c ) ? "" : " disabled" );
+		}
+	}
+	vgui::VPANEL focus = vgui::input()->GetFocus();
+	Msg( "  key focus: %s (%s)\n", focus ? vgui::ipanel()->GetName( focus ) : "none", focus ? vgui::ipanel()->GetClassName( focus ) : "" );
+	for ( vgui::VPANEL p = vgui::input()->GetMouseOver(); p; p = vgui::ipanel()->GetParent( p ) )
+		Msg( "  mouse over: %s (%s)%s%s\n", vgui::ipanel()->GetName( p ), vgui::ipanel()->GetClassName( p ),
+			vgui::ipanel()->IsPopup( p ) ? " popup" : "", vgui::ipanel()->IsMouseInputEnabled( p ) ? "" : " no-mouse" );
+	for ( int i = 0; i < vgui::surface()->GetPopupCount(); i++ )
+	{
+		vgui::VPANEL p = vgui::surface()->GetPopup( i );
+		if ( vgui::ipanel()->IsVisible( p ) )
+		{
+			int x, y, w, h;
+			vgui::ipanel()->GetAbsPos( p, x, y );
+			vgui::ipanel()->GetSize( p, w, h );
+			Msg( "  popup %d: %s (%s) %d,%d %dx%d%s%s\n", i, vgui::ipanel()->GetName( p ), vgui::ipanel()->GetClassName( p ),
+				x, y, w, h, vgui::ipanel()->IsMouseInputEnabled( p ) ? "" : " no-mouse",
+				vgui::ipanel()->IsKeyBoardInputEnabled( p ) ? "" : " no-keys" );
+		}
+	}
 }
 
 CON_COMMAND_F( ges_ss_debug_menubutton, "Testing: ges_ss_debug_menubutton up|down|left|right|a|b sends the game's menus a controller button; no argument lists the open popups", FCVAR_DONTRECORD )
 {
-	GESplitScreenClient()->DebugMenuButton( args.ArgC() > 1 ? args[1] : "" );
+	GESplitScreenClient()->DebugMenuButton( args.ArgC() > 1 ? args.ArgS() : "" );
 }
 
 void CGESplitScreenClient::UpdatePadMouse( float dt )
