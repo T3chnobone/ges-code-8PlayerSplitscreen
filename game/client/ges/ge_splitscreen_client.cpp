@@ -1189,6 +1189,20 @@ void CGESplitScreenClient::Update( float frametime )
 
 	GESSGamepads()->Poll();
 
+	// In the Split Screen lobby, R3 recalibrates that controller's sticks (its card in
+	// the Players list shows how). R3 does nothing else there; in a match it's jump.
+	// (The menu panel can stay "open" behind a match, so check the menu is on screen and
+	// no match is being played.)
+	const bool bInMatch = engine->IsInGame() && !engine->IsLevelMainMenuBackground();
+	if ( GESS_IsSplitScreenMenuOpen() && enginevgui->IsGameUIVisible() && !bInMatch )
+	{
+		for ( int i = 0; i < GES_SS_MAX_PADS; i++ )
+		{
+			if ( GESSGamepads()->GetPad( i ).WasPressed( GESS_PAD_RSTICK ) )
+				GESSGamepads()->RecalibratePad( i );
+		}
+	}
+
 	UpdatePadAssignment();
 	UpdateMenuPadNav( dt );
 	UpdatePadMouse( dt );

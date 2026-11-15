@@ -1335,7 +1335,7 @@ public:
 		surface()->GetScreenSize( sw, sh );
 		const int nameTall = FontTall( m_hNameFont ), smallTall = FontTall( m_hSmallFont );
 		const int pad = Max( 6, sh / 120 );
-		const int rowTall = Max( nameTall + smallTall + 6, sh / 20 );
+		const int rowTall = Max( nameTall + smallTall * 2 + 8, sh / 20 );
 		const int iconW = IconWide( rowTall );
 
 		// As wide as the longest line (and the hint), at least a sixth of the screen
@@ -1344,6 +1344,7 @@ public:
 		{
 			textW = Max( textW, TextWide( m_hNameFont, m_Rows[i].name ) );
 			textW = Max( textW, TextWide( m_hSmallFont, m_Rows[i].state ) );
+			textW = Max( textW, TextWide( m_hSmallFont, m_Rows[i].cal ) );
 		}
 		const int w = Max( sw / 6, pad * 3 + iconW + textW );
 		const int h = pad + nameTall + pad / 2 + m_iRows * ( rowTall + pad / 2 ) + pad / 2 + smallTall + pad;
@@ -1359,7 +1360,7 @@ public:
 		const int w = GetWide(), h = GetTall();
 		const int nameTall = FontTall( m_hNameFont ), smallTall = FontTall( m_hSmallFont );
 		const int pad = Max( 6, sh / 120 );
-		const int rowTall = Max( nameTall + smallTall + 6, sh / 20 );
+		const int rowTall = Max( nameTall + smallTall * 2 + 8, sh / 20 );
 		const int iconW = IconWide( rowTall );
 
 		// Dark box with the menu's gold edge
@@ -1383,9 +1384,15 @@ public:
 			DrawGamepad( pad, y + 2, iconW, rowTall - 4, row.slot + 1, row.bIn, row.slot == 0 );
 
 			const int tx = pad * 2 + iconW;
-			const int ty = y + ( rowTall - nameTall - smallTall - 2 ) / 2;
+			const int ty = y + ( rowTall - nameTall - smallTall * 2 - 4 ) / 2;
 			DrawString( m_hNameFont, tx, ty, Color( 255, 255, 255, row.bIn ? 255 : 150 ), row.name );
 			DrawString( m_hSmallFont, tx, ty + nameTall + 2, row.bIn ? Color( 200, 200, 200, 255 ) : Color( 230, 200, 80, 255 ), row.state );
+			if ( row.cal[0] )
+			{
+				// Stick calibration: the R3 hint grey, in progress yellow, done green
+				const Color calColor = row.calState == 1 ? Color( 240, 210, 90, 255 ) : ( row.calState == 2 ? Color( 120, 220, 120, 255 ) : Color( 150, 150, 150, 255 ) );
+				DrawString( m_hSmallFont, tx, ty + nameTall + smallTall + 4, calColor, row.cal );
+			}
 			y += rowTall + pad / 2;
 		}
 
@@ -1399,6 +1406,8 @@ private:
 		bool bIn;			// Playing / ready, rather than a controller that can join
 		char name[96];		// Profile - character
 		char state[96];
+		char cal[96];		// Stick calibration: "Press R3..." or how it's going
+		int  calState;		// 0 hint, 1 calibrating, 2 done
 	};
 
 	static const char *HintText() { return "LB / RB: change profile    START: join / leave"; }
@@ -1441,6 +1450,13 @@ private:
 			Row_t &row = m_Rows[m_iRows++];
 			row.slot = slot;
 			row.bIn = !bEmpty;
+			row.cal[0] = 0;
+			row.calState = 0;
+			if ( bPad )
+			{
+				GESSGamepads()->GetCalibrationPrompt( pad, row.cal, sizeof( row.cal ) );
+				row.calState = GESSGamepads()->IsCalibrating( pad ) ? 1 : ( !Q_strncmp( row.cal, "Calibrated", 10 ) ? 2 : 0 );
+			}
 
 			if ( bEmpty )
 			{
@@ -1467,6 +1483,8 @@ private:
 			Row_t &row = m_Rows[m_iRows++];
 			row.slot = -1;
 			row.bIn = false;
+			row.cal[0] = 0;
+			row.calState = 0;
 			Q_strncpy( row.name, "No controller support", sizeof( row.name ) );
 			Q_strncpy( row.state, "SDL2 or XInput not found", sizeof( row.state ) );
 		}
@@ -1660,10 +1678,6 @@ private:
 	Label		*m_pHelp;
 	Button		*m_pSaveButton;
 	// The controllers' measured stick dead zones, and a button to measure again
-	Button		*m_pRecalibrate;
-	Label		*m_pPadCal;
-	float		m_flNextPadCalText;
-	void		UpdatePadCalText();
 	CGESSPlayerList *m_pPlayerList;	// Top right of the screen, on every page
 
 	// Match
@@ -1759,17 +1773,13 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pHelp->SetWrap( true );
 	m_pHelp->SetContentAlignment( Label::a_northwest );
 	m_pSaveButton = new Button( this, "SaveButton", "Save", this, "save" );
-	m_pRecalibrate = new Button( this, "Recalibrate", "Recalibrate controllers", this, "recalibrate" );
-	m_pPadCal = new Label( this, "PadCalibration", "" );
-	m_pPadCal->SetContentAlignment( Label::a_northwest );
-	m_flNextPadCalText = 0;
 
 	// The local players: its own panel so it can sit in the screen's corner
 	m_pPlayerList = new CGESSPlayerList( parent );
 	m_pPlayerList->SetMenu( this );
 
 	Panel *profPanels[] = { m_pProfileList, m_pNewButton, m_pDeleteButton, m_pNameLabel, m_pName, m_pCharLabel, m_pCharButton, m_pCharPortrait,
-		m_pSensLabel, m_pSensitivity, m_pSensValue, m_pInvert, m_pInvited, m_pHelp, m_pSaveButton, m_pRecalibrate, m_pPadCal };
+		m_pSensLabel, m_pSensitivity, m_pSensValue, m_pInvert, m_pInvited, m_pHelp, m_pSaveButton };
 	for ( int i = 0; i < ARRAYSIZE( profPanels ); i++ )
 		prof.AddToTail( profPanels[i] );
 
@@ -1847,7 +1857,6 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pSensitivity, GESS_NAV_SLIDER, GESS_PAGE_PROFILES );
 	AddNav( m_pInvert, GESS_NAV_CHECK, GESS_PAGE_PROFILES );
 	AddNav( m_pInvited, GESS_NAV_CHECK, GESS_PAGE_PROFILES );
-	AddNav( m_pRecalibrate, GESS_NAV_BUTTON, GESS_PAGE_PROFILES );
 	AddNav( m_pSaveButton, GESS_NAV_BUTTON, GESS_PAGE_PROFILES );
 	AddNav( m_pMap, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pMode, GESS_NAV_COMBO, GESS_PAGE_MATCH );
@@ -2019,10 +2028,6 @@ void CGESplitScreenMenu::PerformLayout()
 	m_pInvited->SetBounds( fieldX - 4, y, fieldW, 24 );
 	y += 40;
 	m_pHelp->SetBounds( x, y, W - 40, 44 );
-	y += 48;
-	// Controllers' stick dead zones (measured automatically)
-	m_pRecalibrate->SetBounds( x, y, 190, 24 );
-	m_pPadCal->SetBounds( x, y + 30, W - 40, H - 76 - ( y + 30 ) );
 
 	// ---- Match ----
 	y = 76;
@@ -2315,59 +2320,11 @@ void CGESplitScreenMenu::UpdateCharacterButton()
 	m_pCharPortrait->SetImage( image );
 }
 
-// One line per controller: its stick dead zones (and drift) and how far each reaches
-void CGESplitScreenMenu::UpdatePadCalText()
-{
-	if ( !m_pPadCal )
-		return;
-
-	static ConVarRef ges_ss_pad_deadzone_auto( "ges_ss_pad_deadzone_auto" );
-	if ( ges_ss_pad_deadzone_auto.IsValid() && !ges_ss_pad_deadzone_auto.GetBool() )
-	{
-		m_pPadCal->SetText( "Automatic dead zones are off (ges_ss_pad_deadzone_auto 0)." );
-		return;
-	}
-
-	char szText[1024] = "";
-	CGESSGamepads *pPads = GESSGamepads();
-	for ( int i = 0; i < GES_SS_MAX_PADS; i++ )
-	{
-		if ( !pPads->GetPad( i ).connected )
-			continue;
-		char szLine[256];
-		char szName[24];
-		Q_strncpy( szName, pPads->GetPadName( i ), sizeof( szName ) );
-		int len = Q_snprintf( szLine, sizeof( szLine ), "%d. %s:", i + 1, szName );
-		for ( int s = 0; s < 2; s++ )
-		{
-			const CGESSGamepads::StickCal_t &sc = pPads->GetStickCal( i, s );
-			if ( sc.measured )
-				len += Q_snprintf( szLine + len, sizeof( szLine ) - len, "   %s %.2f (drift %.2f, reach %.2f)", s == 0 ? "left" : "right",
-					sc.inner, sc.noise, pPads->GetStickOuter( i, s ) );
-			else
-				len += Q_snprintf( szLine + len, sizeof( szLine ) - len, "   %s measuring...", s == 0 ? "left" : "right" );
-		}
-		Q_strncat( szLine, "\n", sizeof( szLine ), COPY_ALL_CHARACTERS );
-		Q_strncat( szText, szLine, sizeof( szText ), COPY_ALL_CHARACTERS );
-	}
-	if ( !szText[0] )
-		Q_strncpy( szText, "No controllers connected.", sizeof( szText ) );
-	else
-		Q_strncat( szText, "Measured while the sticks rest in the menus. Push each stick all the way round once to set its reach.", sizeof( szText ), COPY_ALL_CHARACTERS );
-	m_pPadCal->SetText( szText );
-}
-
 void CGESplitScreenMenu::OnThink()
 {
 	BaseClass::OnThink();
 
 	HandlePads();
-
-	if ( gpGlobals->realtime >= m_flNextPadCalText )
-	{
-		m_flNextPadCalText = gpGlobals->realtime + 0.5f;
-		UpdatePadCalText();
-	}
 
 	// A player joined or left: players per display follows
 	if ( GESS_PerDisplayLimit() != m_iPerDisplayLimit || ( m_pPadCount && GESS_MenuPadCount() != m_iShownPadCount ) )
@@ -2751,11 +2708,6 @@ void CGESplitScreenMenu::OnCommand( const char *command )
 	{
 		GESSProfiles()->Remove( m_iEditing );
 		RefreshProfileList( m_iEditing - 1 );
-	}
-	else if ( !Q_stricmp( command, "recalibrate" ) )
-	{
-		GESSGamepads()->Recalibrate();
-		m_flNextPadCalText = 0;
 	}
 	else if ( !Q_stricmp( command, "save" ) )
 	{

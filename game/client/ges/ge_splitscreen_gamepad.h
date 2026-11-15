@@ -105,6 +105,11 @@ public:
 	const StickCal_t &GetStickCal( int index, int stick ) const;	// stick 0 left, 1 right
 	float GetStickOuter( int index, int stick ) const;			// The reach used as 100%
 	void Recalibrate();				// Forget the connected controllers' calibration, measure again
+	// One controller, guided (R3 in the Split Screen lobby): rest, then turn the sticks round
+	void RecalibratePad( int index );
+	// What its card in the lobby says about calibrating (the R3 hint, or how it's going)
+	const char *GetCalibrationPrompt( int index, char *buf, int bufLen ) const;
+	bool IsCalibrating( int index ) const;
 	void SaveCalibration();
 
 private:
@@ -133,6 +138,9 @@ private:
 	char		m_szPadName[GES_SS_MAX_PADS][64];
 	int			m_iPadCal[GES_SS_MAX_PADS];		// Index in m_Cals, -1 = none
 	RestWindow_t m_Rest[GES_SS_MAX_PADS][2];
+	int			m_iGuidedCal[GES_SS_MAX_PADS];	// RecalibratePad: 0 none, 1 resting, 2 turning, 3 done
+	double		m_flGuidedCalStart[GES_SS_MAX_PADS];
+	void UpdateGuidedCalibration( int index );
 	CUtlVector<PadCal_t> m_Cals;
 	bool		m_bCalLoaded;
 	bool		m_bCalDirty;

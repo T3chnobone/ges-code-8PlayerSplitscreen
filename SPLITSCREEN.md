@@ -235,9 +235,11 @@ in replaces the saved one; later ones only make it wider, so a stick that starts
 creep. The furthest a stick has gone from its resting point counts as 100%, so worn sticks still
 reach full speed, and movement starts smoothly from the dead zone's edge. Results are saved per
 controller (SDL's GUID plus its serial number when SDL can read one, else plus its name; two
-identical controllers without serials share one entry) in `cfg/ges_splitscreen_pads.txt`. The
-Profiles page shows each controller's values and has a **Recalibrate controllers** button
-(`ges_ss_pad_recalibrate`); `ges_ss_pad_calibration` prints them. With `ges_ss_pad_deadzone_auto 0`
+identical controllers without serials share one entry) in `cfg/ges_splitscreen_pads.txt`. In the
+Split Screen menu each controller's card in the Players list says "Press R3 to calibrate analog
+sticks": R3 on that controller recalibrates only it (leave the sticks centred for about 1.5 s, then
+turn both all the way round; the card shows each step, then the dead zones). The console has
+`ges_ss_pad_recalibrate [controller]` (all, or one) and `ges_ss_pad_calibration` (prints them). With `ges_ss_pad_deadzone_auto 0`
 every stick uses the fixed `ges_ss_pad_deadzone`, as do sticks not measured yet.
 
 ## Second screen (players 5 to 8)
@@ -417,3 +419,10 @@ screens: the first "players per display" players go on the left half and the res
   confirmation's Cancel can be reached. Dialogs without a name, like the quit confirmation, now
   count as dialogs (the mouse is never hidden over them), and the Split Screen menu no longer comes
   to the front over a confirmation box. Disconnect has no confirmation in this engine.
+- **Stick calibration per controller**: the Profiles page's Recalibrate button and readout are
+  gone. In the Split Screen menu each controller's card in the Players list now says "Press R3 to
+  calibrate analog sticks". R3 on a controller recalibrates only that controller: the card asks to
+  leave the sticks centred (measured for about 1.5 s), then to turn both all the way round (up to
+  8 s), then shows the dead zones for a few seconds; the result is saved for that controller. The
+  automatic measuring while sticks rest in the menus carries on as before. R3 only does this in the
+  Split Screen menu outside a match; in a match it is still jump.

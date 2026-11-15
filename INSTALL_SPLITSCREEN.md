@@ -72,8 +72,9 @@ Two monitors (players 5 to 8 on the second): run `ges_ss_span_monitors` in the c
    works too (the right stick moves the cursor, the right trigger clicks).
 2. Open **SPLIT SCREEN**. On **Profiles**, set each player's name, character and look speed.
    The stick dead zones of every controller are measured automatically while the sticks rest in
-   the menus; push each stick all the way round once so it learns its full reach. The Profiles page
-   shows the values and has a **Recalibrate controllers** button.
+   the menus. To calibrate one controller, press **R3** (click the right stick) in the Split Screen
+   menu: its card in the Players list (top right) says what to do (leave the sticks centred, then
+   turn both all the way round) and shows the result.
 3. On **Match**, pick the map, game mode, weapons, team game, jumping, radar, win condition, time
    and kill limits, and how many players share each display.
 4. Other players press **START** to join and **LB / RB** to pick their profile.
@@ -102,9 +103,8 @@ work.
 
 - **Hide the mouse on the main menu while a controller is plugged in**: `ges_ss_menu_hide_mouse 1`
   in the console. `ges_ss_menu_pad_nav 0` stops the controller from driving the game's menus.
-- **A character drifts or a stick feels slow to start**: open SPLIT SCREEN, Profiles, press
-  **Recalibrate controllers**, leave the sticks alone for two seconds, then push each stick all the
-  way round. `ges_ss_pad_deadzone_auto 0` goes back to one fixed dead zone (`ges_ss_pad_deadzone`).
+- **A character drifts or a stick feels slow to start**: open SPLIT SCREEN and press **R3** on that
+  controller, leave its sticks alone until its card says so, then turn each stick all the way round. `ges_ss_pad_deadzone_auto 0` goes back to one fixed dead zone (`ges_ss_pad_deadzone`).
   The measured values are in `cfg\ges_splitscreen_pads.txt` (delete it to start over).
 - **Nothing happens when I press START / only 4 controllers work**: `SDL2.dll` must be in
   `gesource\bin`. `ges_ss_status` in the console lists the controllers and who has which.

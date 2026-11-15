@@ -578,6 +578,8 @@ CGESSGamepads::CGESSGamepads() : m_pBackend( NULL )
 		m_szPadId[i][0] = 0;
 		m_szPadName[i][0] = 0;
 		m_iPadCal[i] = -1;
+		m_iGuidedCal[i] = 0;
+		m_flGuidedCalStart[i] = 0;
 	}
 	m_bCalLoaded = false;
 	m_bCalDirty = false;
@@ -657,8 +659,19 @@ static void ApplyRadialDeadzone( float &x, float &y, float deadzone )
 }
 
 // Testing: override a controller's right stick / right trigger for a while
-struct GESSDebugPad_t { float rx, ry, rt, until; };
+struct GESSDebugPad_t { float rx, ry, rt, until; unsigned int buttons; double buttonsUntil; };
 static GESSDebugPad_t s_DebugPads[GES_SS_MAX_PADS];
+
+CON_COMMAND_F( ges_ss_debug_padbutton, "Testing: ges_ss_debug_padbutton <controller 1-8> <button: 0 A, 1 B, 6 START, 8 R3...> [seconds] holds a controller button", FCVAR_DONTRECORD )
+{
+	if ( args.ArgC() < 3 )
+		return;
+	const int pad = atoi( args[1] ) - 1, button = atoi( args[2] );
+	if ( pad < 0 || pad >= GES_SS_MAX_PADS || button < 0 || button >= GESS_PAD_BUTTON_COUNT )
+		return;
+	s_DebugPads[pad].buttons = GESS_PADBIT( button );
+	s_DebugPads[pad].buttonsUntil = Plat_FloatTime() + ( args.ArgC() > 3 ? atof( args[3] ) : 0.2 );
+}
 
 CON_COMMAND_F( ges_ss_debug_pad, "Testing: ges_ss_debug_pad <controller 1-8> <right x> <right y> [right trigger] [seconds]", FCVAR_DONTRECORD )
 {
@@ -693,6 +706,8 @@ void CGESSGamepads::Poll()
 			raw[i].ry = d.ry;
 			raw[i].rt = d.rt;
 		}
+		if ( raw[i].connected && now < d.buttonsUntil )
+			raw[i].buttons |= d.buttons;
 	}
 
 	const float trigger = ges_ss_pad_trigger_threshold.GetFloat();
@@ -713,6 +728,7 @@ void CGESSGamepads::Poll()
 			Q_strncpy( m_szPadName[i], raw[i].connected && raw[i].name ? raw[i].name : "", sizeof( m_szPadName[i] ) );
 			m_iPadCal[i] = pszId[0] ? FindCal( pszId, m_szPadName[i], true ) : -1;
 			memset( m_Rest[i], 0, sizeof( m_Rest[i] ) );
+			m_iGuidedCal[i] = 0;
 		}
 
 		p.connected = raw[i].connected;
@@ -726,6 +742,7 @@ void CGESSGamepads::Poll()
 			const bool bIdle = bInMenus && raw[i].buttons == 0 && raw[i].lt < 0.1f && raw[i].rt < 0.1f;
 			UpdateCalibration( i, 0, p.lx, p.ly, bIdle );
 			UpdateCalibration( i, 1, p.rx, p.ry, bIdle );
+			UpdateGuidedCalibration( i );
 		}
 		ApplyStick( i, 0, p.lx, p.ly );
 		ApplyStick( i, 1, p.rx, p.ry );
@@ -992,9 +1009,99 @@ void CGESSGamepads::Recalibrate()
 	Msg( "Split screen: controllers recalibrating. Leave the sticks alone for a couple of seconds, then push each one all the way round.\n" );
 }
 
-CON_COMMAND( ges_ss_pad_recalibrate, "Forget the connected controllers' measured stick dead zones and measure them again" )
+//-----------------------------------------------------------------------------
+// One controller's sticks, guided from its card in the Split Screen lobby (R3):
+// forget its calibration, measure where the sticks rest (the automatic
+// measurement above, about 1.5 s of leaving them alone), then learn how far
+// they reach while the player turns them round. Other controllers carry on.
+//-----------------------------------------------------------------------------
+#define GESS_GUIDED_TURN_SECONDS	8.0		// Time to turn the sticks round before it finishes anyway
+#define GESS_GUIDED_DONE_SECONDS	4.0		// How long "Calibrated" stays on the card
+
+void CGESSGamepads::RecalibratePad( int index )
 {
-	GESSGamepads()->Recalibrate();
+	if ( index < 0 || index >= GES_SS_MAX_PADS || m_iPadCal[index] < 0 )
+		return;
+	for ( int s = 0; s < 2; s++ )
+	{
+		StickCal_t &sc = m_Cals[m_iPadCal[index]].stick[s];
+		memset( &sc, 0, sizeof( sc ) );
+		sc.inner = ges_ss_pad_deadzone.GetFloat();
+	}
+	memset( m_Rest[index], 0, sizeof( m_Rest[index] ) );
+	m_iGuidedCal[index] = 1;
+	m_flGuidedCalStart[index] = Plat_FloatTime();
+	m_bCalDirty = true;
+	Msg( "Split screen: controller %d recalibrating its sticks\n", index + 1 );
+}
+
+bool CGESSGamepads::IsCalibrating( int index ) const
+{
+	return index >= 0 && index < GES_SS_MAX_PADS && ( m_iGuidedCal[index] == 1 || m_iGuidedCal[index] == 2 );
+}
+
+void CGESSGamepads::UpdateGuidedCalibration( int index )
+{
+	const int c = m_iPadCal[index];
+	if ( !m_iGuidedCal[index] || c < 0 )
+		return;
+	const StickCal_t *sc = m_Cals[c].stick;
+	const double now = Plat_FloatTime();
+	switch ( m_iGuidedCal[index] )
+	{
+	case 1:		// Resting: until both sticks have been measured
+		if ( !ges_ss_pad_deadzone_auto.GetBool() || ( sc[0].measured && sc[1].measured ) )
+		{
+			m_iGuidedCal[index] = 2;
+			m_flGuidedCalStart[index] = now;
+		}
+		break;
+	case 2:		// Turning: until both have reached the edge, or time's up
+		if ( ( sc[0].reach >= 0.75f && sc[1].reach >= 0.75f ) || now - m_flGuidedCalStart[index] >= GESS_GUIDED_TURN_SECONDS )
+		{
+			m_iGuidedCal[index] = 3;
+			m_flGuidedCalStart[index] = now;
+			SaveCalibration();
+			Msg( "Split screen: controller %d calibrated (dead zones: left %.2f, right %.2f)\n", index + 1, sc[0].inner, sc[1].inner );
+		}
+		break;
+	case 3:
+		if ( now - m_flGuidedCalStart[index] >= GESS_GUIDED_DONE_SECONDS )
+			m_iGuidedCal[index] = 0;
+		break;
+	}
+}
+
+const char *CGESSGamepads::GetCalibrationPrompt( int index, char *buf, int bufLen ) const
+{
+	if ( index < 0 || index >= GES_SS_MAX_PADS || m_iPadCal[index] < 0 )
+		return "";
+	const StickCal_t *sc = m_Cals[m_iPadCal[index]].stick;
+	switch ( m_iGuidedCal[index] )
+	{
+	case 1:
+		Q_strncpy( buf, "Calibrating: leave both sticks centred...", bufLen );
+		break;
+	case 2:
+		Q_snprintf( buf, bufLen, "Now turn both sticks all the way round (%s%s)",
+			sc[0].reach >= 0.75f ? "left done" : "left", sc[1].reach >= 0.75f ? ", right done" : ", right" );
+		break;
+	case 3:
+		Q_snprintf( buf, bufLen, "Calibrated - dead zones: left %.2f, right %.2f", sc[0].inner, sc[1].inner );
+		break;
+	default:
+		Q_strncpy( buf, "Press R3 to calibrate analog sticks", bufLen );
+		break;
+	}
+	return buf;
+}
+
+CON_COMMAND( ges_ss_pad_recalibrate, "Forget the connected controllers' measured stick dead zones and measure them again. With a controller number, only that one (like R3 in the Split Screen lobby)" )
+{
+	if ( args.ArgC() > 1 )
+		GESSGamepads()->RecalibratePad( atoi( args[1] ) - 1 );
+	else
+		GESSGamepads()->Recalibrate();
 }
 
 CON_COMMAND( ges_ss_pad_calibration, "Show each connected controller's measured stick dead zones" )
