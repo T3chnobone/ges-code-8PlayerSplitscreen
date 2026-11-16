@@ -786,6 +786,11 @@ ConVar ges_ss_pad_deadzone_auto( "ges_ss_pad_deadzone_auto", "1", FCVAR_ARCHIVE,
 #define GESS_INNER_MAX			0.35f
 #define GESS_INNER_MARGIN		0.04f
 
+// Added to every measured dead zone after the margin (min 0.06 becomes 0.07): a little more room
+// so a character standing still doesn't creep. Part of the stored value, so it isn't added again
+// when the file loads or a stick is measured again.
+static ConVar ges_ss_pad_deadzone_extra( "ges_ss_pad_deadzone_extra", "0.01", FCVAR_ARCHIVE, "Added to each measured stick dead zone (after the margin; the limits move up with it). Applies to the next measurement." );
+
 static CGESSGamepads::StickCal_t s_EmptyStickCal;
 
 void CGESSGamepads::LoadCalibration()
@@ -814,7 +819,7 @@ void CGESSGamepads::LoadCalibration()
 				sc.cx = pStick->GetFloat( "rest_x" );
 				sc.cy = pStick->GetFloat( "rest_y" );
 				sc.noise = pStick->GetFloat( "drift" );
-				sc.inner = clamp( pStick->GetFloat( "deadzone" ), GESS_INNER_MIN, GESS_INNER_MAX );
+				sc.inner = clamp( pStick->GetFloat( "deadzone" ), GESS_INNER_MIN, GESS_INNER_MAX + Max( 0.0f, ges_ss_pad_deadzone_extra.GetFloat() ) );
 				sc.reach = clamp( pStick->GetFloat( "reach" ), 0.0f, 1.5f );
 				sc.measured = pStick->GetInt( "measured" ) != 0;
 			}
@@ -923,7 +928,7 @@ void CGESSGamepads::UpdateCalibration( int index, int stick, float x, float y, b
 	if ( noise > 0.15f || sqrtf( mx * mx + my * my ) > 0.2f )
 		return;	// It was being touched after all (a resting stick sits near the middle)
 
-	const float inner = clamp( noise + GESS_INNER_MARGIN, GESS_INNER_MIN, GESS_INNER_MAX );
+	const float inner = clamp( noise + GESS_INNER_MARGIN, GESS_INNER_MIN, GESS_INNER_MAX ) + clamp( ges_ss_pad_deadzone_extra.GetFloat(), 0.0f, 0.2f );
 	if ( !w.sessionMeasured || !sc.measured )
 	{
 		// First rest since it was plugged in: measure afresh
