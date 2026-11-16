@@ -113,7 +113,12 @@ On the Match page you pick:
 - **Cheats...** (bottom left) opens the **Cheats** page: on / off cheats for everyone in the match,
   saved with the match (`cheat_<name>`); B or Back returns to the Match page.
   - *Big Head* (`ge_cheat_bighead`): every character's head is drawn twice as big, players and
-    ragdolls, in every view (hats grow with it). Looks only: the hitboxes are unchanged.
+    ragdolls, in every view (hats grow with it), and the head hitbox grows with it, so a shot at
+    the big head counts as a headshot.
+  - *Paintball* (`ge_cheat_paintball`): shots leave splats of mixed paint colours on walls, floors
+    and props instead of bullet holes (8 spiky splats, 9 to 14 units across, in
+    `materials/decals/paintball`). Players still bleed. GoldenEye's own Paintball mode
+    (`ge_paintball`, Create Server) is separate and unchanged.
 - **Win condition**:
   - *Timed, highest score*: the mode's normal scoring when the time limit runs out.
   - *First to N kills*: the match ends as soon as a player (or team) reaches the kill limit.
@@ -495,6 +500,19 @@ screens: the first "players per display" players go on the left half and the res
   on / off toggles (built from a table in `ge_splitscreen_match.cpp`, so more are easy to add). The
   first is **Big Head** (`ge_cheat_bighead`, replicated): the head bone of every character is drawn
   at twice its size (`C_BaseAnimating::BuildTransformations`), players and ragdolls, in every view;
-  hats copy the head bone, so they grow too; first person guns are left alone. Hitboxes don't change
-  (like the N64 game, it's only for looks). Like jump and radar, it stays set after the match: set
+  hats copy the head bone, so they grow too; first person guns are left alone. (The head hitbox now grows with it:
+  see Big Head hitboxes below.) Like jump and radar, it stays set after the match: set
   `ge_cheat_bighead 0` before hosting online.
+- **Big Head hitboxes**: with Big Head on, the head hitboxes (`HITGROUP_HEAD`) of the player models
+  are twice as big around the head bone, matching the drawn head, so a shot at the big head is a
+  headshot. The engine's hit test ignores a scaled bone, so the boxes in the model data are scaled
+  while the cheat is on (once per model, marked, and put back when it's off); neck and body boxes
+  are unchanged. Tested: aiming 11 units above the head bone is a headshot with Big Head on and a
+  miss with it off. `ges_debug_headtest <up> [side]` (cheats) tests it.
+- **Paintball cheat** (Cheats page, `ge_cheat_paintball`): bullet impacts on walls, floors and props
+  leave mixed-colour paint splats instead of bullet holes, for every player and in every view; flesh
+  still bleeds. Hooked where impacts pick their decal (`CDecalEmitterSystem::TranslateDecalForGameMaterial`).
+  The 8 splats (`materials/decals/paintball/splat1-8`, 128x128 BGRA8888 VTF, unlit so they stay
+  bright) are made by `splitscreen_resources/tools/make_paint_splats.cpp`: a spiky star of alpha with
+  18-27 spikes, softly blurred, coloured by Gaussian blobs of 3-4 of pink, green, blue, orange,
+  yellow, purple, cyan and red. Each impact picks one at random; they stay like normal decals.

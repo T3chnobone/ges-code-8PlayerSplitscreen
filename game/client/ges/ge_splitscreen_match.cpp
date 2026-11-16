@@ -44,7 +44,8 @@ static const GESSGameMode_t s_KnownModes[] =
 // The Cheats page (see GESSCheatDef_t). Add new cheats at the end.
 const GESSCheatDef_t g_GESSCheats[GESS_NUM_CHEATS] =
 {
-	{ "bighead", "Big Head", "Every character's head is drawn twice as big (looks only: hits count as normal).", "ge_cheat_bighead" },
+	{ "bighead", "Big Head", "Every character's head is drawn twice as big, and its hitbox grows with it.", "ge_cheat_bighead" },
+	{ "paintball", "Paintball", "Shots leave splats of mixed paint colours on walls and props instead of bullet holes.", "ge_cheat_paintball" },
 };
 
 static CGESplitScreenMatch s_GESSMatch;

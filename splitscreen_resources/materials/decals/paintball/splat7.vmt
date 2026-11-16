@@ -1,0 +1,8 @@
+"UnlitGeneric"
+{
+	"$basetexture" "decals/paintball/splat7"
+	"$decal" "1"
+	"$decalscale" "0.104"
+	"$translucent" "1"
+	"$vertexcolor" "1"
+}

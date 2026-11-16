@@ -1597,11 +1597,10 @@ void C_BaseAnimating::BuildTransformations( CStudioHdr *hdr, Vector *pos, Quater
 #ifdef GE_DLL
 	// Big Head cheat (ge_cheat_bighead, set by the Split Screen menu's Cheats page):
 	// every character's head drawn at twice its size, players and ragdolls alike,
-	// in every view. Only the drawing changes; the hitboxes are the server's.
+	// in every view. The server scales the head bone of players the same way, so the head hitbox matches.
 	// Hats follow by themselves (they copy the head bone, EF_BONEMERGE).
 	static ConVarRef ge_cheat_bighead( "ge_cheat_bighead" );
-	if ( ge_cheat_bighead.IsValid() && ge_cheat_bighead.GetBool() && !boneMerge && !IsViewModel() &&
-		( boneMask & BONE_USED_BY_VERTEX_MASK ) )
+	if ( ge_cheat_bighead.IsValid() && ge_cheat_bighead.GetBool() && !boneMerge && !IsViewModel() )
 	{
 		const int iHead = LookupBone( "ValveBiped.Bip01_Head1" );
 		if ( iHead >= 0 && ( hdr->boneFlags( iHead ) & boneMask ) )

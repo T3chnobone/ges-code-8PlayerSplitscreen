@@ -287,8 +287,53 @@ void CGEPlayer::PreThink( void )
 	BaseClass::PreThink();
 }
 
+//-----------------------------------------------------------------------------
+// Big Head cheat (ge_cheat_bighead): the client draws heads at twice their size,
+// so the head hitboxes (HITGROUP_HEAD) of the player models grow 2x around the
+// head bone to match. The engine's hit test ignores a scaled bone matrix, so the
+// boxes in the model data are scaled instead (in place, marked so it happens once,
+// and put back when the cheat is off). Neck and body boxes are left alone.
+//-----------------------------------------------------------------------------
+#define GE_BIGHEAD_HITBOX_MARK	0x48474942	// "BIGH" in mstudiobbox_t::unused[7]
+extern ConVar ge_cheat_bighead;
+
+static void GE_UpdateBigHeadHitboxes( CBaseAnimating *pEnt )
+{
+	CStudioHdr *pStudioHdr = pEnt ? pEnt->GetModelPtr() : NULL;
+	if ( !pStudioHdr )
+		return;
+	const bool bBig = ge_cheat_bighead.GetBool();
+	for ( int set = 0; set < pStudioHdr->numhitboxsets(); set++ )
+	{
+		mstudiohitboxset_t *pSet = pStudioHdr->pHitboxSet( set );
+		for ( int i = 0; pSet && i < pSet->numhitboxes; i++ )
+		{
+			mstudiobbox_t *pBox = pSet->pHitbox( i );
+			if ( !pBox || pBox->group != HITGROUP_HEAD )
+				continue;
+			const bool bScaled = pBox->unused[7] == GE_BIGHEAD_HITBOX_MARK;
+			if ( bBig && !bScaled )
+			{
+				pBox->bbmin *= 2.0f;
+				pBox->bbmax *= 2.0f;
+				pBox->unused[7] = GE_BIGHEAD_HITBOX_MARK;
+				DevMsg( "Big Head: %s head hitbox %d (bone %d) now %.1f %.1f %.1f - %.1f %.1f %.1f\n", pStudioHdr->pszName(), i, pBox->bone,
+					pBox->bbmin.x, pBox->bbmin.y, pBox->bbmin.z, pBox->bbmax.x, pBox->bbmax.y, pBox->bbmax.z );
+			}
+			else if ( !bBig && bScaled )
+			{
+				pBox->bbmin *= 0.5f;
+				pBox->bbmax *= 0.5f;
+				pBox->unused[7] = 0;
+			}
+		}
+	}
+}
+
 void CGEPlayer::PostThink( void )
 {
+	GE_UpdateBigHeadHitboxes( this );
+
 	if (m_iDmgTakenThisFrame > 0)
 	{
 		DevMsg("Original damage force is %f\n", m_vDmgForceThisFrame.Length());
@@ -1525,4 +1570,37 @@ CON_COMMAND_F( ges_ss_debug_aimtest, "Testing: ges_ss_debug_aimtest <yaw offset>
 		pNear->GetPlayerName(), best, args.ArgC() > 1 ? atof( args[1] ) : 0.0f,
 		RAD2DEG( acosf( clamp( DotProduct( shot, forward ), -1.0f, 1.0f ) ) ),
 		tr.m_pEnt ? ( tr.m_pEnt->IsPlayer() ? ToBasePlayer( tr.m_pEnt )->GetPlayerName() : tr.m_pEnt->GetClassname() ) : "nothing" );
+}
+
+// Testing: shoot a trace from player 1's eyes at the nearest other player's head bone,
+// <up> units above it (and <side> to the side), and print the hitgroup hit (1 = head)
+CON_COMMAND_F( ges_debug_headtest, "Testing: ges_debug_headtest <up> [side]: trace from player 1 to the nearest player's head bone plus an offset and print the hitgroup (1 = head)", FCVAR_CHEAT )
+{
+	CBasePlayer *pHost = UTIL_GetListenServerHost();
+	if ( !pHost )
+		return;
+	CBasePlayer *pNear = NULL;
+	float best = FLT_MAX;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBasePlayer *p = UTIL_PlayerByIndex( i );
+		if ( !p || p == pHost || !p->IsAlive() )
+			continue;
+		const float d = ( p->GetAbsOrigin() - pHost->GetAbsOrigin() ).Length();
+		if ( d < best ) { best = d; pNear = p; }
+	}
+	if ( !pNear )
+		return;
+	const int iHead = pNear->LookupBone( "ValveBiped.Bip01_Head1" );
+	Vector head;
+	QAngle ang;
+	pNear->GetBonePosition( iHead, head, ang );
+	Vector right;
+	AngleVectors( pHost->EyeAngles(), NULL, &right, NULL );
+	const Vector target = head + Vector( 0, 0, args.ArgC() > 1 ? atof( args[1] ) : 0.0f ) + right * ( args.ArgC() > 2 ? atof( args[2] ) : 0.0f );
+	const Vector src = pHost->EyePosition();
+	trace_t tr;
+	UTIL_TraceLine( src, src + ( target - src ) * 1.5f, MASK_SHOT, pHost, COLLISION_GROUP_NONE, &tr );
+	Msg( "headtest: big head %d, aim %.1f above the head bone: hit %s, hitgroup %d\n", ConVarRef( "ge_cheat_bighead" ).GetInt(),
+		args.ArgC() > 1 ? atof( args[1] ) : 0.0f, tr.m_pEnt ? tr.m_pEnt->GetClassname() : "nothing", tr.hitgroup );
 }

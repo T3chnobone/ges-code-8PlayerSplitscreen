@@ -53,7 +53,7 @@ struct GESSCheatDef_t
 	const char *help;		// One line under it
 	const char *cvar;		// The server setting it turns on
 };
-#define GESS_NUM_CHEATS		1
+#define GESS_NUM_CHEATS		2
 #define GESS_MAX_CHEATS		16
 extern const GESSCheatDef_t g_GESSCheats[GESS_NUM_CHEATS];
 

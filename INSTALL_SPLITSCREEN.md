@@ -29,6 +29,7 @@ backups described below.
 | `bin\SDL2.dll` (SDL 2.30.12) | `bin\SDL2.dll` |
 | `bin\shadereditor.dll` | `bin\shadereditor.dll` |
 | `bin\game_shader_generic_procshader.dll` | `bin\game_shader_generic_procshader.dll` |
+| `materials\decals\paintball\` (8 splats) | `materials\decals\paintball\` (the Paintball cheat) |
 | `resource\GameMenu.res` | `resource\GameMenu.res` |
 | `resource\ClientScheme.res` | `resource\ClientScheme.res` |
 | `gameinfo.txt` | `gameinfo.txt` |
@@ -122,7 +123,7 @@ Exit. The console (~) still works.
   menu use `maxplayers 16`.
 - **Hosting a normal online game after split screen**: the match settings are server settings and
   stay set. Before hosting online, set `ge_wincondition 0`, `ge_allowjump 1`, `ge_allowradar 1`,
-  `ge_ss_aimassist 0` and `ge_cheat_bighead 0`.
+  `ge_ss_aimassist 0`, `ge_cheat_bighead 0` and `ge_cheat_paintball 0`.
 - **Crash dumps**: Windows writes them to `%LOCALAPPDATA%\CrashDumps`. Include the newest
   `hl2.exe.*.dmp` and `gesource\console.log` (launch with `-condebug`) in a bug report.
 

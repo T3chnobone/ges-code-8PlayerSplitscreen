@@ -25,6 +25,8 @@
 #ifdef GE_DLL
 #define GE_DECAL_SCRIPT		"scripts/decals_ge.txt"
 #define PAINTBALLS			"PaintballSplats"
+#define GE_CHEAT_PAINT_SPLATS	"CouchPaintSplats"
+extern ConVar ge_cheat_paintball;
 
 extern ConVar ge_paintball;
 #endif
@@ -175,6 +177,23 @@ bool CDecalEmitterSystem::Init()
 	LoadDecalsFromScript( DECAL_LIST_FILE );
 #ifdef GE_DLL
 	LoadDecalsFromScript( GE_DECAL_SCRIPT );
+
+	// The Paintball cheat's splats (materials/decals/paintball, made by
+	// splitscreen_resources/tools/make_paint_splats.cpp): 8 mixed-colour variants
+	{
+		DecalEntry entry;
+		for ( int i = 1; i <= 8; i++ )
+		{
+			DecalListEntry decal;
+			decal.precache_index = -1;
+			char szName[64];
+			Q_snprintf( szName, sizeof( szName ), "decals/paintball/splat%d", i );
+			decal.name = m_DecalFileNames.AddString( szName );
+			decal.weight = 1.0f;
+			entry.indices.AddToTail( m_AllDecals.AddToTail( decal ) );
+		}
+		m_Decals.Insert( GE_CHEAT_PAINT_SPLATS, entry );
+	}
 #endif
 	return true;
 }
@@ -338,6 +357,13 @@ char const *CDecalEmitterSystem::TranslateDecalForGameMaterial( char const *deca
 	if(ge_paintball.GetBool())
 	{
 		return PAINTBALLS;
+	}
+	// Paintball cheat (the Split Screen menu's Cheats page): paint on walls and props;
+	// players and other flesh still bleed
+	if ( ge_cheat_paintball.GetBool() && gamematerial != CHAR_TEX_FLESH && gamematerial != CHAR_TEX_BLOODYFLESH &&
+		gamematerial != CHAR_TEX_ALIENFLESH && gamematerial != CHAR_TEX_ANTLION )
+	{
+		return GE_CHEAT_PAINT_SPLATS;
 	}
 #endif
 

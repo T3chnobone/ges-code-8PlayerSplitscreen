@@ -44,7 +44,8 @@ GoldenEye: Source maps, models and sounds are unchanged.
 - **Win conditions**: highest score when time runs out, first to a number of kills, or best
   kill/death ratio; with time and kill limits.
 - **Cheats** page (from the Match page): on / off cheats for everyone, starting with **Big Head**
-  (every character's head drawn twice as big; looks only, hitboxes unchanged).
+  (every character's head drawn twice as big, with a matching head hitbox) and **Paintball**
+  (shots leave splats of mixed paint colours instead of bullet holes).
 
 ### HUD (per view)
 - GoldenEye's own health and armour dials, ammo counter, radar (centred on that player) and
@@ -72,7 +73,7 @@ GoldenEye: Source maps, models and sounds are unchanged.
 ## Known limitations and tips
 - Jumping, radar, aim assist and cheats are server settings and stay set after a split screen match.
   Before hosting a normal online game, set `ge_wincondition 0`, `ge_allowjump 1`,
-  `ge_allowradar 1`, `ge_ss_aimassist 0` and `ge_cheat_bighead 0` in the console.
+  `ge_allowradar 1`, `ge_ss_aimassist 0`, `ge_cheat_bighead 0` and `ge_cheat_paintball 0` in the console.
 - A frozen game in exclusive fullscreen can sit on top of everything. Use **Fullscreen
   (windowed)** or **Windowed** in Video options (or launch with `-windowed -noborder`); then
   Alt+Tab and Ctrl+Shift+Esc work over it.
