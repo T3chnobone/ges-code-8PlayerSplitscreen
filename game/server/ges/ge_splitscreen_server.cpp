@@ -104,6 +104,23 @@ int CGESplitScreenServer::GetGuestCount( CBasePlayer *pHost )
 	return count;
 }
 
+bool CGESplitScreenServer::IsGuest( CBasePlayer *pPlayer )
+{
+	return pPlayer && FindRecordByGuest( pPlayer->GetUserID() ) != NULL;
+}
+
+bool CGESplitScreenServer::UsesController( CBasePlayer *pPlayer )
+{
+	if ( !pPlayer || !pPlayer->IsPlayer() )
+		return false;
+	if ( IsGuest( pPlayer ) )
+		return true;
+	if ( pPlayer->IsFakeClient() )
+		return false;
+	const char *pszPad = engine->GetClientConVarValue( pPlayer->entindex(), "cl_ges_ss_pad" );
+	return pszPad && atoi( pszPad ) != 0;
+}
+
 //-----------------------------------------------------------------------------
 // Creation
 //-----------------------------------------------------------------------------

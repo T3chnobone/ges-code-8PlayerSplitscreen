@@ -51,6 +51,7 @@ ConVar ges_ss_dualscreen( "ges_ss_dualscreen", "2", FCVAR_ARCHIVE, "Second scree
 ConVar ges_ss_dualscreen_aspect( "ges_ss_dualscreen_aspect", "2.6", FCVAR_ARCHIVE, "Window aspect ratio above which ges_ss_dualscreen 2 treats the window as two monitors side by side." );
 ConVar ges_ss_look_yaw( "ges_ss_look_yaw", "200", FCVAR_ARCHIVE, "Controller look speed (degrees per second at full stick) before the profile's sensitivity." );
 ConVar ges_ss_look_pitch( "ges_ss_look_pitch", "140", FCVAR_ARCHIVE, "Controller look up/down speed (degrees per second at full stick) before the profile's sensitivity." );
+static ConVar cl_ges_ss_pad( "cl_ges_ss_pad", "0", FCVAR_USERINFO | FCVAR_DONTRECORD, "Set by split screen: player 1 plays this game with a controller (the server gives controller players aim assist)." );
 ConVar ges_ss_look_aim_scale( "ges_ss_look_aim_scale", "0.5", FCVAR_ARCHIVE, "Controller look speed multiplier while in aim mode." );
 ConVar ges_ss_padmouse( "ges_ss_padmouse", "1", FCVAR_ARCHIVE, "Let controller 1 move the mouse cursor in menus. The right trigger is the left mouse button." );
 ConVar ges_ss_padmouse_speed( "ges_ss_padmouse_speed", "1100", FCVAR_ARCHIVE, "Cursor speed in pixels per second (at 1080p) when moving it with controller 1." );
@@ -1206,6 +1207,14 @@ void CGESplitScreenClient::Update( float frametime )
 	UpdatePadAssignment();
 	UpdateMenuPadNav( dt );
 	UpdatePadMouse( dt );
+	// Tell the server whether player 1 plays with a controller in this split screen
+	// game (Classic aim assist is only for controller players)
+	{
+		const int hostPad = GetSlotPad( 0 );
+		const bool bPad = ( IsSplitMatch() || HasLocalGuests() ) && hostPad >= 0 && GESSGamepads()->GetPad( hostPad ).connected;
+		if ( cl_ges_ss_pad.GetBool() != bPad )
+			cl_ges_ss_pad.SetValue( bPad ? 1 : 0 );
+	}
 	UpdateHostLook( dt );
 	UpdatePregame();
 
@@ -2524,6 +2533,117 @@ float CGESplitScreenClient::LookScale( int slot, const GESSPadState_t &pad ) con
 	return scale;
 }
 
+//-----------------------------------------------------------------------------
+// Aim assist for the players on controllers in a split screen match (the
+// Match page's "Aim assist", ge_ss_aimassist). Each player's own view is used,
+// so it works the same in every viewport; teammates are left alone in team games.
+//  2 Sticky aim: while the crosshair is on (or just off) an enemy, the view turns
+//    with them as they move (or as you strafe past them)
+//  3 Slowdown: looking around slows down over or near an enemy
+//  1 Classic GoldenEye is on the server (CGEPlayer::GetAutoaimVector): the shots
+//    home in, the view stays put
+//-----------------------------------------------------------------------------
+extern ConVar ge_ss_aimassist;
+static ConVar ges_ss_aim_sticky( "ges_ss_aim_sticky", "0.85", FCVAR_ARCHIVE, "Sticky aim: how much of a target's movement across the view the view follows (0-1)." );
+static ConVar ges_ss_aim_slowdown( "ges_ss_aim_slowdown", "0.4", FCVAR_ARCHIVE, "Slowdown aim assist: look speed over a target (1 = no slowdown)." );
+static ConVar ges_ss_aim_radius( "ges_ss_aim_radius", "1.5", FCVAR_ARCHIVE, "Aim assist: degrees added around a target's body that count as on target." );
+
+static ConVar ges_ss_debug_aim( "ges_ss_debug_aim", "0", FCVAR_DONTRECORD, "Testing: log the aim assist target for each player." );
+struct GESSAimMemory_t { int target; QAngle anglesTo; };
+static GESSAimMemory_t s_AimMemory[GES_SS_MAX_PLAYERS];
+
+float CGESplitScreenClient::ApplyAimAssist( int slot, C_BasePlayer *pPlayer, QAngle &angles )
+{
+	const int mode = ge_ss_aimassist.GetInt();
+	GESSAimMemory_t &mem = s_AimMemory[clamp( slot, 0, GES_SS_MAX_PLAYERS - 1 )];
+	if ( ( mode != 2 && mode != 3 ) || !pPlayer || !( IsSplitMatch() || HasLocalGuests() ) )
+	{
+		mem.target = 0;
+		return 1.0f;
+	}
+
+	// Where this player looks from
+	Vector eye = pPlayer->EyePosition();
+	QAngle viewAngles;
+	float fov, fovViewmodel;
+	GESS_GetPlayerViewSetup( pPlayer, eye, viewAngles, fov, fovViewmodel );
+	Vector forward;
+	AngleVectors( angles, &forward );
+
+	// The enemy nearest the crosshair, measured in "target sizes" from it
+	const bool bTeams = GEMPRules() && GEMPRules()->IsTeamplay();
+	const float maxRatio = mode == 3 ? 2.0f : 1.2f;
+	float bestRatio = maxRatio;
+	C_BasePlayer *pBest = NULL;
+	QAngle bestAngles;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		C_BasePlayer *pOther = UTIL_PlayerByIndex( i );
+		if ( !pOther || pOther == pPlayer || pOther->IsDormant() || !pOther->IsAlive() || pOther->IsObserver() )
+			continue;
+		if ( bTeams && pOther->GetTeamNumber() == pPlayer->GetTeamNumber() )
+			continue;
+
+		const Vector target = pOther->WorldSpaceCenter() + Vector( 0, 0, 8 );
+		Vector dir = target - eye;
+		const float dist = VectorNormalize( dir );
+		if ( dist < 1.0f || dist > 2500.0f )
+			continue;
+		const float offset = RAD2DEG( acosf( clamp( DotProduct( dir, forward ), -1.0f, 1.0f ) ) );
+		const float radius = RAD2DEG( atanf( 20.0f / dist ) ) + ges_ss_aim_radius.GetFloat();
+		const float ratio = offset / radius;
+		if ( ratio >= bestRatio )
+			continue;
+
+		trace_t tr;
+		UTIL_TraceLine( eye, target, MASK_SHOT, pPlayer, COLLISION_GROUP_NONE, &tr );
+		if ( tr.fraction < 1.0f && tr.m_pEnt != pOther )
+			continue;
+
+		pBest = pOther;
+		bestRatio = ratio;
+		VectorAngles( dir, bestAngles );
+	}
+
+	if ( !pBest )
+	{
+		mem.target = 0;
+		return 1.0f;
+	}
+
+	static ConVarRef s_debug( "ges_ss_debug_aim" );
+	static float s_flNextDebug[GES_SS_MAX_PLAYERS];
+	if ( s_debug.IsValid() && s_debug.GetBool() && gpGlobals->realtime >= s_flNextDebug[slot] )
+	{
+		s_flNextDebug[slot] = gpGlobals->realtime + 0.5f;
+		Msg( "aim assist: player %d, mode %d, target %s, %.2f target sizes off\n", slot + 1, mode, pBest->GetPlayerName(), bestRatio );
+	}
+
+	if ( mode == 3 )
+	{
+		// Full slowdown on the target, easing back to normal speed at twice its size
+		mem.target = 0;
+		const float t = clamp( bestRatio - 1.0f, 0.0f, 1.0f );
+		return Lerp( t, ges_ss_aim_slowdown.GetFloat(), 1.0f );
+	}
+
+	// Sticky: follow how far the target moved across the view since the last frame
+	if ( mem.target == pBest->entindex() )
+	{
+		const float dYaw = AngleDiff( bestAngles[YAW], mem.anglesTo[YAW] );
+		const float dPitch = AngleDiff( bestAngles[PITCH], mem.anglesTo[PITCH] );
+		if ( fabsf( dYaw ) < 10.0f && fabsf( dPitch ) < 10.0f )
+		{
+			const float k = clamp( ges_ss_aim_sticky.GetFloat(), 0.0f, 1.0f );
+			angles[YAW] = AngleNormalize( angles[YAW] + dYaw * k );
+			angles[PITCH] = clamp( angles[PITCH] + dPitch * k, -89.0f, 89.0f );
+		}
+	}
+	mem.target = pBest->entindex();
+	mem.anglesTo = bestAngles;
+	return 1.0f;
+}
+
 void CGESplitScreenClient::UpdateGuestLook( int slot, const GESSPadState_t &pad, float dt )
 {
 	LocalSlot_t &s = m_Slots[slot];
@@ -2532,7 +2652,7 @@ void CGESplitScreenClient::UpdateGuestLook( int slot, const GESSPadState_t &pad,
 		return;
 
 	const GESSProfile_t &prof = GetSlotProfileData( slot );
-	const float scale = LookScale( slot, pad );
+	const float scale = LookScale( slot, pad ) * ApplyAimAssist( slot, pPlayer, s.angles );
 
 	// Slight curve so small stick movements aim precisely
 	const float rx = pad.rx * fabsf( pad.rx );
@@ -2563,14 +2683,17 @@ void CGESplitScreenClient::UpdateHostLook( float dt )
 		return;
 
 	const GESSProfile_t &prof = GetSlotProfileData( 0 );
-	const float scale = LookScale( 0, pad );
-	const float rx = pad.rx * fabsf( pad.rx );
-	const float ry = pad.ry * fabsf( pad.ry );
-	if ( rx == 0.0f && ry == 0.0f )
-		return;
-
 	QAngle viewangles;
 	engine->GetViewAngles( viewangles );
+	const QAngle before = viewangles;
+	C_BasePlayer *pLocal = C_BasePlayer::GetLocalPlayer();
+	const float assist = ( pLocal && pLocal->IsAlive() && !pLocal->IsObserver() ) ? ApplyAimAssist( 0, pLocal, viewangles ) : 1.0f;
+	const float scale = LookScale( 0, pad ) * assist;
+	const float rx = pad.rx * fabsf( pad.rx );
+	const float ry = pad.ry * fabsf( pad.ry );
+	if ( rx == 0.0f && ry == 0.0f && viewangles == before )
+		return;
+
 	viewangles[YAW] -= rx * ges_ss_look_yaw.GetFloat() * scale * dt;
 	viewangles[PITCH] -= ry * ges_ss_look_pitch.GetFloat() * scale * dt * ( prof.invertY ? -1.0f : 1.0f );
 	viewangles[PITCH] = clamp( viewangles[PITCH], -89.0f, 89.0f );

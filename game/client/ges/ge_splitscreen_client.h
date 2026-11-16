@@ -256,6 +256,9 @@ private:
 	int  ComputeButtons( const GESSPadState_t &pad ) const;
 	void ComputeMove( const GESSPadState_t &pad, float &forward, float &side ) const;
 	float LookScale( int slot, const GESSPadState_t &pad ) const;
+	// Sticky aim / slowdown near a target (ge_ss_aimassist 2 / 3): turns angles to follow a
+	// target and returns how much to scale this frame's look
+	float ApplyAimAssist( int slot, C_BasePlayer *pPlayer, QAngle &angles );
 
 	LocalSlot_t m_Slots[GES_SS_MAX_PLAYERS];
 	int		m_iSlotPad[GES_SS_MAX_PLAYERS];	// Controller of each player, -1 = none

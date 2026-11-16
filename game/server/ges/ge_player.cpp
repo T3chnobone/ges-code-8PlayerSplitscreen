@@ -31,6 +31,7 @@
 
 #include "ge_player.h"
 #include "gemp_player.h"
+#include "ge_splitscreen_server.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -1386,4 +1387,142 @@ CGEPlayer* ToGEPlayer( CBaseEntity *pEntity )
 	}
 
 	return NULL;
+}
+
+//-----------------------------------------------------------------------------
+// Split screen aim assist, "Classic GoldenEye" (ge_ss_aimassist 1)
+//
+// Like the N64 game's auto-aim: a shot from a player on a controller goes to an
+// enemy close to the crosshair (within a small cone that's wider for nearer
+// players), if nothing blocks the way. The view doesn't move. Only players the
+// split screen plays with a controller get it (guests, and player 1 when on a
+// controller), never keyboard and mouse; teammates are left alone in team games.
+// The weapons already ask for the shot direction here (GetAutoaimVector), which
+// for everyone else stays the plain view direction.
+//-----------------------------------------------------------------------------
+extern ConVar ge_ss_aimassist;
+
+ConVar ge_ss_aimassist_classic_cone( "ge_ss_aimassist_classic_cone", "4", FCVAR_GAMEDLL, "Classic aim assist: extra degrees around a target's body the cone reaches." );
+ConVar ge_ss_aimassist_classic_maxdist( "ge_ss_aimassist_classic_maxdist", "2500", FCVAR_GAMEDLL, "Classic aim assist: farthest target (units)." );
+
+Vector CGEPlayer::GetAutoaimVector( float flScale )
+{
+	Vector forward;
+	AngleVectors( EyeAngles() + m_Local.m_vecPunchAngle, &forward );
+
+	if ( ge_ss_aimassist.GetInt() != 1 || !GESplitScreenServer() || !GESplitScreenServer()->UsesController( this ) )
+		return BaseClass::GetAutoaimVector( flScale );
+
+	const Vector src = Weapon_ShootPosition();
+	const bool bTeams = GEMPRules() && GEMPRules()->IsTeamplay();
+
+	// Already on someone: shoot where the crosshair is (keeps head shots)
+	trace_t tr;
+	UTIL_TraceLine( src, src + forward * MAX_TRACE_LENGTH, MASK_SHOT, this, COLLISION_GROUP_NONE, &tr );
+	if ( tr.m_pEnt && tr.m_pEnt->IsPlayer() && tr.m_pEnt->IsAlive() && !( bTeams && tr.m_pEnt->GetTeamNumber() == GetTeamNumber() ) )
+		return forward;
+
+	CBasePlayer *pBest = NULL;
+	Vector bestDir = forward;
+	float bestRatio = 1.0f;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBasePlayer *pOther = UTIL_PlayerByIndex( i );
+		if ( !pOther || pOther == this || !pOther->IsAlive() || pOther->IsObserver() || pOther->IsEffectActive( EF_NODRAW ) )
+			continue;
+		if ( bTeams && pOther->GetTeamNumber() == GetTeamNumber() )
+			continue;
+
+		// Aim at the chest
+		const Vector target = pOther->WorldSpaceCenter() + Vector( 0, 0, 8 );
+		Vector dir = target - src;
+		const float dist = VectorNormalize( dir );
+		if ( dist < 1.0f || dist > ge_ss_aimassist_classic_maxdist.GetFloat() )
+			continue;
+
+		// Inside the cone: the target's body plus a few degrees
+		const float offset = RAD2DEG( acosf( clamp( DotProduct( dir, forward ), -1.0f, 1.0f ) ) );
+		const float cone = RAD2DEG( atanf( 20.0f / dist ) ) + ge_ss_aimassist_classic_cone.GetFloat();
+		const float ratio = offset / cone;
+		if ( ratio >= bestRatio )
+			continue;
+
+		// Nothing in the way
+		trace_t los;
+		UTIL_TraceLine( src, target, MASK_SHOT, this, COLLISION_GROUP_NONE, &los );
+		if ( los.fraction < 1.0f && los.m_pEnt != pOther )
+			continue;
+
+		pBest = pOther;
+		bestDir = dir;
+		bestRatio = ratio;
+	}
+
+	return pBest ? bestDir : forward;
+}
+
+// Testing: turn player 1 to face the nearest other player (plus an offset) and say where
+// Classic aim assist would send a shot
+CON_COMMAND_F( ges_ss_debug_aimtest, "Testing: ges_ss_debug_aimtest <yaw offset> [pitch offset]: player 1 faces the nearest other player, turned by the offset, and prints where Classic aim assist sends a shot", FCVAR_CHEAT )
+{
+	CGEPlayer *pHost = ToGEPlayer( UTIL_GetListenServerHost() );
+	if ( !pHost )
+		return;
+	CBasePlayer *pNear = NULL;
+	float best = FLT_MAX;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		CBasePlayer *p = UTIL_PlayerByIndex( i );
+		if ( !p || p == pHost || !p->IsAlive() || p->IsObserver() )
+			continue;
+		const float d = ( p->GetAbsOrigin() - pHost->GetAbsOrigin() ).Length();
+		if ( d < best )
+		{
+			best = d;
+			pNear = p;
+		}
+	}
+	if ( !pNear )
+	{
+		Msg( "aimtest: nobody else alive\n" );
+		return;
+	}
+	// "ges_ss_debug_aimtest place": put that player 200 units in front of player 1, somewhere clear
+	if ( args.ArgC() > 1 && !Q_stricmp( args[1], "place" ) )
+	{
+		for ( int yaw = 0; yaw < 360; yaw += 30 )
+		{
+			Vector fwd;
+			AngleVectors( QAngle( 0, yaw, 0 ), &fwd );
+			const Vector end = pHost->GetAbsOrigin() + fwd * 200.0f;
+			trace_t hull;
+			UTIL_TraceHull( pHost->GetAbsOrigin() + Vector( 0, 0, 2 ), end + Vector( 0, 0, 2 ), VEC_HULL_MIN, VEC_HULL_MAX,
+				MASK_PLAYERSOLID, pHost, COLLISION_GROUP_PLAYER_MOVEMENT, &hull );
+			if ( hull.fraction < 1.0f || hull.startsolid )
+				continue;
+			pNear->Teleport( &end, NULL, &vec3_origin );
+			pHost->SnapEyeAngles( QAngle( 0, yaw, 0 ) );
+			Msg( "aimtest: placed %s 200 units away at yaw %d\n", pNear->GetPlayerName(), yaw );
+			return;
+		}
+		Msg( "aimtest: no clear spot\n" );
+		return;
+	}
+	const Vector src = pHost->Weapon_ShootPosition();
+	Vector dir = pNear->WorldSpaceCenter() + Vector( 0, 0, 8 ) - src;
+	QAngle ang;
+	VectorAngles( dir, ang );
+	ang[YAW] += args.ArgC() > 1 ? atof( args[1] ) : 0.0f;
+	ang[PITCH] += args.ArgC() > 2 ? atof( args[2] ) : 0.0f;
+	pHost->SnapEyeAngles( ang );
+
+	Vector forward, shot = pHost->GetAutoaimVector( AUTOAIM_5DEGREES );
+	AngleVectors( pHost->EyeAngles(), &forward );
+	trace_t tr;
+	UTIL_TraceLine( src, src + shot * MAX_TRACE_LENGTH, MASK_SHOT, pHost, COLLISION_GROUP_NONE, &tr );
+	Msg( "aimtest: mode %d, controller %d, target %s at %.0f units, view %.1f deg off; shot bent %.2f deg, hits %s\n",
+		ge_ss_aimassist.GetInt(), GESplitScreenServer() && GESplitScreenServer()->UsesController( pHost ) ? 1 : 0,
+		pNear->GetPlayerName(), best, args.ArgC() > 1 ? atof( args[1] ) : 0.0f,
+		RAD2DEG( acosf( clamp( DotProduct( shot, forward ), -1.0f, 1.0f ) ) ),
+		tr.m_pEnt ? ( tr.m_pEnt->IsPlayer() ? ToBasePlayer( tr.m_pEnt )->GetPlayerName() : tr.m_pEnt->GetClassname() ) : "nothing" );
 }

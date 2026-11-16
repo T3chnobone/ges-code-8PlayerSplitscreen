@@ -55,6 +55,12 @@ public:
 	CGEMPPlayer *GetGuest( CBasePlayer *pHost, int slot );
 	int GetGuestCount( CBasePlayer *pHost );
 
+	// A split screen guest of a player on this server
+	bool IsGuest( CBasePlayer *pPlayer );
+	// Played with a controller in a split screen game: every guest, and a host whose
+	// split screen says player 1 is on a controller (cl_ges_ss_pad). Aim assist is only for these.
+	bool UsesController( CBasePlayer *pPlayer );
+
 private:
 	struct GuestRecord_t
 	{

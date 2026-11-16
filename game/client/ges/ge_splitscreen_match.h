@@ -51,6 +51,7 @@ struct GESSMatchSettings_t
 	bool teams;
 	bool jump;		// ge_allowjump: players can jump
 	bool radar;		// ge_allowradar: the radar shows
+	int  aimassist;	// ge_ss_aimassist: 0 off, 1 classic (shots home in), 2 sticky, 3 slowdown (controller players)
 	int  wincondition;	// GEWinCondition_t: 0 score, 1 kills, 2 kill/death ratio
 	int  timelimit;		// Minutes, 0 = no limit (only allowed with the kills win condition)
 	int  killlimit;		// Kills to win with wincondition 1

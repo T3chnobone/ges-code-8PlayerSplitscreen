@@ -75,8 +75,8 @@ Two monitors (players 5 to 8 on the second): run `ges_ss_span_monitors` in the c
    the menus. To calibrate one controller, press **R3** (click the right stick) in the Split Screen
    menu: its card in the Players list (top right) says what to do (leave the sticks centred, then
    turn both all the way round) and shows the result.
-3. On **Match**, pick the map, game mode, weapons, team game, jumping, radar, win condition, time
-   and kill limits, and how many players share each display.
+3. On **Match**, pick the map, game mode, weapons, team game, jumping, radar, aim assist, win
+   condition, time and kill limits, and how many players share each display.
 4. Other players press **START** to join and **LB / RB** to pick their profile.
 5. **Start match**. When the map loads, each screen asks for its player: press the **right
    trigger**. Player 1 can press **START** to start with whoever is in.
@@ -120,7 +120,8 @@ work.
 - **Guests can't join**: the server needs free player slots. Matches started from the Split Screen
   menu use `maxplayers 16`.
 - **Hosting a normal online game after split screen**: the match settings are server settings and
-  stay set. Before hosting online, set `ge_wincondition 0`, `ge_allowjump 1` and `ge_allowradar 1`.
+  stay set. Before hosting online, set `ge_wincondition 0`, `ge_allowjump 1`, `ge_allowradar 1` and
+  `ge_ss_aimassist 0`.
 - **Crash dumps**: Windows writes them to `%LOCALAPPDATA%\CrashDumps`. Include the newest
   `hl2.exe.*.dmp` and `gesource\console.log` (launch with `-condebug`) in a bug report.
 

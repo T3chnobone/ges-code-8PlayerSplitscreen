@@ -52,6 +52,7 @@ CGESplitScreenMatch::CGESplitScreenMatch()
 	m_Settings.teams = false;
 	m_Settings.jump = true;
 	m_Settings.radar = true;
+	m_Settings.aimassist = 0;
 	m_Settings.wincondition = 0;
 	m_Settings.timelimit = 10;
 	m_Settings.killlimit = 20;
@@ -76,6 +77,7 @@ void CGESplitScreenMatch::Load()
 		m_Settings.teams = pKV->GetBool( "teams", m_Settings.teams );
 		m_Settings.jump = pKV->GetBool( "jump", m_Settings.jump );
 		m_Settings.radar = pKV->GetBool( "radar", m_Settings.radar );
+		m_Settings.aimassist = pKV->GetInt( "aimassist", m_Settings.aimassist );
 		m_Settings.wincondition = pKV->GetInt( "wincondition", m_Settings.wincondition );
 		m_Settings.timelimit = pKV->GetInt( "timelimit", m_Settings.timelimit );
 		m_Settings.killlimit = pKV->GetInt( "killlimit", m_Settings.killlimit );
@@ -100,6 +102,7 @@ void CGESplitScreenMatch::Save()
 	pKV->SetBool( "teams", m_Settings.teams );
 	pKV->SetBool( "jump", m_Settings.jump );
 	pKV->SetBool( "radar", m_Settings.radar );
+	pKV->SetInt( "aimassist", m_Settings.aimassist );
 	pKV->SetInt( "wincondition", m_Settings.wincondition );
 	pKV->SetInt( "timelimit", m_Settings.timelimit );
 	pKV->SetInt( "killlimit", m_Settings.killlimit );
@@ -263,6 +266,7 @@ void CGESplitScreenMatch::RefreshMaps( CUtlVector<CUtlString> &maps ) const
 void CGESplitScreenMatch::Validate()
 {
 	m_Settings.wincondition = clamp( m_Settings.wincondition, 0, 2 );
+	m_Settings.aimassist = clamp( m_Settings.aimassist, 0, 3 );
 	m_Settings.timelimit = clamp( m_Settings.timelimit, 0, GESS_MATCH_TIME_MAX );
 	m_Settings.killlimit = clamp( m_Settings.killlimit, 1, GESS_MATCH_KILLS_MAX );
 	m_Settings.perdisplay = clamp( m_Settings.perdisplay, 1, GES_SS_MAX_PLAYERS );
@@ -322,6 +326,8 @@ void CGESplitScreenMatch::ApplyCvars( bool bMode )
 
 	// The radar, for everyone (the server's setting; a game mode can still force it on)
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowradar %d\n", m_Settings.radar ? 1 : 0 ) );
+	// Aim assist for the players on controllers (split screen only; keyboard and mouse never get it)
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_ss_aimassist %d\n", m_Settings.aimassist ) );
 }
 
 void CGESplitScreenMatch::Start()

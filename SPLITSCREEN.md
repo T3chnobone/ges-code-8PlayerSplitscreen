@@ -99,6 +99,17 @@ On the Match page you pick:
   stick click.
 - **Radar**: `ge_allowradar` for everyone in the match. Each player sees GoldenEye's own radar in
   their view (see Changes, 15 November). A game mode that forces the radar on still shows it.
+- **Aim assist** (`ge_ss_aimassist`, saved as `aimassist`): only for the players on controllers
+  (guests, and player 1 when on a controller), never keyboard and mouse, and never at teammates in
+  a team game. Targets must be in sight and within 2500 units.
+  - *Off*.
+  - *Classic GoldenEye*: like the N64 game. A shot goes to an enemy close to the crosshair (within
+    the target's body plus about 4 degrees, so wider up close); the view doesn't move. Worked out
+    by the server, so the hits count. `ge_ss_aimassist_classic_cone` (4) and `_maxdist` (2500).
+  - *Sticky aim*: while the crosshair is on or just off an enemy, the view turns with them as they
+    move or as you strafe past (`ges_ss_aim_sticky`, 0.85 of their movement).
+  - *Slowdown near target*: looking around slows to `ges_ss_aim_slowdown` (0.4) over an enemy,
+    easing back to full speed at twice the target's size away.
 - **Win condition**:
   - *Timed, highest score*: the mode's normal scoring when the time limit runs out.
   - *First to N kills*: the match ends as soon as a player (or team) reaches the kill limit.
@@ -263,6 +274,8 @@ screens: the first "players per display" players go on the left half and the res
 | `ges_ss_look_aim_scale` | 0.5 | Look speed multiplier in aim mode |
 | `ges_ss_padmouse` / `ges_ss_padmouse_speed` | 1 / 1100 | Mouse cursor from player 1's controller |
 | `ges_ss_pad_deadzone_auto` | 1 | Measure each controller's stick dead zones (see Stick dead zones) |
+| `ge_ss_aimassist` | 0 | Aim assist for controller players (set by the Match page): 0 off, 1 classic, 2 sticky, 3 slowdown |
+| `ges_ss_aim_sticky` / `ges_ss_aim_slowdown` / `ges_ss_aim_radius` | 0.85 / 0.4 / 1.5 | Sticky aim strength, slowdown speed, degrees around a target that count as on it |
 | `ges_ss_pad_deadzone` | 0.22 | Fixed stick dead zone (when not measured, or with auto off) |
 | `ges_ss_menu_pad_nav` / `ges_ss_menu_hide_mouse` | 1 / 0 | Controller drives the game's menus / hide the mouse there |
 | `ges_ss_pad_backend` | auto | `sdl` or `xinput` |
@@ -426,3 +439,15 @@ screens: the first "players per display" players go on the left half and the res
   8 s), then shows the dead zones for a few seconds; the result is saved for that controller. The
   automatic measuring while sticks rest in the menus carries on as before. R3 only does this in the
   Split Screen menu outside a match; in a match it is still jump.
+
+## Changes (16 November)
+
+- **Aim assist**: an "Aim assist" choice on the Match page (Off, Classic GoldenEye, Sticky aim,
+  Slowdown near target), saved as `aimassist` and applied as `ge_ss_aimassist` (see the Match page).
+  Only for players on controllers in split screen games: every guest, and player 1 when the split
+  screen says player 1 is on a controller (the client tells the server through `cl_ges_ss_pad`).
+  Classic is done by the server: GoldenEye's weapons already ask the player which way to shoot
+  (Source's auto-aim, `GetAutoaimVector`, off in multiplayer), and for those players it now points
+  at the enemy nearest the crosshair if they're within the cone and in sight. Sticky aim and
+  slowdown work on each player's own view, so every viewport gets them. Teammates are never
+  targets in team games. `ges_ss_debug_aimtest` (cheats) and `ges_ss_debug_aim` test it.

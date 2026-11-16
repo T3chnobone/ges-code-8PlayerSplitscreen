@@ -55,6 +55,11 @@ public:
 	virtual void InitialSpawn(void);
 	virtual void Spawn();
 
+	// Split screen aim assist, "Classic GoldenEye" (ge_ss_aimassist 1): shots from a
+	// controller player home in on an enemy near the crosshair
+	using CHL2MP_Player::GetAutoaimVector;
+	virtual Vector GetAutoaimVector( float flScale );
+
 	// -------------------------------------------------
 	// GES Functions
 	// -------------------------------------------------

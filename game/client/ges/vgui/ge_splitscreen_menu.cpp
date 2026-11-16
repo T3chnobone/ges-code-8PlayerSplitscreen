@@ -57,6 +57,15 @@ static const char *s_WinConditionNames[] =
 	"Timed - best kill/death ratio wins",
 };
 
+// ge_ss_aimassist (controller players in split screen matches)
+static const char *s_AimAssistNames[] =
+{
+	"Off",
+	"Classic GoldenEye (shots home in)",
+	"Sticky aim (view follows target)",
+	"Slowdown near target",
+};
+
 // Controller buttons the menu listens to
 static const unsigned int GESS_MENU_DIR_BITS[4] =
 {
@@ -1693,6 +1702,8 @@ private:
 	bool		m_bTeamsChoice;		// What the player picked (modes that force teams on/off don't change it)
 	Label		*m_pWinLabel;
 	ComboBox	*m_pWin;
+	Label		*m_pAimLabel;
+	ComboBox	*m_pAim;			// ge_ss_aimassist
 	Label		*m_pTimeLabel;
 	TextEntry	*m_pTime;
 	Label		*m_pKillsLabel;
@@ -1796,6 +1807,11 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pJump = new CheckButton( this, "Jump", "Jumping allowed (right stick click)" );
 	m_pRadar = new CheckButton( this, "Radar", "Radar" );
 
+	m_pAimLabel = new Label( this, "AimLabel", "Aim assist" );
+	m_pAim = new ComboBox( this, "AimAssist", ARRAYSIZE( s_AimAssistNames ), false );
+	for ( int i = 0; i < ARRAYSIZE( s_AimAssistNames ); i++ )
+		m_pAim->AddItem( s_AimAssistNames[i], new KeyValues( "aim", "value", i ) );
+
 	m_pWinLabel = new Label( this, "WinLabel", "Win condition" );
 	m_pWin = new ComboBox( this, "WinCondition", ARRAYSIZE( s_WinConditionNames ), false );
 	for ( int i = 0; i < ARRAYSIZE( s_WinConditionNames ); i++ )
@@ -1824,7 +1840,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pSummary->SetContentAlignment( Label::a_northwest );
 	m_pStartButton = new Button( this, "StartButton", "Start match", this, "start" );
 
-	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pWinLabel, m_pWin,
+	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pAimLabel, m_pAim, m_pWinLabel, m_pWin,
 		m_pTimeLabel, m_pTime, m_pKillsLabel, m_pKills, m_pPerDisplayLabel, m_pPerDisplay, m_pPadCount, m_pDiagram, m_pSummary, m_pStartButton };
 	for ( int i = 0; i < ARRAYSIZE( matchPanels ); i++ )
 		match.AddToTail( matchPanels[i] );
@@ -1842,7 +1858,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 
 	// Every control reports changes to us
 	Panel *signalPanels[] = { m_pProfileList, m_pName, m_pCharacter, m_pSensitivity, m_pInvert, m_pInvited,
-		m_pMap, m_pMode, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pWin, m_pTime, m_pKills, m_pPerDisplay };
+		m_pMap, m_pMode, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pAim, m_pWin, m_pTime, m_pKills, m_pPerDisplay };
 	for ( int i = 0; i < ARRAYSIZE( signalPanels ); i++ )
 		signalPanels[i]->AddActionSignalTarget( this );
 
@@ -1864,6 +1880,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pTeams, GESS_NAV_CHECK, GESS_PAGE_MATCH );
 	AddNav( m_pJump, GESS_NAV_CHECK, GESS_PAGE_MATCH );
 	AddNav( m_pRadar, GESS_NAV_CHECK, GESS_PAGE_MATCH );
+	AddNav( m_pAim, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pWin, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pTime, GESS_NAV_NUMBER, GESS_PAGE_MATCH, 0, GESS_MATCH_TIME_MAX );
 	AddNav( m_pKills, GESS_NAV_NUMBER, GESS_PAGE_MATCH, 1, GESS_MATCH_KILLS_MAX );
@@ -2044,7 +2061,10 @@ void CGESplitScreenMenu::PerformLayout()
 	y += 28;
 	m_pJump->SetBounds( fieldX - 4, y, fieldW / 2 + 40, 24 );
 	m_pRadar->SetBounds( fieldX - 4 + fieldW / 2 + 50, y, fieldW / 2 - 50, 24 );
-	y += 36;
+	y += 32;
+	m_pAimLabel->SetBounds( x, y, labelW, 24 );
+	m_pAim->SetBounds( fieldX, y, fieldW, 24 );
+	y += 32;
 	m_pWinLabel->SetBounds( x, y, labelW, 24 );
 	m_pWin->SetBounds( fieldX, y, fieldW, 24 );
 	y += 32;
@@ -2468,6 +2488,7 @@ void CGESplitScreenMenu::LoadMatchIntoControls()
 	m_pJump->SetSelected( set.jump );
 	m_pRadar->SetSelected( set.radar );
 	m_pWin->ActivateItemByRow( clamp( set.wincondition, 0, ARRAYSIZE( s_WinConditionNames ) - 1 ) );
+	m_pAim->ActivateItemByRow( clamp( set.aimassist, 0, ARRAYSIZE( s_AimAssistNames ) - 1 ) );
 	m_pTime->SetText( VarArgs( "%d", set.timelimit ) );
 	m_pKills->SetText( VarArgs( "%d", set.killlimit ) );
 	m_iPerDisplayWanted = clamp( set.perdisplay, 1, GES_SS_MAX_PLAYERS );
@@ -2527,6 +2548,9 @@ void CGESplitScreenMenu::StoreControlsIntoMatch()
 	pData = m_pWin->GetActiveItemUserData();
 	if ( pData )
 		set.wincondition = pData->GetInt( "value" );
+	pData = m_pAim->GetActiveItemUserData();
+	if ( pData )
+		set.aimassist = pData->GetInt( "value" );
 
 	set.teams = m_pTeams->IsSelected();
 	set.jump = m_pJump->IsSelected();
@@ -2630,7 +2654,7 @@ void CGESplitScreenMenu::OnTextChanged( vgui::Panel *panel )
 		return;
 	}
 
-	if ( panel == m_pMap || panel == m_pMode || panel == m_pWeapons || panel == m_pWin || panel == m_pTime || panel == m_pKills || panel == m_pPerDisplay )
+	if ( panel == m_pMap || panel == m_pMode || panel == m_pWeapons || panel == m_pAim || panel == m_pWin || panel == m_pTime || panel == m_pKills || panel == m_pPerDisplay )
 	{
 		// The player picked a number: remember it, even when fewer controllers
 		// are connected later
