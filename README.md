@@ -55,6 +55,8 @@ GoldenEye: Source maps, models and sounds are unchanged.
   source for the current engine; the 2016 DLLs didn't load. If it ever fails to load, those
   materials fall back to standard shaders instead of crashing (this was the Stack crash).
 - Props and entities near guests fade and appear correctly in every view.
+- Mirrors no longer black out parts of the world in the views: while the screen is split their
+  reflection pass is skipped, so mirrors and reflective glass don't reflect then.
 - Guests' first person guns, muzzle flashes and animations are correct in their own views.
 
 ### Gameplay fixes that also affect online play

@@ -301,6 +301,9 @@ screens: the first "players per display" players go on the left half and the res
 - **Guests see their own movement through normal entity interpolation** (`cl_interp`, about
   100 ms). Looking around is instant because view angles are kept on the client.
 - **Performance**: each extra player renders the whole scene again.
+- **Mirrors**: while the screen is split, mirrors and reflective glass don't reflect. Their reflection
+  pass (`IsReflectiveGlassInView` in `game/client/viewrender.cpp`) cut away the world behind the
+  mirror in the views, leaving black polygons, so it's skipped in split screen.
 - **Areaportals**: entities in areas only a guest can see rely on the engine including areas
   added with `AddOriginToPVS` when it checks what to send. Crates and stairs near guests now show
   in their views (distance fades are worked out per view).
