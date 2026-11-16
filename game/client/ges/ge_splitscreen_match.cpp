@@ -41,6 +41,12 @@ static const GESSGameMode_t s_KnownModes[] =
 	{ "TournamentDM",		"Tournament Deathmatch (teams)",	GESS_TEAMS_ALWAYS, false },
 };
 
+// The Cheats page (see GESSCheatDef_t). Add new cheats at the end.
+const GESSCheatDef_t g_GESSCheats[GESS_NUM_CHEATS] =
+{
+	{ "bighead", "Big Head", "Every character's head is drawn twice as big (looks only: hits count as normal).", "ge_cheat_bighead" },
+};
+
 static CGESplitScreenMatch s_GESSMatch;
 CGESplitScreenMatch *GESSMatch() { return &s_GESSMatch; }
 
@@ -53,6 +59,8 @@ CGESplitScreenMatch::CGESplitScreenMatch()
 	m_Settings.jump = true;
 	m_Settings.radar = true;
 	m_Settings.aimassist = 0;
+	for ( int i = 0; i < GESS_MAX_CHEATS; i++ )
+		m_Settings.cheats[i] = false;
 	m_Settings.wincondition = 0;
 	m_Settings.timelimit = 10;
 	m_Settings.killlimit = 20;
@@ -78,6 +86,8 @@ void CGESplitScreenMatch::Load()
 		m_Settings.jump = pKV->GetBool( "jump", m_Settings.jump );
 		m_Settings.radar = pKV->GetBool( "radar", m_Settings.radar );
 		m_Settings.aimassist = pKV->GetInt( "aimassist", m_Settings.aimassist );
+		for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+			m_Settings.cheats[i] = pKV->GetBool( VarArgs( "cheat_%s", g_GESSCheats[i].key ), m_Settings.cheats[i] );
 		m_Settings.wincondition = pKV->GetInt( "wincondition", m_Settings.wincondition );
 		m_Settings.timelimit = pKV->GetInt( "timelimit", m_Settings.timelimit );
 		m_Settings.killlimit = pKV->GetInt( "killlimit", m_Settings.killlimit );
@@ -103,6 +113,8 @@ void CGESplitScreenMatch::Save()
 	pKV->SetBool( "jump", m_Settings.jump );
 	pKV->SetBool( "radar", m_Settings.radar );
 	pKV->SetInt( "aimassist", m_Settings.aimassist );
+	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+		pKV->SetBool( VarArgs( "cheat_%s", g_GESSCheats[i].key ), m_Settings.cheats[i] );
 	pKV->SetInt( "wincondition", m_Settings.wincondition );
 	pKV->SetInt( "timelimit", m_Settings.timelimit );
 	pKV->SetInt( "killlimit", m_Settings.killlimit );
@@ -328,6 +340,9 @@ void CGESplitScreenMatch::ApplyCvars( bool bMode )
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowradar %d\n", m_Settings.radar ? 1 : 0 ) );
 	// Aim assist for the players on controllers (split screen only; keyboard and mouse never get it)
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_ss_aimassist %d\n", m_Settings.aimassist ) );
+	// Cheats (the Cheats page), for everyone
+	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+		engine->ClientCmd_Unrestricted( VarArgs( "%s %d\n", g_GESSCheats[i].cvar, m_Settings.cheats[i] ? 1 : 0 ) );
 }
 
 void CGESplitScreenMatch::Start()

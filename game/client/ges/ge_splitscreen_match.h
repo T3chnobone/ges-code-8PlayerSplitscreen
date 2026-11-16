@@ -43,6 +43,20 @@ struct GESSWeaponSet_t
 
 #define GESS_WEAPONSET_RANDOM	"random_loadout"
 
+// Cheats (the Split Screen menu's Cheats page). Each is an on / off server setting that the
+// match sets when it starts and saves as "cheat_<key>". To add one: a line here (and raise
+// GESS_NUM_CHEATS), a replicated ConVar for it, and the code that uses it.
+struct GESSCheatDef_t
+{
+	const char *key;		// Saved as "cheat_<key>" in ges_splitscreen_match.txt
+	const char *label;		// Shown on the Cheats page
+	const char *help;		// One line under it
+	const char *cvar;		// The server setting it turns on
+};
+#define GESS_NUM_CHEATS		1
+#define GESS_MAX_CHEATS		16
+extern const GESSCheatDef_t g_GESSCheats[GESS_NUM_CHEATS];
+
 struct GESSMatchSettings_t
 {
 	char map[64];
@@ -52,6 +66,7 @@ struct GESSMatchSettings_t
 	bool jump;		// ge_allowjump: players can jump
 	bool radar;		// ge_allowradar: the radar shows
 	int  aimassist;	// ge_ss_aimassist: 0 off, 1 classic (shots home in), 2 sticky, 3 slowdown (controller players)
+	bool cheats[GESS_MAX_CHEATS];	// g_GESSCheats on / off
 	int  wincondition;	// GEWinCondition_t: 0 score, 1 kills, 2 kill/death ratio
 	int  timelimit;		// Minutes, 0 = no limit (only allowed with the kills win condition)
 	int  killlimit;		// Kills to win with wincondition 1

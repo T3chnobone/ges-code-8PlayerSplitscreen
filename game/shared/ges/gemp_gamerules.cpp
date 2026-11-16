@@ -84,6 +84,7 @@ extern ConVar mp_chattime;
 ConVar ge_allowradar		( "ge_allowradar", "1", FCVAR_REPLICATED|FCVAR_NOTIFY, "Allow clients to use their radars." );
 ConVar ge_allowjump			( "ge_allowjump",  "1", FCVAR_REPLICATED|FCVAR_NOTIFY, "Toggles allowing players to jump." );
 ConVar ge_ss_aimassist		( "ge_ss_aimassist", "0", FCVAR_REPLICATED, "Split screen: aim assist for the players on controllers (never keyboard and mouse): 0 off, 1 classic GoldenEye (shots home in on an enemy near the crosshair), 2 sticky aim, 3 slowdown near a target." );
+ConVar ge_cheat_bighead		( "ge_cheat_bighead", "0", FCVAR_REPLICATED, "Cheat: every character's head is drawn twice as big (looks only; set by the Split Screen menu's Cheats page)." );
 ConVar ge_startarmed		( "ge_startarmed", "1", FCVAR_REPLICATED|FCVAR_NOTIFY, "Configures the armed level of spawned players [0, 1, 2]" );
 ConVar ge_paintball			( "ge_paintball",  "0", FCVAR_REPLICATED|FCVAR_NOTIFY, "The famous paintball mode." );
 

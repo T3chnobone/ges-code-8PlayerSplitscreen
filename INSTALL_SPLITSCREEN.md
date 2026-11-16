@@ -121,8 +121,8 @@ Exit. The console (~) still works.
 - **Guests can't join**: the server needs free player slots. Matches started from the Split Screen
   menu use `maxplayers 16`.
 - **Hosting a normal online game after split screen**: the match settings are server settings and
-  stay set. Before hosting online, set `ge_wincondition 0`, `ge_allowjump 1`, `ge_allowradar 1` and
-  `ge_ss_aimassist 0`.
+  stay set. Before hosting online, set `ge_wincondition 0`, `ge_allowjump 1`, `ge_allowradar 1`,
+  `ge_ss_aimassist 0` and `ge_cheat_bighead 0`.
 - **Crash dumps**: Windows writes them to `%LOCALAPPDATA%\CrashDumps`. Include the newest
   `hl2.exe.*.dmp` and `gesource\console.log` (launch with `-condebug`) in a bug report.
 

@@ -110,6 +110,10 @@ On the Match page you pick:
     move or as you strafe past (`ges_ss_aim_sticky`, 0.85 of their movement).
   - *Slowdown near target*: looking around slows to `ges_ss_aim_slowdown` (0.4) over an enemy,
     easing back to full speed at twice the target's size away.
+- **Cheats...** (bottom left) opens the **Cheats** page: on / off cheats for everyone in the match,
+  saved with the match (`cheat_<name>`); B or Back returns to the Match page.
+  - *Big Head* (`ge_cheat_bighead`): every character's head is drawn twice as big, players and
+    ragdolls, in every view (hats grow with it). Looks only: the hitboxes are unchanged.
 - **Win condition**:
   - *Timed, highest score*: the mode's normal scoring when the time limit runs out.
   - *First to N kills*: the match ends as soon as a player (or team) reaches the kill limit.
@@ -487,3 +491,10 @@ screens: the first "players per display" players go on the left half and the res
 - **Dead zones +0.01**: every measured stick dead zone (automatic or R3 calibration) gets 0.01
   more (`ges_ss_pad_deadzone_extra`), so a character standing still doesn't creep: 0.07 at the
   least. It's part of the saved value, so loading or measuring again doesn't add it twice.
+- **Cheats page and Big Head**: a **Cheats...** button on the Match page opens a Cheats page of
+  on / off toggles (built from a table in `ge_splitscreen_match.cpp`, so more are easy to add). The
+  first is **Big Head** (`ge_cheat_bighead`, replicated): the head bone of every character is drawn
+  at twice its size (`C_BaseAnimating::BuildTransformations`), players and ragdolls, in every view;
+  hats copy the head bone, so they grow too; first person guns are left alone. Hitboxes don't change
+  (like the N64 game, it's only for looks). Like jump and radar, it stays set after the match: set
+  `ge_cheat_bighead 0` before hosting online.

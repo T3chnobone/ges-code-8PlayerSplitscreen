@@ -33,7 +33,8 @@ GoldenEye: Source maps, models and sounds are unchanged.
 - The first controller to press a button on the main menu is player 1. It drives all the game's
   menus and dialogs: D-pad / left stick to move, A / Cross to choose, B / Circle to go back. The
   mouse keeps working.
-- Stick dead zones are measured automatically per controller and saved. **R3** in the Split
+- Stick dead zones are measured automatically per controller and saved. They get 0.01 extra so a
+  character standing still doesn't creep. **R3** in the Split
   Screen menu recalibrates just that controller, with the steps shown on its card.
 
 ### Match options
@@ -42,6 +43,8 @@ GoldenEye: Source maps, models and sounds are unchanged.
   Teammates are never targets.
 - **Win conditions**: highest score when time runs out, first to a number of kills, or best
   kill/death ratio; with time and kill limits.
+- **Cheats** page (from the Match page): on / off cheats for everyone, starting with **Big Head**
+  (every character's head drawn twice as big; looks only, hitboxes unchanged).
 
 ### HUD (per view)
 - GoldenEye's own health and armour dials, ammo counter, radar (centred on that player) and
@@ -67,9 +70,9 @@ GoldenEye: Source maps, models and sounds are unchanged.
 - Grenade, rocket and mine explosions no longer crash the server.
 
 ## Known limitations and tips
-- Jumping, radar and aim assist are server settings and stay set after a split screen match.
+- Jumping, radar, aim assist and cheats are server settings and stay set after a split screen match.
   Before hosting a normal online game, set `ge_wincondition 0`, `ge_allowjump 1`,
-  `ge_allowradar 1` and `ge_ss_aimassist 0` in the console.
+  `ge_allowradar 1`, `ge_ss_aimassist 0` and `ge_cheat_bighead 0` in the console.
 - A frozen game in exclusive fullscreen can sit on top of everything. Use **Fullscreen
   (windowed)** or **Windowed** in Video options (or launch with `-windowed -noborder`); then
   Alt+Tab and Ctrl+Shift+Esc work over it.

@@ -1589,6 +1589,7 @@ enum GESSMenuPage_t
 {
 	GESS_PAGE_PROFILES = 0,
 	GESS_PAGE_MATCH,
+	GESS_PAGE_CHEATS,		// No tab: the Match page's Cheats button opens it
 	GESS_PAGE_COUNT
 };
 
@@ -1662,6 +1663,11 @@ private:
 
 	// Common
 	Button		*m_pTabs[GESS_PAGE_COUNT];
+	Button		*m_pCheatsButton;		// Match page: opens the Cheats page
+	Label		*m_pCheatsTitle, *m_pCheatsIntro;
+	CheckButton	*m_pCheat[GESS_MAX_CHEATS];	// g_GESSCheats
+	Label		*m_pCheatHelp[GESS_MAX_CHEATS];
+	Button		*m_pCheatsBack;
 	Label		*m_pPadHint;
 	Button		*m_pCloseButton;
 	CGESSOnScreenKeyboard *m_pKeyboard;
@@ -1751,6 +1757,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 
 	m_pTabs[GESS_PAGE_PROFILES] = new Button( this, "TabProfiles", "Profiles", this, "page0" );
 	m_pTabs[GESS_PAGE_MATCH] = new Button( this, "TabMatch", "Match", this, "page1" );
+	m_pTabs[GESS_PAGE_CHEATS] = NULL;
 
 	// ---- Profiles page ----
 	CUtlVector<Panel*> &prof = m_PagePanels[GESS_PAGE_PROFILES];
@@ -1839,11 +1846,37 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pSummary->SetWrap( true );
 	m_pSummary->SetContentAlignment( Label::a_northwest );
 	m_pStartButton = new Button( this, "StartButton", "Start match", this, "start" );
+	m_pCheatsButton = new Button( this, "CheatsButton", "Cheats...", this, "cheats" );
+
+	// The Cheats page: one tick box per cheat (g_GESSCheats), with a line about it
+	m_pCheatsTitle = new Label( this, "CheatsTitle", "Cheats" );
+	m_pCheatsIntro = new Label( this, "CheatsIntro", "For everyone in the match. Saved with the match settings. B: back to the Match page." );
+	for ( int i = 0; i < GESS_MAX_CHEATS; i++ )
+	{
+		m_pCheat[i] = NULL;
+		m_pCheatHelp[i] = NULL;
+	}
+	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+	{
+		m_pCheat[i] = new CheckButton( this, VarArgs( "Cheat_%s", g_GESSCheats[i].key ), g_GESSCheats[i].label );
+		m_pCheatHelp[i] = new Label( this, VarArgs( "CheatHelp_%s", g_GESSCheats[i].key ), g_GESSCheats[i].help );
+	}
+	m_pCheatsBack = new Button( this, "CheatsBack", "Back", this, "cheatsback" );
 
 	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pAimLabel, m_pAim, m_pWinLabel, m_pWin,
-		m_pTimeLabel, m_pTime, m_pKillsLabel, m_pKills, m_pPerDisplayLabel, m_pPerDisplay, m_pPadCount, m_pDiagram, m_pSummary, m_pStartButton };
+		m_pTimeLabel, m_pTime, m_pKillsLabel, m_pKills, m_pPerDisplayLabel, m_pPerDisplay, m_pPadCount, m_pDiagram, m_pSummary, m_pStartButton, m_pCheatsButton };
 	for ( int i = 0; i < ARRAYSIZE( matchPanels ); i++ )
 		match.AddToTail( matchPanels[i] );
+
+	CUtlVector<Panel*> &cheats = m_PagePanels[GESS_PAGE_CHEATS];
+	cheats.AddToTail( m_pCheatsTitle );
+	cheats.AddToTail( m_pCheatsIntro );
+	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+	{
+		cheats.AddToTail( m_pCheat[i] );
+		cheats.AddToTail( m_pCheatHelp[i] );
+	}
+	cheats.AddToTail( m_pCheatsBack );
 
 	// ---- Common ----
 	m_pPadHint = new Label( this, "PadHint", "D-pad: move   Left/Right: change   A: select   B: close   Y: Profiles / Match   START: join   LB/RB: your profile" );
@@ -1885,7 +1918,11 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pTime, GESS_NAV_NUMBER, GESS_PAGE_MATCH, 0, GESS_MATCH_TIME_MAX );
 	AddNav( m_pKills, GESS_NAV_NUMBER, GESS_PAGE_MATCH, 1, GESS_MATCH_KILLS_MAX );
 	AddNav( m_pPerDisplay, GESS_NAV_COMBO, GESS_PAGE_MATCH );
+	AddNav( m_pCheatsButton, GESS_NAV_BUTTON, GESS_PAGE_MATCH );
 	AddNav( m_pStartButton, GESS_NAV_BUTTON, GESS_PAGE_MATCH );
+	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+		AddNav( m_pCheat[i], GESS_NAV_CHECK, GESS_PAGE_CHEATS );
+	AddNav( m_pCheatsBack, GESS_NAV_BUTTON, GESS_PAGE_CHEATS );
 	AddNav( m_pCloseButton, GESS_NAV_BUTTON, -1 );
 
 	SetSize( 600, 540 );
@@ -1994,7 +2031,8 @@ void CGESplitScreenMenu::SetPage( int page )
 		for ( int i = 0; i < m_PagePanels[p].Count(); i++ )
 			m_PagePanels[p][i]->SetVisible( p == m_iPage );
 
-		m_pTabs[p]->ForceDepressed( p == m_iPage );
+		if ( m_pTabs[p] )
+			m_pTabs[p]->ForceDepressed( p == m_iPage || ( p == GESS_PAGE_MATCH && m_iPage == GESS_PAGE_CHEATS ) );
 	}
 
 	// Start on the first setting of the page
@@ -2086,6 +2124,21 @@ void CGESplitScreenMenu::PerformLayout()
 	m_pPadHint->SetBounds( x, H - 70, W - 40, 20 );
 	m_pSaveButton->SetBounds( W - 20 - 170, H - 40, 80, 26 );
 	m_pStartButton->SetBounds( W - 20 - 210, H - 40, 120, 26 );
+	m_pCheatsButton->SetBounds( 20, H - 40, 100, 26 );
+
+	// ---- Cheats ----
+	y = 76;
+	m_pCheatsTitle->SetBounds( x, y, W - 40, 24 );
+	y += 28;
+	m_pCheatsIntro->SetBounds( x, y, W - 40, 24 );
+	y += 36;
+	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+	{
+		m_pCheat[i]->SetBounds( x, y, W - 40, 24 );
+		m_pCheatHelp[i]->SetBounds( x + 26, y + 24, W - 66, 20 );
+		y += 52;
+	}
+	m_pCheatsBack->SetBounds( 20, H - 40, 100, 26 );
 	m_pCloseButton->SetBounds( W - 20 - 80, H - 40, 80, 26 );
 
 	// The keyboard covers the page area
@@ -2248,12 +2301,18 @@ void CGESplitScreenMenu::HandlePads()
 
 	// LB / RB choose each player's profile in the lobby (ge_splitscreen_client.cpp),
 	// so Y switches pages
-	if ( m_Pads.Pressed( GESS_PAD_Y ) )		SetPage( ( m_iPage + 1 ) % GESS_PAGE_COUNT );
+	if ( m_Pads.Pressed( GESS_PAD_Y ) )		SetPage( m_iPage == GESS_PAGE_PROFILES ? GESS_PAGE_MATCH : GESS_PAGE_PROFILES );
 
 	if ( m_Pads.Pressed( GESS_PAD_A ) )
 		ActivateFocused();
 	else if ( m_Pads.Pressed( GESS_PAD_B ) )
-		Close();
+	{
+		// B on the Cheats page goes back to the Match page
+		if ( m_iPage == GESS_PAGE_CHEATS )
+			SetPage( GESS_PAGE_MATCH );
+		else
+			Close();
+	}
 }
 
 void CGESplitScreenMenu::PostChildPaint()
@@ -2489,6 +2548,8 @@ void CGESplitScreenMenu::LoadMatchIntoControls()
 	m_pRadar->SetSelected( set.radar );
 	m_pWin->ActivateItemByRow( clamp( set.wincondition, 0, ARRAYSIZE( s_WinConditionNames ) - 1 ) );
 	m_pAim->ActivateItemByRow( clamp( set.aimassist, 0, ARRAYSIZE( s_AimAssistNames ) - 1 ) );
+	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+		m_pCheat[i]->SetSelected( set.cheats[i] );
 	m_pTime->SetText( VarArgs( "%d", set.timelimit ) );
 	m_pKills->SetText( VarArgs( "%d", set.killlimit ) );
 	m_iPerDisplayWanted = clamp( set.perdisplay, 1, GES_SS_MAX_PLAYERS );
@@ -2551,6 +2612,8 @@ void CGESplitScreenMenu::StoreControlsIntoMatch()
 	pData = m_pAim->GetActiveItemUserData();
 	if ( pData )
 		set.aimassist = pData->GetInt( "value" );
+	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+		set.cheats[i] = m_pCheat[i]->IsSelected();
 
 	set.teams = m_pTeams->IsSelected();
 	set.jump = m_pJump->IsSelected();
@@ -2696,7 +2759,10 @@ void CGESplitScreenMenu::OnCheckButtonChecked( vgui::Panel *panel )
 		return;
 	}
 
-	if ( panel == m_pJump || panel == m_pRadar )
+	bool bCheat = false;
+	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
+		bCheat = bCheat || panel == m_pCheat[i];
+	if ( panel == m_pJump || panel == m_pRadar || bCheat )
 	{
 		StoreControlsIntoMatch();
 		UpdateMatchControls();
@@ -2714,6 +2780,15 @@ void CGESplitScreenMenu::OnCommand( const char *command )
 	}
 	else if ( !Q_stricmp( command, "page1" ) )
 	{
+		SetPage( GESS_PAGE_MATCH );
+	}
+	else if ( !Q_stricmp( command, "cheats" ) )
+	{
+		SetPage( GESS_PAGE_CHEATS );
+	}
+	else if ( !Q_stricmp( command, "cheatsback" ) )
+	{
+		StoreControlsIntoMatch();
 		SetPage( GESS_PAGE_MATCH );
 	}
 	else if ( !Q_stricmp( command, "new" ) )
