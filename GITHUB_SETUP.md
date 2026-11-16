@@ -8,9 +8,12 @@ players a download. You only need a GitHub account and Git for Windows.
 1. Sign in at [github.com](https://github.com).
 2. Open [goldeneye-source/ges-code](https://github.com/goldeneye-source/ges-code) and click
    **Fork** (top right).
-3. Owner: your account. Name: `ges-code` (or another name). Click **Create fork**.
+3. Owner: your account. Name: `ges-code` or another name (this build's fork is
+   `ges-code-Couch-Party`). Click **Create fork**.
 
-Your fork is now at `https://github.com/<your-name>/ges-code`.
+Your fork is now at `https://github.com/<your-name>/<fork name>`. This build lives at
+[T3chnobone/ges-code-Couch-Party](https://github.com/T3chnobone/ges-code-Couch-Party), branch
+`ges-splitscreen`.
 
 ## 2. Push the split screen branch
 
@@ -19,7 +22,7 @@ Open **Git Bash** (or a terminal) in the folder that holds this branch (on the P
 
 ```
 git checkout ges-splitscreen
-git remote add fork https://github.com/<your-name>/ges-code.git
+git remote add fork https://github.com/<your-name>/<fork name>.git
 git push -u fork ges-splitscreen
 ```
 
