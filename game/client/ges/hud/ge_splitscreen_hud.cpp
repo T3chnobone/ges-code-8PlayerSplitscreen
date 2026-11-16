@@ -247,20 +247,6 @@ static float GESS_CalcDialPoints( float curr, float max )
 	return ( prop < 0.625f ) ? ( prop * 8.0f / 11.0f ) : ( prop * 16.0f / 11.0f - 5.0f / 11.0f );
 }
 
-// Where the health and armour dials sit in a view (as PaintLifeDials draws them):
-// each is w x h, its inner edge offset from the centre
-static void GESS_DialGeometry( const GESSViewport_t &vp, int &w, int &h, int &offset, int &radius )
-{
-	const float wide = 16.0f / 9.0f;
-	const float aspect = vp.h > 0 ? (float) vp.w / (float) vp.h : wide;
-	const float s = ( aspect >= wide ? vp.h : vp.w / wide ) / 480.0f;
-	const float spread = Max( 1.0f, aspect / wide );
-	w = (int)( 115 * s );
-	h = (int)( 350 * s );
-	offset = (int)( 130 * s * spread );
-	radius = (int)( ( 97 + 115 ) * s );
-}
-
 void CGESplitScreenHud::PaintLifeDials( C_GEPlayer *pGE, const GESSViewport_t &vp, float alpha )
 {
 	CHudTexture *pHealthFull = gHUD.GetIcon( "health_full" );
@@ -646,10 +632,14 @@ void CGESplitScreenHud::PaintGEScoreboard( const GESSViewport_t &area, int highl
 	// Fonts: "Scoreboard" and "Scoreboard_Spec" (Adventure Subtitles GES, 8 and 6
 	// units), the rows' "DefaultVerySmall" (Tahoma, 14 pixels on a 1080 screen)
 	const int aa = ISurface::FONTFLAG_ANTIALIAS | ISurface::FONTFLAG_CUSTOM;
-	HFont fBoard = GetScaledFont( "Adventure Subtitles GES", SBS( 8 ), 300, aa );
+	// Split screen views are small and the game is played from the sofa: the rows are at least
+	// a 21st of the board's height (22 pixels in a quarter of a 1080p screen), the headers
+	// nearly as big, and the rows spaced to fit them
+	const int rowTall = (int)( Max( Max( 14.0f * s / 2.25f, 9.0f * s ), area.h / 21.0f ) + 0.5f );
+	HFont fBoard = GetScaledFont( "Adventure Subtitles GES", Max( SBS( 8 ), rowTall * 9 / 10 ), 300, aa );
 	HFont fSpec = GetScaledFont( "Adventure Subtitles GES", SBS( 6 ), 100, aa );
 	// (in a small view the rows get as tall a font as their 10-unit spacing allows, to stay readable)
-	HFont fRow = GetScaledFont( "Tahoma", (int)( Max( 14.0f * s / 2.25f, 9.0f * s ) + 0.5f ), 0, ISurface::FONTFLAG_ANTIALIAS );
+	HFont fRow = GetScaledFont( "Tahoma", rowTall, 0, ISurface::FONTFLAG_ANTIALIAS );
 
 	// Colours from the scheme (ClientScheme.res)
 	const Color colText( 153, 255, 140, 255 );		// SB_Text / SB_Labels
@@ -684,12 +674,13 @@ void CGESplitScreenHud::PaintGEScoreboard( const GESSViewport_t &area, int highl
 	// The player list: sections (one, or MI6 and Janus), a header row each, then
 	// the players. Columns as in CGEScoreBoard::AddSection.
 	const float listX = 48 + 4.7f, listY = 46 + 4.1f, listW = 364 - listX, listBottom = 46 + 240;
-	const float colW[6] = { 16, 143, 41, 39, 39, 28 };	// dead icon, name, identity, score, deaths, ping
+	// No Ping column (everyone is on this PC): its room goes to the others
+	const float colW[6] = { 16, 136, 62, 46, 46, 0 };	// dead icon, name, identity, score, deaths, (ping)
 	float colX[6];
 	colX[0] = listX;
 	for ( int c = 1; c < 6; c++ )
 		colX[c] = colX[c - 1] + colW[c - 1];
-	const float lineSpacing = 10.0f, sectionGap = 8.0f;
+	const float lineSpacing = Max( 10.0f, surface()->GetFontTall( fRow ) * 1.2f / s ), sectionGap = 8.0f;
 	const float headerTall = surface()->GetFontTall( fBoard ) / s + 7.0f;
 
 	CUtlVector<GESSBoardRow_t> rows;
@@ -758,7 +749,6 @@ void CGESplitScreenHud::PaintGEScoreboard( const GESSViewport_t &area, int highl
 		GESS_DrawLabelW( fBoard, SBX( colX[2] ), hy, SBS( colW[2] ), hh, headCol, GESS_Localize( "#GE_Charname", L"Identity" ), 0 );
 		GESS_DrawLabelW( fBoard, SBX( colX[3] ), hy, SBS( colW[3] ), hh, headCol, GESS_Localize( "#GE_Score", L"Score" ), 0 );
 		GESS_DrawLabelW( fBoard, SBX( colX[4] ), hy, SBS( colW[4] ), hh, headCol, GESS_Localize( "#GE_Deaths", L"Deaths" ), 0 );
-		GESS_DrawLabelW( fBoard, SBX( colX[5] ), hy, SBS( colW[5] - 2 ), hh, headCol, GESS_Localize( "#GE_Ping", L"Ping" ), 1 );
 		y += headerTall;
 
 		for ( int r = 0; r < rows.Count(); r++ )
@@ -824,9 +814,6 @@ void CGESplitScreenHud::PaintGEScoreboard( const GESSViewport_t &area, int highl
 			}
 			GESS_DrawLabel( fRow, SBX( colX[3] ), ry, SBS( colW[3] ), rh, col, row.scoreText, 0 );
 			GESS_DrawLabel( fRow, SBX( colX[4] ), ry, SBS( colW[4] ), rh, col, VarArgs( "%d", row.deaths ), 0 );
-			const int ping = pRes->GetPing( i );
-			const char *pszPing = ping < 1 ? ( pRes->IsFakePlayer( i ) ? "BOT" : "" ) : VarArgs( "%d", ping );
-			GESS_DrawLabel( fRow, SBX( colX[5] ), ry, SBS( colW[5] - 2 ), rh, col, pszPing, 1 );
 
 			y += lineSpacing;
 		}
@@ -1217,13 +1204,12 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 	{
 		// The player's own row is highlighted, as in the normal game
 		C_BasePlayer *pViewer = pSS->GetSlotPlayer( slot );
-		// Centred in the view between the health and armour dials, as big as fits
-		// under the round timer and above the help line (the radar is hidden meanwhile)
-		int dialW, dialH, dialOffset, dialRadius;
-		GESS_DialGeometry( vp, dialW, dialH, dialOffset, dialRadius );
+		// Centred in the view and as big as it allows under the round timer and above
+		// the help line, drawn over the health and armour dials (the radar is hidden
+		// meanwhile), so it can be read from the sofa even in a quarter of the screen
 		const int top = vp.y + Max( 4, vp.h / 40 ) + tallL + 4;
 		const int bottom = helpY - 4;
-		const int halfW = Min( vp.w / 2 - 4, dialOffset + dialW / 2 );
+		const int halfW = vp.w / 2 - Max( 4, vp.w / 60 );
 		const int vcx = vp.x + vp.w / 2, vcy = vp.y + vp.h / 2;
 		const int halfH = Max( 10, Min( vcy - top, bottom - vcy ) );
 		GESSViewport_t board = { vcx - halfW, vcy - halfH, halfW * 2, halfH * 2 };

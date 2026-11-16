@@ -465,3 +465,9 @@ screens: the first "players per display" players go on the left half and the res
   screen (it used to be fitted by its whole texture, which has empty space above and below), so
   it's much bigger, and the radar is hidden while it's open. Its rows use a larger font in small
   views. The spare-cell scoreboard is fitted the same way, so it's bigger too.
+- **Readable START menu scoreboard**: the leaderboard now takes as much of the player's view as
+  it can between the round timer and the help line, drawn over the health and armour dials. The
+  player rows use a much bigger font (at least a 21st of the board's height: about 22 pixels in a
+  quarter of a 1080p screen), the column titles nearly as big, with the rows spaced to fit. The
+  Ping column is gone (everyone is on this PC); Name, Identity, Score and Deaths share its room.
+  The spare-cell scoreboard uses the same sizes.
