@@ -10,6 +10,9 @@
 #include "hl2mp_playeranimstate.h"
 #include "base_playeranimstate.h"
 #include "datacache/imdlcache.h"
+#if defined( GE_DLL ) && defined( CLIENT_DLL )
+#include "prediction.h"
+#endif
 
 #ifdef CLIENT_DLL
 #include "c_hl2mp_player.h"
@@ -181,6 +184,24 @@ void CHL2MPPlayerAnimState::DoAnimationEvent( PlayerAnimEvent_t event, int nData
 	CBasePlayer *pPlayer = GetBasePlayer();
 	if ( !pPlayer )
 		return;
+
+#ifdef GE_DLL
+	// Testing: log the third person animation events of player <index>
+#ifdef CLIENT_DLL
+	static ConVar s_debug( "cl_ges_debug_animevent", "0", FCVAR_DONTRECORD, "Testing: log the client's third person animation events of player <index> (0: off)." );
+#else
+	static ConVar s_debug( "sv_ges_debug_animevent", "0", FCVAR_DONTRECORD, "Testing: log the server's third person animation events of player <index> (0: off)." );
+#endif
+	if ( s_debug.GetInt() > 0 && pPlayer->entindex() == s_debug.GetInt() )
+	{
+#ifdef CLIENT_DLL
+		Msg( "[client] anim event %d for player %d at %.3f (predicting %d, first %d)\n", event, pPlayer->entindex(), gpGlobals->curtime,
+			prediction->InPrediction() ? 1 : 0, prediction->IsFirstTimePredicted() ? 1 : 0 );
+#else
+		Msg( "[server] anim event %d for player %d at %.3f\n", event, pPlayer->entindex(), gpGlobals->curtime );
+#endif
+	}
+#endif
 
 	switch( event )
 	{

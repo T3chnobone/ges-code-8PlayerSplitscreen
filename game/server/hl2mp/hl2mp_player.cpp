@@ -1599,9 +1599,23 @@ static CTEPlayerAnimEvent g_TEPlayerAnimEvent( "PlayerAnimEvent" );
 void TE_PlayerAnimEvent( CBasePlayer *pPlayer, PlayerAnimEvent_t event, int nData )
 {
 	CPVSFilter filter( (const Vector&)pPlayer->EyePosition() );
+#ifdef GE_DLL
+	const int before = filter.GetRecipientCount();
+#endif
 
 	//Tony; use prediction rules.
 	filter.UsePredictionRules();
+#ifdef GE_DLL
+	ConVarRef s_debug( "sv_ges_debug_animevent" );
+	if ( s_debug.IsValid() && s_debug.GetInt() == pPlayer->entindex() )
+	{
+		Msg( "[server] anim event message (player predicts weapons %d, cl_predict \"%s\", cl_predictweapons \"%s\"): %d recipients, %d after prediction rules:", pPlayer->IsPredictingWeapons() ? 1 : 0,
+			engine->GetClientConVarValue( pPlayer->entindex(), "cl_predict" ), engine->GetClientConVarValue( pPlayer->entindex(), "cl_predictweapons" ), before, filter.GetRecipientCount() );
+		for ( int r = 0; r < filter.GetRecipientCount(); r++ )
+			Msg( " %d", filter.GetRecipientIndex( r ) );
+		Msg( "\n" );
+	}
+#endif
 	
 	g_TEPlayerAnimEvent.m_hPlayer = pPlayer;
 	g_TEPlayerAnimEvent.m_iEvent = event;

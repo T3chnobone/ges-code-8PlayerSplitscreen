@@ -2917,6 +2917,23 @@ void CServerGameClients::ClientSettingsChanged( edict_t *pEdict )
 	}
 	
 #if !defined( NO_ENTITY_PREDICTION )
+#ifdef GE_DLL
+	// The current engine doesn't register the client's cl_predict (the client
+	// predicts anyway), so its value never arrives here and reads as "". Taken as
+	// 0, every player counted as not predicting: the server then sent players the
+	// events their own client had already predicted (each shot's third person
+	// fire animation played twice, and so on) and never lag compensated their
+	// shots. A setting that isn't sent counts as its default, 1.
+	#define GE_CVAR_OR_DEFAULT_ON( v ) ( !QUICKGETCVARVALUE( v )[0] || Q_atoi( QUICKGETCVARVALUE( v ) ) != 0 )
+	bool usePrediction = GE_CVAR_OR_DEFAULT_ON( "cl_predict" );
+
+	if ( usePrediction )
+	{
+		player->m_bPredictWeapons  = GE_CVAR_OR_DEFAULT_ON( "cl_predictweapons" );
+		player->m_bLagCompensation = GE_CVAR_OR_DEFAULT_ON( "cl_lagcompensation" );
+	}
+	#undef GE_CVAR_OR_DEFAULT_ON
+#else
 	bool usePrediction = Q_atoi( QUICKGETCVARVALUE("cl_predict")) != 0;
 
 	if ( usePrediction )
@@ -2924,13 +2941,21 @@ void CServerGameClients::ClientSettingsChanged( edict_t *pEdict )
 		player->m_bPredictWeapons  = Q_atoi( QUICKGETCVARVALUE("cl_predictweapons")) != 0;
 		player->m_bLagCompensation = Q_atoi( QUICKGETCVARVALUE("cl_lagcompensation")) != 0;
 	}
+#endif
 	else
 #endif
 	{
 		player->m_bPredictWeapons  = false;
 		player->m_bLagCompensation = false;
 	}
-	
+
+#ifdef GE_DLL
+	static ConVar ges_debug_clientsettings( "ges_debug_clientsettings", "0", FCVAR_DONTRECORD, "Testing: print each player's prediction settings when they change." );
+	if ( ges_debug_clientsettings.GetBool() )
+		Msg( "Client settings for %d: cl_predict \"%s\", cl_predictweapons \"%s\", cl_lagcompensation \"%s\" -> predict weapons %d, lag compensation %d\n",
+			player->entindex(), QUICKGETCVARVALUE( "cl_predict" ), QUICKGETCVARVALUE( "cl_predictweapons" ), QUICKGETCVARVALUE( "cl_lagcompensation" ),
+			player->m_bPredictWeapons ? 1 : 0, player->m_bLagCompensation ? 1 : 0 );
+#endif
 
 #undef QUICKGETCVARVALUE
 	}

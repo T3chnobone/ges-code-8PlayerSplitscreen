@@ -1025,6 +1025,12 @@ public:
 	{
 		// Create the effect.
 		C_HL2MP_Player *pPlayer = dynamic_cast< C_HL2MP_Player* >( m_hPlayer.Get() );
+#ifdef GE_DLL
+		// (looked up each time: the setting is created by the first animation event)
+		ConVarRef s_debug( "cl_ges_debug_animevent" );
+		if ( pPlayer && s_debug.IsValid() && s_debug.GetInt() == pPlayer->entindex() )
+			Msg( "[client] anim event %d for player %d arrived from the server (local %d)\n", m_iEvent.Get(), pPlayer->entindex(), pPlayer->IsLocalPlayer() ? 1 : 0 );
+#endif
 		if ( pPlayer && !pPlayer->IsDormant() )
 		{
 			pPlayer->DoAnimationEvent( (PlayerAnimEvent_t)m_iEvent.Get(), m_nData );

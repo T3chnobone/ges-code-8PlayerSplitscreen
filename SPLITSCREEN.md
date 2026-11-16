@@ -471,3 +471,11 @@ screens: the first "players per display" players go on the left half and the res
   quarter of a 1080p screen), the column titles nearly as big, with the rows spaced to fit. The
   Ping column is gone (everyone is on this PC); Name, Identity, Score and Deaths share its room.
   The spare-cell scoreboard uses the same sizes.
+- **Fire animation played twice** (seen on player 1's model in the other views, with the PP7 and
+  other pistols, the slappers, the throwing knives...): the current engine doesn't register the
+  client's `cl_predict`, so the server read it as 0 and treated every player as not predicting.
+  It then sent each player the animation events (fire, reload, jump...) their own game had already
+  predicted, so they played twice, and it skipped lag compensation for everyone's shots (online
+  too). The server now takes a setting that isn't sent as its default (on). Testing:
+  `sv_ges_debug_animevent` / `cl_ges_debug_animevent <player>` log the events,
+  `ges_debug_clientsettings 1` prints what each player's game sent.
