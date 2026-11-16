@@ -230,6 +230,7 @@ private:
 	void UpdateMenu( int slot, const GESSPadState_t &pad, float frametime );
 	void UpdateGameMenu( int slot, const GESSPadState_t &pad, float frametime );
 	void OpenGameMenu( int slot );
+	void BlockPauseMenu();		// No game pause menu in a split screen match: player 1's START menu instead
 	void CycleGameMenuPage( int slot, int dir );
 	void ActivateGameMenuPage( int slot );
 	void UpdateGuestLook( int slot, const GESSPadState_t &pad, float frametime );

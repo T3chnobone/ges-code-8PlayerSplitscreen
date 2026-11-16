@@ -1215,6 +1215,7 @@ void CGESplitScreenClient::Update( float frametime )
 		if ( cl_ges_ss_pad.GetBool() != bPad )
 			cl_ges_ss_pad.SetValue( bPad ? 1 : 0 );
 	}
+	BlockPauseMenu();
 	UpdateHostLook( dt );
 	UpdatePregame();
 
@@ -1802,6 +1803,37 @@ bool CGESplitScreenClient::IsGameMenuPageAvailable( int page ) const
 	if ( page == GESS_GAMEPAGE_TEAM )
 		return IsTeamplay();
 	return page >= 0 && page < GESS_GAMEPAGE_COUNT;
+}
+
+//-----------------------------------------------------------------------------
+// No game pause menu in a split screen match
+//
+// The game's own pause menu (Resume Game, Disconnect, Find Servers...) covers
+// every player's view and isn't made for controllers. It can open from Esc, from
+// a controller button the engine itself reads (an Xbox pad's START / BACK, or any
+// pad Steam Input presents as one), or the window losing and regaining focus.
+// While a split screen match is on, it's closed as soon as it appears and player
+// 1's own START menu opens instead (leaderboard, team, profile, exit with a
+// confirmation: player 1 exiting ends the match). The console (~) still opens.
+// Back at the main menu everything works as usual. Not when player 1 has no
+// controller (the START menu needs one), so there's always a way out.
+//-----------------------------------------------------------------------------
+static ConVar ges_ss_block_pausemenu( "ges_ss_block_pausemenu", "1", FCVAR_ARCHIVE, "In a split screen match, close the game's pause menu when it opens and open player 1's START menu instead." );
+
+void CGESplitScreenClient::BlockPauseMenu()
+{
+	if ( !ges_ss_block_pausemenu.GetBool() || !enginevgui->IsGameUIVisible() || !ShouldSuppressGameMenus() )
+		return;
+	if ( !engine->IsInGame() || engine->IsLevelMainMenuBackground() || engine->IsDrawingLoadingImage() || engine->Con_IsVisible() )
+		return;
+	const int hostPad = GetSlotPad( 0 );
+	if ( hostPad < 0 || !GESSGamepads()->GetPad( hostPad ).connected )
+		return;
+
+	engine->ClientCmd_Unrestricted( "gameui_hide\n" );
+	if ( m_Slots[0].menu == GESS_MENU_NONE && !m_bPregame )
+		OpenGameMenu( 0 );
+	DevMsg( "Split screen: closed the game's pause menu (player 1's START menu instead)\n" );
 }
 
 void CGESplitScreenClient::OpenGameMenu( int slot )

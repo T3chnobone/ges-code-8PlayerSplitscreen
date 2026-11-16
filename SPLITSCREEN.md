@@ -451,3 +451,17 @@ screens: the first "players per display" players go on the left half and the res
   at the enemy nearest the crosshair if they're within the cone and in sight. Sticky aim and
   slowdown work on each player's own view, so every viewport gets them. Teammates are never
   targets in team games. `ges_ss_debug_aimtest` (cheats) and `ges_ss_debug_aim` test it.
+- **No game pause menu in split screen matches**: the game's own pause menu (Resume Game,
+  Disconnect, Find Servers...) covered every view. It could open from Esc, from a controller the
+  engine reads itself (an Xbox pad's START / BACK, or a pad Steam Input presents as one, also with
+  `-gamepadui`), or the window regaining focus. While a split screen match is on and player 1 has a
+  controller, it's closed as soon as it appears and player 1's START menu opens instead
+  (leaderboard, team, profile, exit with a confirmation; player 1 exiting ends the match and shows
+  the results). The console (~) still opens. Back at the main menu the menus work as usual.
+  `ges_ss_block_pausemenu 0` turns this off.
+- **START menu leaderboard**: no "Leaderboard" title, arrows or page dots any more (they sat on the
+  round timer; the help line still says Left / Right: more). The other pages keep their titles. The
+  scoreboard is centred in the view between the health and armour dials, sized by its visible green
+  screen (it used to be fitted by its whole texture, which has empty space above and below), so
+  it's much bigger, and the radar is hidden while it's open. Its rows use a larger font in small
+  views. The spare-cell scoreboard is fitted the same way, so it's bigger too.

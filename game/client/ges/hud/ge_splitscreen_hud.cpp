@@ -247,6 +247,20 @@ static float GESS_CalcDialPoints( float curr, float max )
 	return ( prop < 0.625f ) ? ( prop * 8.0f / 11.0f ) : ( prop * 16.0f / 11.0f - 5.0f / 11.0f );
 }
 
+// Where the health and armour dials sit in a view (as PaintLifeDials draws them):
+// each is w x h, its inner edge offset from the centre
+static void GESS_DialGeometry( const GESSViewport_t &vp, int &w, int &h, int &offset, int &radius )
+{
+	const float wide = 16.0f / 9.0f;
+	const float aspect = vp.h > 0 ? (float) vp.w / (float) vp.h : wide;
+	const float s = ( aspect >= wide ? vp.h : vp.w / wide ) / 480.0f;
+	const float spread = Max( 1.0f, aspect / wide );
+	w = (int)( 115 * s );
+	h = (int)( 350 * s );
+	offset = (int)( 130 * s * spread );
+	radius = (int)( ( 97 + 115 ) * s );
+}
+
 void CGESplitScreenHud::PaintLifeDials( C_GEPlayer *pGE, const GESSViewport_t &vp, float alpha )
 {
 	CHudTexture *pHealthFull = gHUD.GetIcon( "health_full" );
@@ -601,14 +615,15 @@ void CGESplitScreenHud::PaintGEScoreboard( const GESSViewport_t &area, int highl
 	if ( !pRes || !GEMPRules() )
 		return;
 
-	// The panel is 420 x 340 (in 640 x 480 units) and its background reaches 44
-	// above it: 422 x 425 in all. Fit that into the area, centred.
-	const float bw = 422.0f, bh = 425.0f;
+	// The panel is 420 x 340 (in 640 x 480 units) and its background texture
+	// reaches 44 above it (422 x 425 in all), but the green screen you see only
+	// covers units 40 to 302 down: fit that visible part into the area, centred.
+	const float bw = 422.0f, visTop = 40.0f, visBottom = 302.0f, bh = visBottom - visTop;
 	const float s = Min( area.w / bw, area.h / bh );
 	if ( s <= 0.05f )
 		return;
 	const float ox = area.x + ( area.w - bw * s ) * 0.5f;
-	const float oy = area.y + ( area.h - bh * s ) * 0.5f + 44.0f * s;
+	const float oy = area.y + ( area.h - bh * s ) * 0.5f - visTop * s;
 #define SBX( u ) ( (int)( ox + (u) * s + 0.5f ) )
 #define SBY( u ) ( (int)( oy + (u) * s + 0.5f ) )
 #define SBS( u ) ( (int)( (u) * s + 0.5f ) )
@@ -633,7 +648,8 @@ void CGESplitScreenHud::PaintGEScoreboard( const GESSViewport_t &area, int highl
 	const int aa = ISurface::FONTFLAG_ANTIALIAS | ISurface::FONTFLAG_CUSTOM;
 	HFont fBoard = GetScaledFont( "Adventure Subtitles GES", SBS( 8 ), 300, aa );
 	HFont fSpec = GetScaledFont( "Adventure Subtitles GES", SBS( 6 ), 100, aa );
-	HFont fRow = GetScaledFont( "Tahoma", (int)( 14.0f * s / 2.25f + 0.5f ), 0, ISurface::FONTFLAG_ANTIALIAS );
+	// (in a small view the rows get as tall a font as their 10-unit spacing allows, to stay readable)
+	HFont fRow = GetScaledFont( "Tahoma", (int)( Max( 14.0f * s / 2.25f, 9.0f * s ) + 0.5f ), 0, ISurface::FONTFLAG_ANTIALIAS );
 
 	// Colours from the scheme (ClientScheme.res)
 	const Color colText( 153, 255, 140, 255 );		// SB_Text / SB_Labels
@@ -1085,7 +1101,9 @@ void CGESplitScreenHud::PaintPlayerHud( int slot, C_BasePlayer *pPlayer, const G
 		PaintLifeDials( pGE, vp, barAlpha );
 
 	// GoldenEye's radar, centred on this player (ge_hudradar.cpp), when the match allows it
-	GESS_PaintRadar( slot, pPlayer, vp.x, vp.y, vp.w, vp.h );
+	// (not under the leaderboard)
+	if ( !( pSS->GetSlotMenu( slot ) == GESS_MENU_PAUSE && pSS->GetSlotMenuSelection( slot ) == GESS_GAMEPAGE_LEADERBOARD ) )
+		GESS_PaintRadar( slot, pPlayer, vp.x, vp.y, vp.w, vp.h );
 
 	// Ammo: GoldenEye's own counter, bottom right
 	(void) pMP;
@@ -1163,26 +1181,31 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 	static const char *s_pszPages[GESS_GAMEPAGE_COUNT] = { "Leaderboard", "Swap team", "Change profile", "Exit game" };
 	const int cx = box.x + box.w / 2;
 	int y = box.y + 6;
-	DrawText( m_hFontLarge, cx, y, Color( 230, 200, 80, 255 ), s_pszPages[clamp( page, 0, GESS_GAMEPAGE_COUNT - 1 )], true );
-	DrawText( m_hFontLarge, box.x + 12, y, Color( 230, 200, 80, 200 ), "<" );
-	DrawText( m_hFontLarge, box.x + box.w - 12 - TextWide( m_hFontLarge, ">" ), y, Color( 230, 200, 80, 200 ), ">" );
-	y += tallL + 2;
 
-	// Page dots
-	int numPages = 0;
-	for ( int p = 0; p < GESS_GAMEPAGE_COUNT; p++ )
-		numPages += pSS->IsGameMenuPageAvailable( p ) ? 1 : 0;
-	const int dot = Max( 4, tallS / 3 ), dotGap = dot * 2;
-	int dx = cx - ( numPages * dotGap ) / 2;
-	for ( int p = 0; p < GESS_GAMEPAGE_COUNT; p++ )
+	// The page name, arrows and page dots on the framed pages. The leaderboard has
+	// none: its title sat on the round timer, and the help line says Left / Right: more.
+	if ( !bBoard )
 	{
-		if ( !pSS->IsGameMenuPageAvailable( p ) )
-			continue;
-		surface()->DrawSetColor( p == page ? Color( 230, 200, 80, 255 ) : Color( 110, 110, 110, 255 ) );
-		surface()->DrawFilledRect( dx, y, dx + dot, y + dot );
-		dx += dotGap;
+		DrawText( m_hFontLarge, cx, y, Color( 230, 200, 80, 255 ), s_pszPages[clamp( page, 0, GESS_GAMEPAGE_COUNT - 1 )], true );
+		DrawText( m_hFontLarge, box.x + 12, y, Color( 230, 200, 80, 200 ), "<" );
+		DrawText( m_hFontLarge, box.x + box.w - 12 - TextWide( m_hFontLarge, ">" ), y, Color( 230, 200, 80, 200 ), ">" );
+		y += tallL + 2;
+
+		int numPages = 0;
+		for ( int p = 0; p < GESS_GAMEPAGE_COUNT; p++ )
+			numPages += pSS->IsGameMenuPageAvailable( p ) ? 1 : 0;
+		const int dot = Max( 4, tallS / 3 ), dotGap = dot * 2;
+		int dx = cx - ( numPages * dotGap ) / 2;
+		for ( int p = 0; p < GESS_GAMEPAGE_COUNT; p++ )
+		{
+			if ( !pSS->IsGameMenuPageAvailable( p ) )
+				continue;
+			surface()->DrawSetColor( p == page ? Color( 230, 200, 80, 255 ) : Color( 110, 110, 110, 255 ) );
+			surface()->DrawFilledRect( dx, y, dx + dot, y + dot );
+			dx += dotGap;
+		}
+		y += dot + 6;
 	}
-	y += dot + 6;
 
 	const int helpY = box.y + box.h - tallS - 6;
 	GESSViewport_t content = { box.x + 8, y, box.w - 16, helpY - y - 6 };
@@ -1194,8 +1217,16 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 	{
 		// The player's own row is highlighted, as in the normal game
 		C_BasePlayer *pViewer = pSS->GetSlotPlayer( slot );
-		// As big as the view allows: the help line sits over its empty round bottom
-		GESSViewport_t board = { vp.x, y, vp.w, vp.y + vp.h - y };
+		// Centred in the view between the health and armour dials, as big as fits
+		// under the round timer and above the help line (the radar is hidden meanwhile)
+		int dialW, dialH, dialOffset, dialRadius;
+		GESS_DialGeometry( vp, dialW, dialH, dialOffset, dialRadius );
+		const int top = vp.y + Max( 4, vp.h / 40 ) + tallL + 4;
+		const int bottom = helpY - 4;
+		const int halfW = Min( vp.w / 2 - 4, dialOffset + dialW / 2 );
+		const int vcx = vp.x + vp.w / 2, vcy = vp.y + vp.h / 2;
+		const int halfH = Max( 10, Min( vcy - top, bottom - vcy ) );
+		GESSViewport_t board = { vcx - halfW, vcy - halfH, halfW * 2, halfH * 2 };
 		PaintScoreboard( board, pViewer ? pViewer->entindex() : -1 );
 		break;
 	}

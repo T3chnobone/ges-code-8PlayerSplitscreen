@@ -96,8 +96,9 @@ In the game:
 | Right stick click | Jump (when the match allows jumping) |
 | START | Your menu: scoreboard, swap team, change profile, exit |
 
-Keyboard and mouse are off during split screen matches. Esc, the console and the menus still
-work.
+Keyboard and mouse are off during split screen matches. The game's pause menu doesn't open during
+a match: Esc (or a controller's own pause button) opens player 1's START menu instead, which has
+Exit. The console (~) still works.
 
 ### Troubleshooting
 
