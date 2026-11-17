@@ -1,6 +1,6 @@
 ; GoldenEye: Source Split Screen Mod - setup wizard (NSIS 3, Unicode)
 ;
-; Build:  makensis -DVERSION=1.0.0 -DGAME_TITLE="GoldenEye: Source - Split Screen Mod" ges-splitscreen-setup.nsi
+; Build:  makensis -DVERSION=0.1.0 -DGAME_TITLE="GoldenEye: Source - Split Screen Mod" ges-splitscreen-setup.nsi
 ; Expects the files to install in .\payload\ laid out like the gesource folder
 ; (bin\client.dll, bin\server.dll, ..., resource\*.res, materials\..., gameinfo.txt, steam.inf).
 
@@ -9,12 +9,16 @@ ManifestDPIAware true
 SetCompressor /SOLID lzma
 
 !ifndef VERSION
-  !define VERSION "1.0.0"
+  !define VERSION "0.1.0"
 !endif
 !ifndef GAME_TITLE
   !define GAME_TITLE "GoldenEye: Source - Split Screen Mod"
 !endif
-!define PRODUCT "GoldenEye: Source Split Screen Mod"
+!define PRODUCT "GoldenEye: Source - Split Screen Mod"
+!define GAME_TITLE_FILE "GoldenEye Source - Split Screen Mod"
+!ifndef REPO_URL_PATH
+  !define REPO_URL_PATH "T3chnobone/GoldenEye-Source-Split-Screen-Mod"
+!endif
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\GESSplitScreenMod"
 !define BACKUP_DIR "splitscreen_backup"
 
@@ -42,7 +46,7 @@ VIAddVersionKey "LegalCopyright" "GoldenEye: Source by Team GoldenEye: Source. U
 !define MUI_WELCOMEPAGE_TEXT "This adds local split screen for up to 8 players with controllers to GoldenEye: Source, plus Big Head, Paintball, aim assist and the other new match options.$\r$\n$\r$\nYou need Steam, Source SDK Base 2013 Multiplayer (free on Steam) and GoldenEye: Source 5.0.6 installed.$\r$\n$\r$\nThe files this replaces are backed up first, and the uninstaller puts them back.$\r$\n$\r$\nPlease quit GoldenEye: Source before continuing."
 !define MUI_DIRECTORYPAGE_TEXT_TOP "Setup found this GoldenEye: Source folder. If yours is somewhere else, pick the gesource folder that holds gameinfo.txt."
 !define MUI_DIRECTORYPAGE_TEXT_DESTINATION "GoldenEye: Source folder (gesource)"
-!define MUI_FINISHPAGE_SHOWREADME "https://github.com/T3chnobone/ges-code-Couch-Party/blob/ges-splitscreen/INSTALL_SPLITSCREEN.md#controller-quick-start"
+!define MUI_FINISHPAGE_SHOWREADME "https://github.com/${REPO_URL_PATH}/blob/ges-splitscreen/INSTALL_SPLITSCREEN.md#controller-quick-start"
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "Open the controller quick start guide"
 !define MUI_FINISHPAGE_SHOWREADME_NOTCHECKED
 !define MUI_FINISHPAGE_TEXT "${PRODUCT} is installed. Restart Steam so the library shows the new name, then start ${GAME_TITLE} from your Steam library."
@@ -119,7 +123,7 @@ Section "Split Screen Mod (required)" SecCore
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "${PRODUCT}"
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKLM "${UNINST_KEY}" "Publisher" "T3chnobone"
-  WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout" "https://github.com/T3chnobone/ges-code-Couch-Party"
+  WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout" "https://github.com/${REPO_URL_PATH}"
   WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" '"$INSTDIR\${BACKUP_DIR}\Uninstall Split Screen Mod.exe"'
   WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
