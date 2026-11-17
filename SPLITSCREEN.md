@@ -115,9 +115,12 @@ On the Match page you pick:
   - *Big Head* (`ge_cheat_bighead`): every character's head is drawn twice as big, players and
     ragdolls, in every view (hats grow with it), and the head hitbox grows with it, so a shot at
     the big head counts as a headshot.
-  - *Paintball* (`ge_cheat_paintball`): shots leave splats of mixed paint colours on walls, floors
-    and props instead of bullet holes (8 spiky splats, 9 to 14 units across, in
-    `materials/decals/paintball`). Players still bleed. GoldenEye's own Paintball mode
+  - *Paintball* (`ge_cheat_paintball`): paint instead of bullet holes and blood. Shots leave
+    splats of mixed paint colours on walls, floors and props, and on players where they're hit;
+    a hit player gives off a puff of the paint colours instead of blood, and the blood that
+    would land on walls and floors around them is paint too. Every splat is turned at random
+    (8 spiky splats, 9 to 14 units across, in `materials/decals/paintball`). Not changed (yet):
+    the dust puffs on walls, the death screen's blood and ragdoll blood. GoldenEye's own Paintball mode
     (`ge_paintball`, Create Server) is separate and unchanged.
 - **Win condition**:
   - *Timed, highest score*: the mode's normal scoring when the time limit runs out.
@@ -516,3 +519,10 @@ screens: the first "players per display" players go on the left half and the res
   bright) are made by `splitscreen_resources/tools/make_paint_splats.cpp`: a spiky star of alpha with
   18-27 spikes, softly blurred, coloured by Gaussian blobs of 3-4 of pink, green, blue, orange,
   yellow, purple, cyan and red. Each impact picks one at random; they stay like normal decals.
+- **Paintball: paint instead of blood** (with `ge_cheat_paintball` on): impact decals on players
+  are paint splats too (`TranslateDecalForGameMaterial` no longer leaves flesh out), so paint sticks
+  to player models where they're hit; blood decals on walls and floors (`UTIL_BloodDecalTrace`) are
+  paint splats; the blood spray of a hit (`BloodImpact` / `bloodspray` effects) is a short puff of
+  the 8 paint colours; and every decal gets a random rotation (a random texture axis for world and
+  brush decals, a random up direction for model decals). The dust puffs on walls, the death screen's
+  blood and ragdoll blood pools are unchanged for now.

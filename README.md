@@ -45,7 +45,8 @@ GoldenEye: Source maps, models and sounds are unchanged.
   kill/death ratio; with time and kill limits.
 - **Cheats** page (from the Match page): on / off cheats for everyone, starting with **Big Head**
   (every character's head drawn twice as big, with a matching head hitbox) and **Paintball**
-  (shots leave splats of mixed paint colours instead of bullet holes).
+  (paint instead of bullet holes and blood: mixed-colour splats on walls and players, and a
+  paint puff when someone is hit).
 
 ### HUD (per view)
 - GoldenEye's own health and armour dials, ammo counter, radar (centred on that player) and

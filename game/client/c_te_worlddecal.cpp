@@ -14,6 +14,10 @@
 #include "tier0/vprof.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
+#ifdef GE_DLL
+const Vector *GE_PaintDecalAxis( Vector &axis );	// c_baseentity.cpp
+#endif
+
 #include "tier0/memdbgon.h"
 
 //-----------------------------------------------------------------------------
@@ -121,7 +125,15 @@ void C_TEWorldDecal::PostDataUpdate( DataUpdateType_t updateType )
 
 			if ( !( bNoBlood && bIsBlood ) )
 			{
+				{
+#ifdef GE_DLL
+				// Paintball cheat: a random rotation
+				Vector axis;
+				effects->DecalShoot( m_nIndex, 0, ent->GetModel(), ent->GetAbsOrigin(), ent->GetAbsAngles(), m_vecOrigin, GE_PaintDecalAxis( axis ), 0 );
+#else
 				effects->DecalShoot( m_nIndex, 0, ent->GetModel(), ent->GetAbsOrigin(), ent->GetAbsAngles(), m_vecOrigin, 0, 0 );
+#endif
+				}
 			}
 		}
 	}
@@ -139,7 +151,12 @@ void TE_WorldDecal( IRecipientFilter& filter, float delay, const Vector* pos, in
 		C_BaseEntity *ent = cl_entitylist->GetEnt( 0 );
 		if ( ent )
 		{
+#ifdef GE_DLL
+			Vector axis;
+			effects->DecalShoot( index, 0, ent->GetModel(), ent->GetAbsOrigin(), ent->GetAbsAngles(), *pos, GE_PaintDecalAxis( axis ), 0 );
+#else
 			effects->DecalShoot( index, 0, ent->GetModel(), ent->GetAbsOrigin(), ent->GetAbsAngles(), *pos, 0, 0 );
+#endif
 		}
 	}
 	RecordWorldDecal( pos, index );

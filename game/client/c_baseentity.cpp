@@ -3596,6 +3596,22 @@ bool C_BaseEntity::IsBrushModel() const
 }
 
 
+#ifdef GE_DLL
+// Paintball cheat (ge_cheat_paintball): every decal (all of them are paint then) gets a
+// random rotation. Returns a random direction for its texture axis, or NULL when off.
+const Vector *GE_PaintDecalAxis( Vector &axis )
+{
+	static ConVarRef ge_cheat_paintball( "ge_cheat_paintball" );
+	if ( !ge_cheat_paintball.IsValid() || !ge_cheat_paintball.GetBool() )
+		return NULL;
+	axis = RandomVector( -1.0f, 1.0f );
+	if ( axis.LengthSqr() < 0.01f )
+		axis.Init( 1.0f, 0.0f, 0.0f );
+	VectorNormalize( axis );
+	return &axis;
+}
+#endif
+
 //-----------------------------------------------------------------------------
 // This method works when we've got a studio model
 //-----------------------------------------------------------------------------
@@ -3623,6 +3639,9 @@ void C_BaseEntity::AddStudioDecal( const Ray_t& ray, int hitbox, int decalIndex,
 
 	// FIXME: Pass in decal up?
 	Vector up(0, 0, 1);
+#ifdef GE_DLL
+	GE_PaintDecalAxis( up );	// Paintball cheat: a random rotation
+#endif
 
 	if (doTrace && (GetSolid() == SOLID_VPHYSICS) && !tr.startsolid && !tr.allsolid)
 	{
@@ -3665,6 +3684,9 @@ void C_BaseEntity::AddColoredStudioDecal( const Ray_t& ray, int hitbox, int deca
 
 	// FIXME: Pass in decal up?
 	Vector up(0, 0, 1);
+#ifdef GE_DLL
+	GE_PaintDecalAxis( up );	// Paintball cheat: a random rotation
+#endif
 
 	if (doTrace && (GetSolid() == SOLID_VPHYSICS) && !tr.startsolid && !tr.allsolid)
 	{
@@ -3696,8 +3718,14 @@ void C_BaseEntity::AddBrushModelDecal( const Ray_t& ray, const Vector& decalCent
 			return;
 	}
 
+#ifdef GE_DLL
+	Vector axis;
+	effects->DecalShoot( decalIndex, index, 
+		model, GetAbsOrigin(), GetAbsAngles(), decalCenter, GE_PaintDecalAxis( axis ), 0 );
+#else
 	effects->DecalShoot( decalIndex, index, 
 		model, GetAbsOrigin(), GetAbsAngles(), decalCenter, 0, 0 );
+#endif
 }
 
 

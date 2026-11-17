@@ -30,6 +30,9 @@ CLIENTEFFECT_MATERIAL( "effects/blood_core" )
 CLIENTEFFECT_MATERIAL( "effects/blood_gore" )
 CLIENTEFFECT_MATERIAL( "effects/blood_drop" )
 CLIENTEFFECT_MATERIAL( "effects/blood_puff" )
+#ifdef GE_DLL
+CLIENTEFFECT_MATERIAL( "particle/particle_smokegrenade" )	// the Paintball cheat's puff
+#endif
 CLIENTEFFECT_REGISTER_END()
 
 // Cached material handles
@@ -484,11 +487,63 @@ ParticleForBlood_t	bloodCallbacks[] =
 #endif // HL2_EPISODIC
 };
 
+#ifdef GE_DLL
+//-----------------------------------------------------------------------------
+// Paintball cheat (ge_cheat_paintball): a hit player gives off a small puff of the
+// paint colours instead of blood. Returns false (show the blood) when it's off.
+//-----------------------------------------------------------------------------
+static bool GE_PaintballPuff( const Vector &origin, const Vector &normal )
+{
+	static ConVarRef ge_cheat_paintball( "ge_cheat_paintball" );
+	if ( !ge_cheat_paintball.IsValid() || !ge_cheat_paintball.GetBool() )
+		return false;
+
+	CSmartPtr<CSimpleEmitter> pEmitter = CSimpleEmitter::Create( "PaintballPuff" );
+	if ( !pEmitter )
+		return true;
+	pEmitter->SetSortOrigin( origin );
+	PMaterialHandle hMaterial = pEmitter->GetPMaterial( "particle/particle_smokegrenade" );
+
+	// The splats' colours: pink, green, blue, orange, yellow, purple, cyan, red
+	static const unsigned char s_Colours[8][3] = {
+		{ 255, 60, 170 }, { 60, 230, 90 }, { 50, 140, 255 }, { 255, 150, 30 },
+		{ 255, 235, 40 }, { 170, 80, 255 }, { 40, 230, 230 }, { 255, 60, 60 } };
+
+	Vector dir = normal.IsZero() ? Vector( 0, 0, 1 ) : normal;
+	for ( int i = 0; i < 16; i++ )
+	{
+		SimpleParticle *p = (SimpleParticle *) pEmitter->AddParticle( sizeof( SimpleParticle ), hMaterial, origin );
+		if ( !p )
+			continue;
+		Vector v = dir + RandomVector( -0.9f, 0.9f );
+		VectorNormalize( v );
+		p->m_flLifetime = 0.0f;
+		p->m_flDieTime = random->RandomFloat( 0.3f, 0.6f );
+		p->m_vecVelocity = v * random->RandomFloat( 30.0f, 110.0f );
+		const unsigned char *c = s_Colours[random->RandomInt( 0, 7 )];
+		p->m_uchColor[0] = c[0];
+		p->m_uchColor[1] = c[1];
+		p->m_uchColor[2] = c[2];
+		p->m_uchStartAlpha = 230;
+		p->m_uchEndAlpha = 0;
+		p->m_uchStartSize = random->RandomInt( 2, 4 );
+		p->m_uchEndSize = random->RandomInt( 6, 10 );
+		p->m_flRoll = random->RandomFloat( 0.0f, 360.0f );
+		p->m_flRollDelta = random->RandomFloat( -2.0f, 2.0f );
+	}
+	return true;
+}
+#endif
+
 //-----------------------------------------------------------------------------
 // Purpose: Intercepts the blood spray message.
 //-----------------------------------------------------------------------------
 void BloodSprayCallback( const CEffectData &data )
 {
+#ifdef GE_DLL
+	if ( GE_PaintballPuff( data.m_vOrigin, data.m_vNormal ) )
+		return;
+#endif
 	colorentry_t color;
 
 	GetBloodColor( data.m_nColor, color );
@@ -501,6 +556,10 @@ DECLARE_CLIENT_EFFECT( "bloodspray", BloodSprayCallback );
 //-----------------------------------------------------------------------------
 void BloodImpactCallback( const CEffectData & data )
 {
+#ifdef GE_DLL
+	if ( GE_PaintballPuff( data.m_vOrigin, data.m_vNormal ) )
+		return;
+#endif
 	bool bFoundBlood = false;
 
 	// Find which sort of blood we are

@@ -358,10 +358,9 @@ char const *CDecalEmitterSystem::TranslateDecalForGameMaterial( char const *deca
 	{
 		return PAINTBALLS;
 	}
-	// Paintball cheat (the Split Screen menu's Cheats page): paint on walls and props;
-	// players and other flesh still bleed
-	if ( ge_cheat_paintball.GetBool() && gamematerial != CHAR_TEX_FLESH && gamematerial != CHAR_TEX_BLOODYFLESH &&
-		gamematerial != CHAR_TEX_ALIENFLESH && gamematerial != CHAR_TEX_ANTLION )
+	// Paintball cheat (the Split Screen menu's Cheats page): paint everywhere a shot lands,
+	// players included (paint instead of blood)
+	if ( ge_cheat_paintball.GetBool() )
 	{
 		return GE_CHEAT_PAINT_SPLATS;
 	}

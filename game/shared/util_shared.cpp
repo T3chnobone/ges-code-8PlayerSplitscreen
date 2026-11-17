@@ -881,6 +881,15 @@ void UTIL_DecalTrace( trace_t *pTrace, char const *decalName )
 
 void UTIL_BloodDecalTrace( trace_t *pTrace, int bloodColor )
 {
+#ifdef GE_DLL
+	// Paintball cheat: paint instead of blood on the walls and floors around a hit player
+	static ConVarRef ge_cheat_paintball( "ge_cheat_paintball" );
+	if ( ge_cheat_paintball.IsValid() && ge_cheat_paintball.GetBool() && bloodColor != DONT_BLEED )
+	{
+		UTIL_DecalTrace( pTrace, "CouchPaintSplats" );
+		return;
+	}
+#endif
 	if ( UTIL_ShouldShowBlood( bloodColor ) )
 	{
 		if ( bloodColor == BLOOD_COLOR_RED )
