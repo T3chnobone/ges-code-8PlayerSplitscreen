@@ -351,10 +351,15 @@ int	ClientModeGENormal::KeyInput( int down, ButtonCode_t keynum, const char *psz
 	if ( engine->Con_IsVisible() )
 		return 1;
 
+	// Player 1's START menu has the mouse (a cursor shows): clicking it doesn't also fire
+	const bool bStartMenuMouse = GESplitScreenClient()->WantsMenuMouse();
+	if ( down && bStartMenuMouse && IsMouseCode( keynum ) )
+		return 0;
+
 	// Split screen match: keys and mouse buttons don't play, only controllers do.
 	// Esc and the console key still work, and menus (cursor showing) get input as
 	// usual. Releases go through so nothing stays held down.
-	if ( down && GESplitScreenClient()->IsControllerOnly() && !vgui::surface()->IsCursorVisible() && keynum != KEY_ESCAPE &&
+	if ( down && GESplitScreenClient()->IsControllerOnly() && ( !vgui::surface()->IsCursorVisible() || bStartMenuMouse ) && keynum != KEY_ESCAPE &&
 		!( pszCurrentBinding && ( !Q_stricmp( pszCurrentBinding, "toggleconsole" ) || !Q_stricmp( pszCurrentBinding, "cancelselect" ) ) ) )
 	{
 		return 0;

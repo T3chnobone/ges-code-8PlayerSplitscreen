@@ -573,6 +573,8 @@ CGESSGamepads::CGESSGamepads() : m_pBackend( NULL )
 	memset( m_Pads, 0, sizeof( m_Pads ) );
 	memset( &s_EmptyPad, 0, sizeof( s_EmptyPad ) );
 	memset( m_Rest, 0, sizeof( m_Rest ) );
+	memset( m_RawStick, 0, sizeof( m_RawStick ) );
+	memset( m_bPadInMenu, 0, sizeof( m_bPadInMenu ) );
 	for ( int i = 0; i < GES_SS_MAX_PADS; i++ )
 	{
 		m_szPadId[i][0] = 0;
@@ -734,11 +736,14 @@ void CGESSGamepads::Poll()
 		p.connected = raw[i].connected;
 		p.lx = raw[i].lx; p.ly = raw[i].ly;
 		p.rx = raw[i].rx; p.ry = raw[i].ry;
+		m_RawStick[i][0] = p.lx; m_RawStick[i][1] = p.ly;
+		m_RawStick[i][2] = p.rx; m_RawStick[i][3] = p.ry;
 		if ( p.connected )
 		{
 			// Left alone: nothing pressed, triggers up, and not in the middle of a game
-			// (where a stick held gently and steadily would look like it's resting)
-			const bool bInMenus = !engine->IsInGame() || enginevgui->IsGameUIVisible();
+			// (where a stick held gently and steadily would look like it's resting),
+			// unless this controller's player has a menu open
+			const bool bInMenus = !engine->IsInGame() || enginevgui->IsGameUIVisible() || m_bPadInMenu[i];
 			const bool bIdle = bInMenus && raw[i].buttons == 0 && raw[i].lt < 0.1f && raw[i].rt < 0.1f;
 			UpdateCalibration( i, 0, p.lx, p.ly, bIdle );
 			UpdateCalibration( i, 1, p.rx, p.ry, bIdle );
@@ -1038,6 +1043,52 @@ void CGESSGamepads::RecalibratePad( int index )
 	m_flGuidedCalStart[index] = Plat_FloatTime();
 	m_bCalDirty = true;
 	Msg( "Split screen: controller %d recalibrating its sticks\n", index + 1 );
+}
+
+void CGESSGamepads::GetRawStick( int index, int stick, float &x, float &y ) const
+{
+	x = y = 0.0f;
+	if ( index < 0 || index >= GES_SS_MAX_PADS || stick < 0 || stick > 1 )
+		return;
+	x = m_RawStick[index][stick * 2];
+	y = m_RawStick[index][stick * 2 + 1];
+}
+
+float CGESSGamepads::GetDeadzoneMin()
+{
+	return GESS_INNER_MIN;
+}
+
+float CGESSGamepads::GetDeadzoneMax()
+{
+	return GESS_INNER_MAX + clamp( ges_ss_pad_deadzone_extra.GetFloat(), 0.0f, 0.2f );
+}
+
+void CGESSGamepads::SetStickDeadzone( int index, int stick, float inner )
+{
+	if ( index < 0 || index >= GES_SS_MAX_PADS || m_iPadCal[index] < 0 || stick < 0 || stick > 1 )
+		return;
+	StickCal_t &sc = m_Cals[m_iPadCal[index]].stick[stick];
+	sc.inner = clamp( inner, GetDeadzoneMin(), GetDeadzoneMax() );
+	sc.measured = true;	// Used from now on (a resting point not measured yet is the middle)
+	// Kept like a measurement made since it was plugged in: later ones only widen it
+	m_Rest[index][stick].sessionMeasured = true;
+	m_bCalDirty = true;
+}
+
+void CGESSGamepads::RestoreStickCal( int index, int stick, const StickCal_t &cal )
+{
+	if ( index < 0 || index >= GES_SS_MAX_PADS || m_iPadCal[index] < 0 || stick < 0 || stick > 1 )
+		return;
+	m_Cals[m_iPadCal[index]].stick[stick] = cal;
+	m_iGuidedCal[index] = 0;
+	m_bCalDirty = true;
+}
+
+void CGESSGamepads::SetPadInMenu( int index, bool bInMenu )
+{
+	if ( index >= 0 && index < GES_SS_MAX_PADS )
+		m_bPadInMenu[index] = bInMenu;
 }
 
 bool CGESSGamepads::IsCalibrating( int index ) const

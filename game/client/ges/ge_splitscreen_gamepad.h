@@ -110,6 +110,17 @@ public:
 	// What its card in the lobby says about calibrating (the R3 hint, or how it's going)
 	const char *GetCalibrationPrompt( int index, char *buf, int bufLen ) const;
 	bool IsCalibrating( int index ) const;
+	// The START menu's Calibrate Sticks screen: where the sticks really are (before the dead
+	// zone, y up), a dead zone set by hand (kept like a measured one, later measurements
+	// only widen it), putting a stick's calibration back, and the dead zone limits
+	void GetRawStick( int index, int stick, float &x, float &y ) const;
+	void SetStickDeadzone( int index, int stick, float inner );
+	void RestoreStickCal( int index, int stick, const StickCal_t &cal );
+	static float GetDeadzoneMin();
+	static float GetDeadzoneMax();
+	// The controller's player has a menu open in a match: its sticks count as left alone
+	// (resting) for the measurement, as in the menus. Set every frame.
+	void SetPadInMenu( int index, bool bInMenu );
 	void SaveCalibration();
 
 private:
@@ -138,6 +149,8 @@ private:
 	char		m_szPadName[GES_SS_MAX_PADS][64];
 	int			m_iPadCal[GES_SS_MAX_PADS];		// Index in m_Cals, -1 = none
 	RestWindow_t m_Rest[GES_SS_MAX_PADS][2];
+	float		m_RawStick[GES_SS_MAX_PADS][4];	// lx ly rx ry before the dead zone
+	bool		m_bPadInMenu[GES_SS_MAX_PADS];
 	int			m_iGuidedCal[GES_SS_MAX_PADS];	// RecalibratePad: 0 none, 1 resting, 2 turning, 3 done
 	double		m_flGuidedCalStart[GES_SS_MAX_PADS];
 	void UpdateGuidedCalibration( int index );

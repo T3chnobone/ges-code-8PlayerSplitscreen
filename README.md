@@ -23,9 +23,14 @@ GoldenEye: Source maps, models and sounds are unchanged.
   options below, with a diagram of how the screens will be split.
 - A lobby list in the top right: players press START to join and LB / RB to pick a profile.
 - When the map loads, each screen asks for its player (right trigger) and, in team games, a team.
-- **START** in a match opens that player's own menu in their view: leaderboard, swap team, change
-  profile, and exit with a confirmation (player 1 exiting ends the match and shows the results).
-  The game's own pause menu no longer covers everyone's view during a match.
+- **START** in a match opens that player's own menu in their view: leaderboard, swap team, and
+  exit with a confirmation (player 1 exiting ends the match and shows the results), with
+  **Commit Suicide and Respawn** under Exit game (asks first; only that player dies and loses a
+  point like an online suicide). No borders on its pages. Player 1 can also use it with the
+  mouse. The game's own pause menu no longer covers everyone's view during a match.
+- A **Controller** page in that menu: Invert Look Up/Down, Look Sensitivity (1-10, 5 = normal),
+  both saved with the player's profile, and **Calibrate Sticks**: both sticks live with their dead
+  zone circles, Re-measure (R3) and dead zone sliders, saved per controller. All apply at once.
 - A grid cell nobody plays in shows the live scoreboard.
 - Menus readable on big screens: the main menu text and the Split Screen, Create Server and credits
   menus grow with the resolution (1.5x at 1080p, 2.25x at 1440p, 3.75x at 4K).

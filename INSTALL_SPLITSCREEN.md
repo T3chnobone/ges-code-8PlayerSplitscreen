@@ -36,6 +36,7 @@ backups described below.
 | `resource\SourceScheme.res` | `resource\SourceScheme.res` |
 | `resource\GESMenuScheme.res` | `resource\GESMenuScheme.res` (new) |
 | `resource\GESPropScheme.res` | `resource\GESPropScheme.res` (new) |
+| `resource\ges_splitscreen_english.txt` | `resource\ges_splitscreen_english.txt` (new) |
 | `gameinfo.txt` | `gameinfo.txt` |
 | `steam.inf` | `steam.inf` |
 
@@ -56,6 +57,9 @@ What the text files change:
 - `resource\GESMenuScheme.res`, `resource\GESPropScheme.res` (new): the fonts of the mod's own
   menus (Split Screen, Create Server, credits, intro video) at the same sizes. The menus grow with
   them.
+- `resource\ges_splitscreen_english.txt` (new): split screen's own text. For now one string,
+  `GES_SS_Suicide`, the label of the START menu's Commit Suicide and Respawn button; change it
+  there to rename the button (without the file the button says Commit Suicide and Respawn).
 
 ### Install
 
@@ -106,7 +110,7 @@ In the game:
 | A | Use (doors, buttons) |
 | B or left stick click | Crouch |
 | Right stick click | Jump (when the match allows jumping) |
-| START | Your menu: scoreboard, swap team, change profile, exit |
+| START | Your menu: scoreboard, swap team, controller settings (invert, sensitivity, calibrate sticks), exit, commit suicide (player 1: the mouse works there too) |
 
 Keyboard and mouse are off during split screen matches. The game's pause menu doesn't open during
 a match: Esc (or a controller's own pause button) opens player 1's START menu instead, which has

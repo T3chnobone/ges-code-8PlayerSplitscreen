@@ -23,6 +23,10 @@
 #include "vgui/ISurface.h"
 #include "vgui/IInput.h"
 #include "vgui/IInputInternal.h"
+#include "vgui/ILocalize.h"
+
+// ge_splitscreen_hud.cpp: shows / hides the mouse catcher over player 1's START menu
+void GESS_UpdateMenuMouse( bool bWant );
 #include "vgui_controls/Controls.h"
 #include "ienginevgui.h"
 #include "game/client/iviewport.h"
@@ -347,6 +351,8 @@ CGESplitScreenClient::CGESplitScreenClient() : CAutoGameSystemPerFrame( "CGESpli
 		s.menu = GESS_MENU_NONE;
 		s.menuSel = 0;
 		s.menuSub = 0;
+		s.menuConfirm = GESS_CONFIRM_NONE;
+		s.menuConfirmSel = 0;
 		s.profile = -1;
 		s.angles.Init();
 		s.angleResetSeen = -1;
@@ -356,6 +362,12 @@ CGESplitScreenClient::CGESplitScreenClient() : CAutoGameSystemPerFrame( "CGESpli
 		s.profileChosen = false;
 		s.debugNoPad = false;
 		s.team = 0;
+		s.ctrlRow = GESS_CTRLROW_PAGE;
+		s.calOpen = false;
+		s.calRow = GESS_CALROW_REMEASURE;
+		s.calPad = -1;
+		memset( s.calBackup, 0, sizeof( s.calBackup ) );
+		m_GuestProfile[i] = CGESSProfiles::DefaultProfile();
 		m_iSlotPad[i] = -1;
 		m_bSlotHadPad[i] = false;
 		m_SlotViews[i].frame = 0;
@@ -402,6 +414,9 @@ bool CGESplitScreenClient::Init()
 {
 	GESSProfiles()->Load();
 	GESSGamepads()->Init();
+	// Split screen's own text (the START menu's suicide button), easy to change there
+	if ( g_pVGuiLocalize )
+		g_pVGuiLocalize->AddFile( "resource/ges_splitscreen_%language%.txt", "MOD" );
 	return true;
 }
 
@@ -676,7 +691,13 @@ C_BasePlayer *CGESplitScreenClient::GetSlotPlayer( int slot ) const
 const GESSProfile_t &CGESplitScreenClient::GetSlotProfileData( int slot ) const
 {
 	const GESSProfile_t *p = GESSProfiles()->Get( m_Slots[slot].profile );
-	return p ? *p : CGESSProfiles::DefaultProfile();
+	return p ? *p : m_GuestProfile[slot];
+}
+
+GESSProfile_t *CGESplitScreenClient::GetSlotProfileForEdit( int slot )
+{
+	GESSProfile_t *p = GESSProfiles()->Get( m_Slots[slot].profile );
+	return p ? p : &m_GuestProfile[slot];
 }
 
 const char *CGESplitScreenClient::GetSlotName( int slot ) const
@@ -1128,6 +1149,9 @@ void CGESplitScreenClient::Update( float frametime )
 
 	UpdateDebugLook( dt );
 
+	// Player 1's START menu takes the mouse while it's open (a cursor shows)
+	GESS_UpdateMenuMouse( WantsMenuMouse() );
+
 	GESSMatch()->Update();
 
 	// Player 1 left the match: after the results, back to the Split Screen menu
@@ -1206,6 +1230,14 @@ void CGESplitScreenClient::Update( float frametime )
 			joystick.SetValue( 0 );
 			DevMsg( "Split screen: turned the engine's joystick input off (split screen reads the controllers)\n" );
 		}
+	}
+
+	// A player with their START menu open isn't playing: their sticks can be measured
+	// at rest (the Controller page's Calibrate Sticks) even in a match
+	for ( int pad = 0; pad < GES_SS_MAX_PADS; pad++ )
+	{
+		const int slot = GetPadSlot( pad );
+		GESSGamepads()->SetPadInMenu( pad, slot >= 0 && m_Slots[slot].menu != GESS_MENU_NONE );
 	}
 
 	GESSGamepads()->Poll();
@@ -1578,7 +1610,9 @@ void CGESplitScreenClient::UpdatePadMouse( float dt )
 	// Player 1's controller moves the cursor
 	const GESSPadState_t &pad = GESSGamepads()->GetPad( GetSlotPad( 0 ) );
 	// (not where the mouse is hidden: the menus there are driven like a console's)
-	const bool bCursor = ges_ss_padmouse.GetBool() && pad.connected && vgui::surface()->IsCursorVisible() && !m_bMenuMouseHidden;
+	// (nor while player 1's START menu has the cursor: the controller drives that menu itself)
+	const bool bCursor = ges_ss_padmouse.GetBool() && pad.connected && vgui::surface()->IsCursorVisible() && !m_bMenuMouseHidden &&
+		!WantsMenuMouse();
 
 	if ( !bCursor )
 	{
@@ -1726,8 +1760,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 	{
 		// Never a spectator, and no picker: play straight away with the profile chosen
 		// in the Split Screen menu (or the first free invited one) and the team from
-		// the profile menu (auto assign if none). "Change profile" in the START menu
-		// changes it during the match.
+		// the profile menu (auto assign if none).
 		if ( s.profile < 0 && !s.profileChosen && !m_bHostChosen )
 			s.profile = NextFreeProfile( slot, -1 );
 		ApplyHostChoice();
@@ -1792,8 +1825,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 	{
 		if ( slot > 0 && s.state == GESS_SLOT_EMPTY && slot < GetMaxSlots() )
 		{
-			// Join straight away with the next free profile (no picker; "Change
-			// profile" in the START menu changes it)
+			// Join straight away with the next free profile (no picker)
 			s.profile = NextFreeProfile( slot, -1 );
 			s.state = GESS_SLOT_JOINING;
 			SendJoin( slot );
@@ -1833,8 +1865,8 @@ bool CGESplitScreenClient::IsGameMenuPageAvailable( int page ) const
 // a controller button the engine itself reads (an Xbox pad's START / BACK, or any
 // pad Steam Input presents as one), or the window losing and regaining focus.
 // While a split screen match is on, it's closed as soon as it appears and player
-// 1's own START menu opens instead (leaderboard, team, profile, exit with a
-// confirmation: player 1 exiting ends the match). The console (~) still opens.
+// 1's own START menu opens instead (leaderboard, team, exit with a confirmation:
+// player 1 exiting ends the match). The console (~) still opens.
 // Back at the main menu everything works as usual. Not when player 1 has no
 // controller (the START menu needs one), so there's always a way out.
 //-----------------------------------------------------------------------------
@@ -1861,8 +1893,12 @@ void CGESplitScreenClient::OpenGameMenu( int slot )
 	LocalSlot_t &s = m_Slots[slot];
 	s.menu = GESS_MENU_PAUSE;
 	s.menuSel = GESS_GAMEPAGE_LEADERBOARD;
-	s.menuSub = 0;
+	s.menuSub = GESS_EXITBTN_EXIT;
+	s.menuConfirm = GESS_CONFIRM_NONE;
+	s.menuConfirmSel = 0;
 	s.menuRepeatTime = 0;
+	s.ctrlRow = GESS_CTRLROW_PAGE;
+	s.calOpen = false;
 }
 
 void CGESplitScreenClient::CycleGameMenuPage( int slot, int dir )
@@ -1876,13 +1912,78 @@ void CGESplitScreenClient::CycleGameMenuPage( int slot, int dir )
 			break;
 	}
 	s.menuSel = page;
-	s.menuSub = 0;	// "Leave the game?" starts on No
+	s.menuSub = GESS_EXITBTN_EXIT;
+	s.menuConfirm = GESS_CONFIRM_NONE;
+	s.ctrlRow = GESS_CTRLROW_PAGE;
+}
+
+// The suicide button's label: the localization string #GES_SS_Suicide
+// (resource/ges_splitscreen_english.txt), this text if that file isn't there
+const char *GESS_SuicideLabel()
+{
+	static char s_szLabel[64];
+	const wchar_t *pwsz = g_pVGuiLocalize ? g_pVGuiLocalize->Find( "#GES_SS_Suicide" ) : NULL;
+	if ( pwsz && pwsz[0] )
+		g_pVGuiLocalize->ConvertUnicodeToANSI( pwsz, s_szLabel, sizeof( s_szLabel ) );
+	else
+		Q_strncpy( s_szLabel, "Commit Suicide and Respawn", sizeof( s_szLabel ) );
+	return s_szLabel;
+}
+
+bool CGESplitScreenClient::CanSlotSuicide( int slot ) const
+{
+	C_BasePlayer *pPlayer = GetSlotPlayer( slot );
+	return pPlayer && pPlayer->IsAlive() && !pPlayer->IsObserver();
+}
+
+// The confirmation box's answer: Cancel goes back to the page, Confirm does it
+void CGESplitScreenClient::AnswerGameMenuConfirm( int slot, bool bYes )
+{
+	LocalSlot_t &s = m_Slots[slot];
+	const int what = s.menuConfirm;
+	s.menuConfirm = GESS_CONFIRM_NONE;
+	if ( !bYes )
+		return;
+
+	if ( what == GESS_CONFIRM_SUICIDE )
+	{
+		// Only this player dies, through the server's normal suicide (the online
+		// game's "kill"): the game mode scores it (DeathMatch: 1 point off)
+		s.menu = GESS_MENU_NONE;
+		engine->ServerCmd( VarArgs( "%s %d\n", GES_SS_CMD_SUICIDE, slot ) );
+		return;
+	}
+
+	if ( what != GESS_CONFIRM_EXIT )
+		return;
+
+	s.menu = GESS_MENU_NONE;
+	if ( slot > 0 )
+	{
+		// A guest leaves: their screen closes and the others share the space
+		LeaveSlot( slot );
+	}
+	else
+	{
+		// Player 1 leaves: the match ends for everyone and shows the results,
+		// then back to the Split Screen menu (before the next map loads)
+		engine->ServerCmd( "ges_ss_endmatch\n" );
+		static ConVarRef mp_chattime( "mp_chattime" );
+		const float results = mp_chattime.IsValid() ? mp_chattime.GetFloat() - 1.0f : 9.0f;
+		m_flExitToMenuTime = gpGlobals->realtime + clamp( results, 6.0f, 20.0f );
+	}
 }
 
 // The page's action (A or the right trigger)
 void CGESplitScreenClient::ActivateGameMenuPage( int slot )
 {
 	LocalSlot_t &s = m_Slots[slot];
+	if ( s.menuConfirm != GESS_CONFIRM_NONE )
+	{
+		AnswerGameMenuConfirm( slot, s.menuConfirmSel == 1 );
+		return;
+	}
+
 	switch ( s.menuSel )
 	{
 	case GESS_GAMEPAGE_TEAM:
@@ -1900,31 +2001,12 @@ void CGESplitScreenClient::ActivateGameMenuPage( int slot )
 		}
 		break;
 
-	case GESS_GAMEPAGE_PROFILE:
-		OpenProfileMenu( slot );	// The list; LB / RB change it straight away
-		break;
-
 	case GESS_GAMEPAGE_EXIT:
-		if ( s.menuSub != 1 )
-		{
-			s.menu = GESS_MENU_NONE;	// No
+		// Each button asks first (starting on Cancel). Dead players can't commit suicide.
+		if ( s.menuSub == GESS_EXITBTN_SUICIDE && !CanSlotSuicide( slot ) )
 			break;
-		}
-		s.menu = GESS_MENU_NONE;
-		if ( slot > 0 )
-		{
-			// A guest leaves: their screen closes and the others share the space
-			LeaveSlot( slot );
-		}
-		else
-		{
-			// Player 1 leaves: the match ends for everyone and shows the results,
-			// then back to the Split Screen menu (before the next map loads)
-			engine->ServerCmd( "ges_ss_endmatch\n" );
-			static ConVarRef mp_chattime( "mp_chattime" );
-			const float results = mp_chattime.IsValid() ? mp_chattime.GetFloat() - 1.0f : 9.0f;
-			m_flExitToMenuTime = gpGlobals->realtime + clamp( results, 6.0f, 20.0f );
-		}
+		s.menuConfirm = s.menuSub == GESS_EXITBTN_SUICIDE ? GESS_CONFIRM_SUICIDE : GESS_CONFIRM_EXIT;
+		s.menuConfirmSel = 0;
 		break;
 
 	default:
@@ -1933,12 +2015,48 @@ void CGESplitScreenClient::ActivateGameMenuPage( int slot )
 }
 
 // START in a match: the leaderboard, with more pages to the left and right
-// (swap team, change profile, exit). START or B closes it. The game carries on.
+// (swap team, exit / commit suicide). START or B closes it. The game carries on.
 void CGESplitScreenClient::UpdateGameMenu( int slot, const GESSPadState_t &pad, float dt )
 {
 	LocalSlot_t &s = m_Slots[slot];
 	if ( !IsGameMenuPageAvailable( s.menuSel ) )
 		CycleGameMenuPage( slot, 1 );
+
+	int vdir = 0;
+	if ( pad.WasPressed( GESS_PAD_DPAD_UP ) )
+		vdir = -1;
+	else if ( pad.WasPressed( GESS_PAD_DPAD_DOWN ) )
+		vdir = 1;
+	const bool bStickUpDown = fabsf( pad.ly ) > 0.6f && fabsf( pad.lx ) < 0.3f;
+
+	// A confirmation box: up / down between Cancel and Confirm, A answers, B cancels
+	if ( s.menuConfirm != GESS_CONFIRM_NONE )
+	{
+		if ( vdir )
+			s.menuConfirmSel = 1 - s.menuConfirmSel;
+		else if ( bStickUpDown )
+			s.menuConfirmSel = pad.ly > 0 ? 0 : 1;	// up: Cancel, down: Confirm
+
+		if ( pad.WasPressed( GESS_PAD_A ) || pad.WasPressed( GESS_PAD_RT ) )
+			AnswerGameMenuConfirm( slot, s.menuConfirmSel == 1 );
+		else if ( pad.WasPressed( GESS_PAD_B ) )
+			AnswerGameMenuConfirm( slot, false );
+		else if ( pad.WasPressed( GESS_PAD_START ) )
+		{
+			s.menuConfirm = GESS_CONFIRM_NONE;
+			s.menu = GESS_MENU_NONE;
+		}
+
+		GESSGamepads()->ConsumeEdges( GetSlotPad( slot ) );
+		return;
+	}
+
+	// The Controller page's settings and its Calibrate Sticks screen
+	if ( UpdateControllerPage( slot, pad, vdir, dt ) )
+	{
+		GESSGamepads()->ConsumeEdges( GetSlotPad( slot ) );
+		return;
+	}
 
 	// Left / right: next page (d-pad or left stick, with repeat)
 	int dir = 0;
@@ -1962,29 +2080,13 @@ void CGESplitScreenClient::UpdateGameMenu( int slot, const GESSPadState_t &pad, 
 	if ( dir )
 		CycleGameMenuPage( slot, dir );
 
-	// Exit page: up / down between No and Yes
+	// Exit page: up / down between Exit game and Commit Suicide under it
 	if ( s.menuSel == GESS_GAMEPAGE_EXIT )
 	{
-		if ( pad.WasPressed( GESS_PAD_DPAD_UP ) || pad.WasPressed( GESS_PAD_DPAD_DOWN ) || ( fabsf( pad.ly ) > 0.6f && fabsf( pad.lx ) < 0.3f && s.menuRepeatTime <= 0 ) )
-		{
-			if ( pad.WasPressed( GESS_PAD_DPAD_UP ) || pad.WasPressed( GESS_PAD_DPAD_DOWN ) )
-				s.menuSub = 1 - s.menuSub;
-			else
-			{
-				s.menuSub = pad.ly > 0 ? 0 : 1;	// up: No, down: Yes
-			}
-		}
-	}
-
-	// Profile page: LB / RB change the profile straight away
-	if ( s.menuSel == GESS_GAMEPAGE_PROFILE )
-	{
-		const int pdir = pad.WasPressed( GESS_PAD_RB ) ? 1 : ( pad.WasPressed( GESS_PAD_LB ) ? -1 : 0 );
-		if ( pdir )
-		{
-			s.profile = CycleProfile( slot, s.profile, pdir );
-			FinishChoice( slot );
-		}
+		if ( vdir )
+			s.menuSub = ( s.menuSub + vdir + GESS_EXITBTN_COUNT ) % GESS_EXITBTN_COUNT;
+		else if ( bStickUpDown )
+			s.menuSub = pad.ly > 0 ? GESS_EXITBTN_EXIT : GESS_EXITBTN_SUICIDE;
 	}
 
 	if ( pad.WasPressed( GESS_PAD_A ) || pad.WasPressed( GESS_PAD_RT ) )
@@ -1993,6 +2095,269 @@ void CGESplitScreenClient::UpdateGameMenu( int slot, const GESSPadState_t &pad, 
 		s.menu = GESS_MENU_NONE;
 
 	GESSGamepads()->ConsumeEdges( GetSlotPad( slot ) );
+}
+
+//-----------------------------------------------------------------------------
+// The mouse in player 1's START menu
+//
+// There is one mouse and it's player 1's, so while player 1's START menu is open
+// in a match a cursor shows and their menu can be clicked: < and > change page,
+// the buttons choose, a confirmation box's Cancel / Confirm answer it, the right
+// button goes back. Clicks don't also fire. The HUD records where it drew what.
+//-----------------------------------------------------------------------------
+static ConVar ges_ss_menu_mouse( "ges_ss_menu_mouse", "1", FCVAR_ARCHIVE, "In a split screen match, show a cursor while player 1's START menu is open, so it can be used with the mouse." );
+
+bool CGESplitScreenClient::WantsMenuMouse() const
+{
+	return ges_ss_menu_mouse.GetBool() && ges_ss_enable.GetBool() && m_Slots[0].menu == GESS_MENU_PAUSE &&
+		engine->IsInGame() && !engine->IsLevelMainMenuBackground() && !enginevgui->IsGameUIVisible() && !engine->Con_IsVisible();
+}
+
+void CGESplitScreenClient::OnMenuMouse( int hit, int arg, bool bClick, float frac )
+{
+	LocalSlot_t &s = m_Slots[0];
+	if ( s.menu != GESS_MENU_PAUSE || hit == GESS_MENUHIT_NONE )
+		return;
+
+	switch ( hit )
+	{
+	case GESS_MENUHIT_ROW:
+	case GESS_MENUHIT_SLIDER:
+		if ( s.menuConfirm != GESS_CONFIRM_NONE || s.menuSel != GESS_GAMEPAGE_CONTROLLER )
+			break;
+		frac = clamp( frac, 0.0f, 1.0f );
+		if ( s.calOpen )
+		{
+			s.calRow = clamp( arg, 0, GESS_CALROW_COUNT - 1 );	// Pointing at it highlights it
+			if ( !bClick )
+				break;
+			if ( hit == GESS_MENUHIT_SLIDER && ( arg == GESS_CALROW_LEFT || arg == GESS_CALROW_RIGHT ) )
+			{
+				const float lo = CGESSGamepads::GetDeadzoneMin(), hi = CGESSGamepads::GetDeadzoneMax();
+				SetCalDeadzone( 0, arg == GESS_CALROW_LEFT ? 0 : 1, lo + ( hi - lo ) * frac );
+			}
+			else if ( arg == GESS_CALROW_REMEASURE )
+				GESSGamepads()->RecalibratePad( s.calPad );
+			else if ( arg == GESS_CALROW_DONE || arg == GESS_CALROW_BACK )
+				CloseCalibrate( 0, arg == GESS_CALROW_DONE );
+			break;
+		}
+		s.ctrlRow = clamp( arg, 0, GESS_CTRLROW_COUNT - 1 );
+		if ( !bClick )
+			break;
+		if ( arg == GESS_CTRLROW_INVERT )
+			ToggleSlotInvert( 0 );
+		else if ( arg == GESS_CTRLROW_SENS && hit == GESS_MENUHIT_SLIDER )
+			SetSlotSensStep( 0, 1 + (int)( frac * ( GESS_SENS_STEPS - 1 ) + 0.5f ) );
+		else if ( arg == GESS_CTRLROW_CALIBRATE )
+			OpenCalibrate( 0 );
+		break;
+
+	case GESS_MENUHIT_PREV:
+	case GESS_MENUHIT_NEXT:
+		if ( bClick && s.menuConfirm == GESS_CONFIRM_NONE )
+			CycleGameMenuPage( 0, hit == GESS_MENUHIT_PREV ? -1 : 1 );
+		break;
+
+	case GESS_MENUHIT_BUTTON:
+		if ( s.menuConfirm != GESS_CONFIRM_NONE || s.menuSel != GESS_GAMEPAGE_EXIT )
+			break;
+		s.menuSub = clamp( arg, 0, GESS_EXITBTN_COUNT - 1 );	// Pointing at it highlights it
+		if ( bClick )
+			ActivateGameMenuPage( 0 );
+		break;
+
+	case GESS_MENUHIT_CONFIRM:
+		if ( s.menuConfirm == GESS_CONFIRM_NONE )
+			break;
+		s.menuConfirmSel = arg ? 1 : 0;
+		if ( bClick )
+			AnswerGameMenuConfirm( 0, arg != 0 );
+		break;
+
+	case GESS_MENUHIT_TEAM:
+		if ( bClick && s.menuConfirm == GESS_CONFIRM_NONE && s.menuSel == GESS_GAMEPAGE_TEAM )
+			ActivateGameMenuPage( 0 );
+		break;
+	}
+}
+
+void CGESplitScreenClient::OnMenuMouseBack()
+{
+	LocalSlot_t &s = m_Slots[0];
+	if ( s.menuConfirm != GESS_CONFIRM_NONE )
+		s.menuConfirm = GESS_CONFIRM_NONE;
+	else if ( s.calOpen )
+		CloseCalibrate( 0, false );
+	else
+		s.menu = GESS_MENU_NONE;
+}
+
+//-----------------------------------------------------------------------------
+// The START menu's Controller page
+//
+// Rows: the page title (left / right change page there, as on every page), Invert
+// Look Up/Down (A or left / right toggle it), Look Sensitivity (left / right, 1-10,
+// 5 = the normal look speed) and Calibrate Sticks (A opens it). Invert and
+// sensitivity are the player's profile's (saved with it, used at once); a Guest's
+// last until they leave.
+//
+// Calibrate Sticks shows both sticks live with their dead zone circles. Re-measure
+// (or R3) is the lobby's R3 measurement: leave the sticks alone, then turn them
+// round. The dead zone sliders set them by hand (0.01 steps). Done keeps it all
+// (saved per controller in cfg/ges_splitscreen_pads.txt), Back (or B) puts the
+// sticks back as they were when the screen opened.
+//-----------------------------------------------------------------------------
+bool CGESplitScreenClient::GetSlotInvert( int slot ) const
+{
+	return GetSlotProfileData( slot ).invertY;
+}
+
+int CGESplitScreenClient::GetSlotSensStep( int slot ) const
+{
+	return GESS_StepFromSens( GetSlotProfileData( slot ).sensitivity );
+}
+
+void CGESplitScreenClient::SetSlotSensStep( int slot, int step )
+{
+	GESSProfile_t *p = GetSlotProfileForEdit( slot );
+	const float sens = clamp( GESS_SensFromStep( step ), GES_SS_SENS_MIN, GES_SS_SENS_MAX );
+	if ( p->sensitivity == sens )
+		return;
+	p->sensitivity = sens;
+	if ( m_Slots[slot].profile >= 0 )
+		GESSProfiles()->Save();
+}
+
+void CGESplitScreenClient::ToggleSlotInvert( int slot )
+{
+	GESSProfile_t *p = GetSlotProfileForEdit( slot );
+	p->invertY = !p->invertY;
+	if ( m_Slots[slot].profile >= 0 )
+		GESSProfiles()->Save();
+}
+
+void CGESplitScreenClient::OpenCalibrate( int slot )
+{
+	LocalSlot_t &s = m_Slots[slot];
+	const int pad = GetSlotPad( slot );
+	if ( pad < 0 || !GESSGamepads()->GetPad( pad ).connected )
+		return;
+	s.calOpen = true;
+	s.calRow = GESS_CALROW_REMEASURE;
+	s.calPad = pad;
+	for ( int st = 0; st < 2; st++ )
+		s.calBackup[st] = GESSGamepads()->GetStickCal( pad, st );
+}
+
+void CGESplitScreenClient::CloseCalibrate( int slot, bool bKeep )
+{
+	LocalSlot_t &s = m_Slots[slot];
+	if ( !s.calOpen )
+		return;
+	s.calOpen = false;
+	s.ctrlRow = GESS_CTRLROW_CALIBRATE;
+	if ( s.calPad < 0 )
+		return;
+	if ( !bKeep )
+	{
+		for ( int st = 0; st < 2; st++ )
+			GESSGamepads()->RestoreStickCal( s.calPad, st, s.calBackup[st] );
+	}
+	GESSGamepads()->SaveCalibration();
+}
+
+void CGESplitScreenClient::SetCalDeadzone( int slot, int stick, float inner )
+{
+	const LocalSlot_t &s = m_Slots[slot];
+	// Whole hundredths, as the slider shows them
+	GESSGamepads()->SetStickDeadzone( s.calPad, stick, floorf( inner * 100.0f + 0.5f ) / 100.0f );
+}
+
+bool CGESplitScreenClient::UpdateControllerPage( int slot, const GESSPadState_t &pad, int vdir, float dt )
+{
+	LocalSlot_t &s = m_Slots[slot];
+	if ( s.menuSel != GESS_GAMEPAGE_CONTROLLER )
+	{
+		s.calOpen = false;
+		return false;
+	}
+
+	// The controller went away (or changed) while calibrating: keep what was done
+	if ( s.calOpen && s.calPad != GetSlotPad( slot ) )
+		CloseCalibrate( slot, true );
+
+	// On the title row left / right change page as usual; down goes into the settings
+	if ( !s.calOpen && s.ctrlRow == GESS_CTRLROW_PAGE )
+	{
+		if ( vdir > 0 || ( pad.ly < -0.6f && fabsf( pad.lx ) < 0.3f ) )
+		{
+			s.ctrlRow = GESS_CTRLROW_INVERT;
+			s.menuRepeatTime = GESS_MENU_REPEAT;
+			return true;
+		}
+		return false;
+	}
+
+	// Left stick up / down / left / right with repeat, as well as the d-pad
+	int hdir = pad.WasPressed( GESS_PAD_DPAD_LEFT ) ? -1 : ( pad.WasPressed( GESS_PAD_DPAD_RIGHT ) ? 1 : 0 );
+	if ( !vdir && !hdir )
+	{
+		const bool bV = fabsf( pad.ly ) > 0.5f && fabsf( pad.ly ) >= fabsf( pad.lx );
+		const bool bH = fabsf( pad.lx ) > 0.5f && fabsf( pad.lx ) > fabsf( pad.ly );
+		if ( bV || bH )
+		{
+			s.menuRepeatTime -= dt;
+			if ( s.menuRepeatTime <= 0 )
+			{
+				if ( bV )
+					vdir = pad.ly > 0 ? -1 : 1;
+				else
+					hdir = pad.lx > 0 ? 1 : -1;
+				s.menuRepeatTime = GESS_MENU_REPEAT;
+			}
+		}
+		else
+		{
+			s.menuRepeatTime = 0;
+		}
+	}
+	const bool bA = pad.WasPressed( GESS_PAD_A ) || pad.WasPressed( GESS_PAD_RT );
+
+	if ( s.calOpen )
+	{
+		if ( vdir )
+			s.calRow = clamp( s.calRow + vdir, 0, GESS_CALROW_COUNT - 1 );
+		if ( pad.WasPressed( GESS_PAD_RSTICK ) || ( bA && s.calRow == GESS_CALROW_REMEASURE ) )
+			GESSGamepads()->RecalibratePad( s.calPad );
+		else if ( hdir && ( s.calRow == GESS_CALROW_LEFT || s.calRow == GESS_CALROW_RIGHT ) )
+		{
+			const int st = s.calRow == GESS_CALROW_LEFT ? 0 : 1;
+			SetCalDeadzone( slot, st, GESSGamepads()->GetStickCal( s.calPad, st ).inner + hdir * 0.01f );
+		}
+		else if ( bA && ( s.calRow == GESS_CALROW_DONE || s.calRow == GESS_CALROW_BACK ) )
+			CloseCalibrate( slot, s.calRow == GESS_CALROW_DONE );
+		else if ( pad.WasPressed( GESS_PAD_B ) )
+			CloseCalibrate( slot, false );
+		else if ( pad.WasPressed( GESS_PAD_START ) )
+		{
+			CloseCalibrate( slot, true );
+			s.menu = GESS_MENU_NONE;
+		}
+		return true;
+	}
+
+	if ( vdir )
+		s.ctrlRow = clamp( s.ctrlRow + vdir, (int) GESS_CTRLROW_PAGE, GESS_CTRLROW_COUNT - 1 );
+	else if ( s.ctrlRow == GESS_CTRLROW_INVERT && ( hdir || bA ) )
+		ToggleSlotInvert( slot );
+	else if ( s.ctrlRow == GESS_CTRLROW_SENS && hdir )
+		SetSlotSensStep( slot, GetSlotSensStep( slot ) + hdir );
+	else if ( s.ctrlRow == GESS_CTRLROW_CALIBRATE && bA )
+		OpenCalibrate( slot );
+	else if ( pad.WasPressed( GESS_PAD_B ) || pad.WasPressed( GESS_PAD_START ) )
+		s.menu = GESS_MENU_NONE;
+	return true;
 }
 
 void CGESplitScreenClient::UpdateMenu( int slot, const GESSPadState_t &pad, float dt )
@@ -2254,6 +2619,8 @@ void CGESplitScreenClient::LeaveSlot( int slot )
 	s.menu = GESS_MENU_NONE;
 	s.profile = -1;
 	s.team = 0;
+	s.calOpen = false;
+	m_GuestProfile[slot] = CGESSProfiles::DefaultProfile();	// A Guest's look settings go with them
 	m_bSlotHadPad[slot] = m_iSlotPad[slot] >= 0;
 	s.angleResetSeen = -1;
 	s.pendingCycle = 0;
@@ -3006,10 +3373,23 @@ void CGESplitScreenClient::DebugGameMenu( int slot, const char *what )
 	else if ( s.menu != GESS_MENU_PAUSE )		return;
 	else if ( !Q_stricmp( what, "left" ) )		CycleGameMenuPage( slot, -1 );
 	else if ( !Q_stricmp( what, "right" ) )	CycleGameMenuPage( slot, 1 );
-	else if ( !Q_stricmp( what, "down" ) || !Q_stricmp( what, "up" ) )	s.menuSub = 1 - s.menuSub;
+	else if ( !Q_stricmp( what, "down" ) || !Q_stricmp( what, "up" ) )
+	{
+		if ( s.menuConfirm != GESS_CONFIRM_NONE )
+			s.menuConfirmSel = 1 - s.menuConfirmSel;
+		else
+			s.menuSub = 1 - s.menuSub;
+	}
 	else if ( !Q_stricmp( what, "a" ) )		ActivateGameMenuPage( slot );
-	else if ( !Q_stricmp( what, "b" ) )		s.menu = GESS_MENU_NONE;
-	Msg( "Player %d START menu: %s, page %d, %s\n", slot + 1, s.menu == GESS_MENU_PAUSE ? "open" : "closed", s.menuSel, s.menuSub ? "Yes" : "No" );
+	else if ( !Q_stricmp( what, "b" ) )
+	{
+		if ( s.menuConfirm != GESS_CONFIRM_NONE )
+			s.menuConfirm = GESS_CONFIRM_NONE;
+		else
+			s.menu = GESS_MENU_NONE;
+	}
+	Msg( "Player %d START menu: %s, page %d, button %d, confirm %d (%s)\n", slot + 1, s.menu == GESS_MENU_PAUSE ? "open" : "closed",
+		s.menuSel, s.menuSub, s.menuConfirm, s.menuConfirmSel ? "Confirm" : "Cancel" );
 }
 
 CON_COMMAND_F( ges_ss_debug_menu, "Testing: ges_ss_debug_menu <player 1-8> open|left|right|up|down|a|b (the in-match START menu)", FCVAR_DONTRECORD )

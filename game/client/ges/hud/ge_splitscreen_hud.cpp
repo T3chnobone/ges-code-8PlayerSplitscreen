@@ -16,6 +16,7 @@
 #include "iclientmode.h"
 #include "vgui/ISurface.h"
 #include "vgui/ILocalize.h"
+#include "vgui/IInput.h"
 #include "vgui_controls/Panel.h"
 
 #include "c_ge_player.h"
@@ -76,6 +77,12 @@ private:
 	};
 	CUtlVector<ScaledFont_t> m_ScaledFonts;
 	void PaintGameMenu( int slot, const GESSViewport_t &vp );
+	// The START menu's Controller page and Calibrate Sticks screen (return the help line)
+	const char *PaintControllerPage( int slot, const GESSViewport_t &area );
+	const char *PaintCalibrate( int slot, const GESSViewport_t &area );
+	// A row's highlight, and a slider (filled to frac) with its value at the right
+	void PaintMenuRowBack( int x, int y, int w, int h, bool bSel );
+	void PaintSlider( int slot, int row, int x, int y, int w, int h, float frac, const char *value, bool bSel );
 	void PaintLogo( const GESSViewport_t &vp );
 	void PaintJoinHint( const GESSViewport_t &vp, const char *line1, const char *line2 );
 	// GoldenEye's own health and armour dials (the normal game's CGEHudLifebars),
@@ -1144,15 +1151,126 @@ void CGESplitScreenHud::PaintPlayerHud( int slot, C_BasePlayer *pPlayer, const G
 	}
 }
 
-// START during a match: leaderboard, swap team, change profile, exit (left / right)
+//-----------------------------------------------------------------------------
+// The mouse in player 1's START menu
+//
+// While it's open (CGESplitScreenClient::WantsMenuMouse) an invisible popup over the
+// screen takes the mouse: vgui shows the cursor for it, and clicks go to it instead
+// of firing. Player 1's menu records where it drew its buttons each frame; the
+// popup looks up what's under the cursor and tells the split screen client.
+//-----------------------------------------------------------------------------
+struct GESSMenuHit_t
+{
+	int x0, y0, x1, y1;
+	int hit, arg;
+};
+static CUtlVector<GESSMenuHit_t> s_MenuHits;	// Player 1's START menu, as last drawn
+
+static void GESS_AddMenuHit( int slot, int x0, int y0, int x1, int y1, int hit, int arg = 0 )
+{
+	if ( slot != 0 )
+		return;
+	GESSMenuHit_t &h = s_MenuHits[s_MenuHits.AddToTail()];
+	h.x0 = x0; h.y0 = y0; h.x1 = x1; h.y1 = y1;
+	h.hit = hit; h.arg = arg;
+}
+
+static const GESSMenuHit_t *GESS_FindMenuHit( int x, int y )
+{
+	for ( int i = s_MenuHits.Count() - 1; i >= 0; i-- )
+	{
+		const GESSMenuHit_t &h = s_MenuHits[i];
+		if ( x >= h.x0 && x < h.x1 && y >= h.y0 && y < h.y1 )
+			return &h;
+	}
+	return NULL;
+}
+
+class CGESSMenuMouse : public vgui::Panel
+{
+	DECLARE_CLASS_SIMPLE( CGESSMenuMouse, vgui::Panel );
+public:
+	CGESSMenuMouse() : BaseClass( NULL, "GESSMenuMouse" )
+	{
+		SetParent( g_pClientMode->GetViewport() );
+		MakePopup( false, false );
+		SetPaintBackgroundEnabled( false );
+		SetPaintEnabled( false );
+		SetKeyBoardInputEnabled( false );
+		SetMouseInputEnabled( true );
+		SetVisible( false );
+	}
+
+	virtual void OnMousePressed( vgui::MouseCode code )
+	{
+		if ( code == MOUSE_RIGHT )
+		{
+			GESplitScreenClient()->OnMenuMouseBack();
+			return;
+		}
+		if ( code != MOUSE_LEFT )
+			return;
+		int x, y;
+		vgui::input()->GetCursorPos( x, y );
+		const GESSMenuHit_t *h = GESS_FindMenuHit( x, y );
+		if ( h )
+			GESplitScreenClient()->OnMenuMouse( h->hit, h->arg, true, Frac( h, x ) );
+	}
+
+	virtual void OnCursorMoved( int, int )
+	{
+		int x, y;
+		vgui::input()->GetCursorPos( x, y );
+		const GESSMenuHit_t *h = GESS_FindMenuHit( x, y );
+		if ( h )
+			GESplitScreenClient()->OnMenuMouse( h->hit, h->arg, false, Frac( h, x ) );
+	}
+
+private:
+	// How far along the hit area (a slider) the cursor is, 0-1
+	static float Frac( const GESSMenuHit_t *h, int x )
+	{
+		return h->x1 > h->x0 ? clamp( (float)( x - h->x0 ) / (float)( h->x1 - h->x0 ), 0.0f, 1.0f ) : 0.0f;
+	}
+};
+
+static vgui::DHANDLE<CGESSMenuMouse> s_hMenuMouse;
+
+// Called every frame by the split screen client: the popup shows (with the cursor)
+// only while player 1's START menu wants the mouse
+void GESS_UpdateMenuMouse( bool bWant )
+{
+	if ( !s_hMenuMouse.Get() )
+	{
+		if ( !bWant || !g_pClientMode || !g_pClientMode->GetViewport() )
+			return;
+		s_hMenuMouse = new CGESSMenuMouse();
+	}
+	CGESSMenuMouse *p = s_hMenuMouse.Get();
+	if ( bWant )
+	{
+		int w, h;
+		surface()->GetScreenSize( w, h );
+		p->SetBounds( 0, 0, w, h );
+	}
+	if ( p->IsVisible() != bWant )
+		p->SetVisible( bWant );
+	if ( !bWant )
+		s_MenuHits.RemoveAll();
+}
+
+// START during a match: leaderboard, swap team, exit / commit suicide (left / right)
 void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 {
 	CGESplitScreenClient *pSS = GESplitScreenClient();
 	const int page = pSS->GetSlotMenuSelection( slot );
 	const int tallL = surface()->GetFontTall( m_hFontLarge );
 	const int tallS = surface()->GetFontTall( m_hFontSmall );
+	const bool bMouse = slot == 0 && pSS->WantsMenuMouse();
+	if ( slot == 0 )
+		s_MenuHits.RemoveAll();
 
-	// Dark frame with the page name and arrows on top, help underneath
+	// Dark background (no border) with the page name and arrows on top, help underneath
 	const int inset = Max( 6, vp.h / 30 );
 	GESSViewport_t box = { vp.x + inset, vp.y + inset, vp.w - inset * 2, vp.h - inset * 2 };
 	// The leaderboard is GoldenEye's scoreboard over the game, as when holding TAB
@@ -1161,21 +1279,40 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 	{
 		surface()->DrawSetColor( Color( 10, 10, 10, 225 ) );
 		surface()->DrawFilledRect( box.x, box.y, box.x + box.w, box.y + box.h );
-		surface()->DrawSetColor( Color( 185, 168, 90, 255 ) );
-		surface()->DrawOutlinedRect( box.x, box.y, box.x + box.w, box.y + box.h );
 	}
 
-	static const char *s_pszPages[GESS_GAMEPAGE_COUNT] = { "Leaderboard", "Swap team", "Change profile", "Exit game" };
+	static const char *s_pszPages[GESS_GAMEPAGE_COUNT] = { "Leaderboard", "Swap team", "Controller", "Exit game" };
 	const int cx = box.x + box.w / 2;
 	int y = box.y + 6;
 
-	// The page name, arrows and page dots on the framed pages. The leaderboard has
-	// none: its title sat on the round timer, and the help line says Left / Right: more.
+	// The leaderboard has no title (it sat on the round timer); with the mouse, < and >
+	// halfway down its sides change page
+	if ( bBoard && bMouse )
+	{
+		const int ay = vp.y + vp.h / 2 - tallL / 2, aw = TextWide( m_hFontLarge, ">" );
+		DrawText( m_hFontLarge, vp.x + 8, ay, Color( 230, 200, 80, 220 ), "<" );
+		DrawText( m_hFontLarge, vp.x + vp.w - 8 - aw, ay, Color( 230, 200, 80, 220 ), ">" );
+		GESS_AddMenuHit( slot, vp.x, ay - tallL, vp.x + 16 + aw * 2, ay + tallL * 2, GESS_MENUHIT_PREV );
+		GESS_AddMenuHit( slot, vp.x + vp.w - 16 - aw * 2, ay - tallL, vp.x + vp.w, ay + tallL * 2, GESS_MENUHIT_NEXT );
+	}
+
+	// The page name, arrows and page dots on the other pages (Calibrate Sticks: its own
+	// title, no arrows: it's left with Done / Back)
+	const bool bCal = page == GESS_GAMEPAGE_CONTROLLER && pSS->IsSlotCalibrateOpen( slot );
 	if ( !bBoard )
 	{
-		DrawText( m_hFontLarge, cx, y, Color( 230, 200, 80, 255 ), s_pszPages[clamp( page, 0, GESS_GAMEPAGE_COUNT - 1 )], true );
-		DrawText( m_hFontLarge, box.x + 12, y, Color( 230, 200, 80, 200 ), "<" );
-		DrawText( m_hFontLarge, box.x + box.w - 12 - TextWide( m_hFontLarge, ">" ), y, Color( 230, 200, 80, 200 ), ">" );
+		DrawText( m_hFontLarge, cx, y, Color( 230, 200, 80, 255 ), bCal ? "Calibrate Sticks" : s_pszPages[clamp( page, 0, GESS_GAMEPAGE_COUNT - 1 )], true );
+		if ( !bCal )
+		{
+			const int aw = TextWide( m_hFontLarge, ">" );
+			// On the Controller page, the title row is highlighted while left / right change page
+			const bool bTitleSel = page == GESS_GAMEPAGE_CONTROLLER && pSS->GetSlotCtrlRow( slot ) == GESS_CTRLROW_PAGE;
+			const int a = bTitleSel || page != GESS_GAMEPAGE_CONTROLLER ? 200 : 90;
+			DrawText( m_hFontLarge, box.x + 12, y, Color( 230, 200, 80, a ), "<" );
+			DrawText( m_hFontLarge, box.x + box.w - 12 - aw, y, Color( 230, 200, 80, a ), ">" );
+			GESS_AddMenuHit( slot, box.x, y - 4, box.x + 24 + aw * 2, y + tallL + 4, GESS_MENUHIT_PREV );
+			GESS_AddMenuHit( slot, box.x + box.w - 24 - aw * 2, y - 4, box.x + box.w, y + tallL + 4, GESS_MENUHIT_NEXT );
+		}
 		y += tallL + 2;
 
 		int numPages = 0;
@@ -1229,44 +1366,211 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 		Q_snprintf( line, sizeof( line ), "Press A / RIGHT TRIGGER to swap to %s", bMI6 ? "Janus" : "MI6" );
 		DrawText( m_hFontSmall, cx, midY, Color( 255, 255, 255, 230 ), line, true );
 		DrawText( m_hFontSmall, cx, midY + tallS + 6, Color( 180, 180, 180, 220 ), "(you respawn on the new team straight away)", true );
+		GESS_AddMenuHit( slot, content.x, midY - 4, content.x + content.w, midY + tallS + 4, GESS_MENUHIT_TEAM );
 		break;
 	}
 
-	case GESS_GAMEPAGE_PROFILE:
-	{
-		const int midY = content.y + content.h / 2;
-		char line[96];
-		Q_snprintf( line, sizeof( line ), "Profile: %s", pSS->GetSlotName( slot ) );
-		DrawText( m_hFontLarge, cx, midY - tallL - tallS, Color( 255, 255, 255, 255 ), line, true );
-		DrawText( m_hFontSmall, cx, midY, Color( 255, 255, 255, 230 ), "LB / RB: change profile    A: choose from the list", true );
+	case GESS_GAMEPAGE_CONTROLLER:
+		help = bCal ? PaintCalibrate( slot, content ) : PaintControllerPage( slot, content );
 		break;
-	}
 
 	case GESS_GAMEPAGE_EXIT:
 	{
+		// Exit game, with Commit Suicide under it. Each asks "are you sure" first.
 		const int midY = content.y + content.h / 2;
-		DrawText( m_hFontLarge, cx, midY - tallL * 2 - 8, Color( 255, 255, 255, 255 ),
-			slot == 0 ? "End the match for everyone?" : "Leave the game?", true );
-		const int sub = pSS->GetSlotMenuSub( slot );
-		const int bw = Max( content.w / 4, TextWide( m_hFontLarge, "Yes" ) + 30 ), bh = tallL + 8;
+		const int confirm = pSS->GetSlotMenuConfirm( slot );
+		const char *pszSuicide = GESS_SuicideLabel();
+		const bool bCanSuicide = pSS->CanSlotSuicide( slot );
+		const int bh = tallL + 8;
+		const char *pszLabels[2];
+		int sel, hit;
+		bool bEnabled[2] = { true, true };
+		if ( confirm == GESS_CONFIRM_NONE )
+		{
+			pszLabels[0] = "Exit game";
+			pszLabels[1] = pszSuicide;
+			bEnabled[1] = bCanSuicide;
+			sel = pSS->GetSlotMenuSub( slot );
+			hit = GESS_MENUHIT_BUTTON;
+			help = "Up / Down: choose    A / RIGHT TRIGGER: select    Left / Right: more";
+		}
+		else
+		{
+			const char *pszQuestion = confirm == GESS_CONFIRM_SUICIDE ? "Are you sure?" :
+				( slot == 0 ? "End the match for everyone?" : "Leave the game?" );
+			DrawText( m_hFontLarge, cx, midY - tallL * 2 - 8, Color( 255, 255, 255, 255 ), pszQuestion, true );
+			if ( confirm == GESS_CONFIRM_SUICIDE )
+				DrawText( m_hFontSmall, cx, midY - tallL - 4, Color( 200, 200, 200, 220 ), pszSuicide, true );
+			pszLabels[0] = "Cancel";
+			pszLabels[1] = "Confirm";
+			sel = pSS->GetSlotMenuConfirmSel( slot );
+			hit = GESS_MENUHIT_CONFIRM;
+			help = "Up / Down: choose    A / RIGHT TRIGGER: answer    B: cancel";
+		}
+
+		const int bw = Min( content.w, Max( content.w / 3, Max( TextWide( m_hFontLarge, pszLabels[0] ), TextWide( m_hFontLarge, pszLabels[1] ) ) + 30 ) );
 		for ( int i = 0; i < 2; i++ )
 		{
 			const int by = midY - tallL / 2 + i * ( bh + 6 );
-			const bool bSel = sub == i;
+			const bool bSel = sel == i;
 			surface()->DrawSetColor( bSel ? Color( 150, 125, 50, 255 ) : Color( 40, 40, 40, 255 ) );
 			surface()->DrawFilledRect( cx - bw / 2, by, cx + bw / 2, by + bh );
 			surface()->DrawSetColor( bSel ? Color( 255, 230, 120, 255 ) : Color( 90, 90, 90, 255 ) );
 			surface()->DrawOutlinedRect( cx - bw / 2, by, cx + bw / 2, by + bh );
-			DrawText( m_hFontLarge, cx, by + 4, Color( 255, 255, 255, 255 ), i == 0 ? "No" : "Yes", true );
+			DrawText( m_hFontLarge, cx, by + 4, bEnabled[i] ? Color( 255, 255, 255, 255 ) : Color( 130, 130, 130, 255 ), pszLabels[i], true );
+			GESS_AddMenuHit( slot, cx - bw / 2, by, cx + bw / 2, by + bh, hit, i );
 		}
-		if ( slot == 0 )
+		if ( confirm == GESS_CONFIRM_EXIT && slot == 0 )
 			DrawText( m_hFontSmall, cx, midY + bh * 2 + 18, Color( 200, 200, 200, 220 ), "The results are shown, then back to the menu", true );
-		help = "Up / Down: choose    A / RIGHT TRIGGER: confirm    Left / Right: more";
+		else if ( confirm == GESS_CONFIRM_NONE && !bCanSuicide )
+			DrawText( m_hFontSmall, cx, midY + bh * 2 + 18, Color( 200, 200, 200, 220 ), "(only while you're alive)", true );
 		break;
 	}
 	}
 
 	DrawText( m_hFontSmall, cx, helpY, Color( 200, 200, 200, 230 ), help, true );
+}
+
+// The dead zone a stick has before it's measured (ges_ss_pad_deadzone)
+static float GESS_FixedDeadzone()
+{
+	static ConVarRef ges_ss_pad_deadzone( "ges_ss_pad_deadzone" );
+	return ges_ss_pad_deadzone.IsValid() ? ges_ss_pad_deadzone.GetFloat() : 0.22f;
+}
+
+void CGESplitScreenHud::PaintMenuRowBack( int x, int y, int w, int h, bool bSel )
+{
+	if ( !bSel )
+		return;
+	surface()->DrawSetColor( Color( 230, 200, 80, 70 ) );
+	surface()->DrawFilledRect( x, y, x + w, y + h );
+}
+
+void CGESplitScreenHud::PaintSlider( int slot, int row, int x, int y, int w, int h, float frac, const char *value, bool bSel )
+{
+	// The track, filled up to the value (no border), and the value after it
+	const int vw = TextWide( m_hFontSmall, "0.00" ) + 8;
+	const int tw = Max( 10, w - vw ), th = Max( 4, h / 3 ), ty = y + ( h - th ) / 2;
+	surface()->DrawSetColor( Color( 60, 60, 60, 255 ) );
+	surface()->DrawFilledRect( x, ty, x + tw, ty + th );
+	surface()->DrawSetColor( bSel ? Color( 255, 220, 100, 255 ) : Color( 185, 160, 70, 255 ) );
+	surface()->DrawFilledRect( x, ty, x + (int)( tw * clamp( frac, 0.0f, 1.0f ) ), ty + th );
+	DrawText( m_hFontSmall, x + tw + 6, y + ( h - surface()->GetFontTall( m_hFontSmall ) ) / 2, Color( 255, 255, 255, 255 ), value );
+	GESS_AddMenuHit( slot, x, y, x + tw, y + h, GESS_MENUHIT_SLIDER, row );
+}
+
+const char *CGESplitScreenHud::PaintControllerPage( int slot, const GESSViewport_t &area )
+{
+	CGESplitScreenClient *pSS = GESplitScreenClient();
+	const int sel = pSS->GetSlotCtrlRow( slot );
+	// Large text when the three rows fit, small in a small view
+	const HFont font = ( surface()->GetFontTall( m_hFontLarge ) + 10 ) * 3 <= area.h ? m_hFontLarge : m_hFontSmall;
+	const int tall = surface()->GetFontTall( font ), rowH = tall + 10;
+	int y = area.y + Max( 0, ( area.h - rowH * 3 ) / 2 );
+	const int lx = area.x + 10, rx = area.x + area.w - 10;
+
+	for ( int row = GESS_CTRLROW_INVERT; row < GESS_CTRLROW_COUNT; row++, y += rowH )
+	{
+		const bool bSel = sel == row;
+		PaintMenuRowBack( area.x, y, area.w, rowH - 2, bSel );
+		GESS_AddMenuHit( slot, area.x, y, area.x + area.w, y + rowH - 2, GESS_MENUHIT_ROW, row );
+		const int ty = y + ( rowH - 2 - tall ) / 2;
+		const Color col = bSel ? Color( 255, 255, 255, 255 ) : Color( 210, 210, 210, 230 );
+		switch ( row )
+		{
+		case GESS_CTRLROW_INVERT:
+		{
+			DrawText( font, lx, ty, col, "Invert Look Up/Down" );
+			const char *v = pSS->GetSlotInvert( slot ) ? "On" : "Off";
+			DrawText( font, rx - TextWide( font, v ), ty, Color( 255, 220, 100, 255 ), v );
+			break;
+		}
+		case GESS_CTRLROW_SENS:
+		{
+			DrawText( font, lx, ty, col, "Look Sensitivity" );
+			const int step = pSS->GetSlotSensStep( slot );
+			char v[8];
+			Q_snprintf( v, sizeof( v ), "%d", step );
+			const int sx = Max( lx + TextWide( font, "Look Sensitivity" ) + 12, area.x + area.w / 2 );
+			PaintSlider( slot, row, sx, y + 2, rx - sx, rowH - 6, (float)( step - 1 ) / (float)( GESS_SENS_STEPS - 1 ), v, bSel );
+			break;
+		}
+		case GESS_CTRLROW_CALIBRATE:
+			DrawText( font, lx, ty, col, "Calibrate Sticks" );
+			DrawText( font, rx - TextWide( font, "..." ), ty, Color( 255, 220, 100, 255 ), "..." );
+			break;
+		}
+	}
+
+	if ( sel == GESS_CTRLROW_PAGE )
+		return "Left / Right: more    Down: settings    START / B: close";
+	return "Up / Down: choose    Left / Right: change    A: select    B: close";
+}
+
+const char *CGESplitScreenHud::PaintCalibrate( int slot, const GESSViewport_t &area )
+{
+	CGESplitScreenClient *pSS = GESplitScreenClient();
+	CGESSGamepads *pPads = GESSGamepads();
+	const int pad = pSS->GetSlotPad( slot );
+	const int sel = pSS->GetSlotCalRow( slot );
+	const int tallS = surface()->GetFontTall( m_hFontSmall );
+	const int rowH = tallS + 6;
+	const int rowsH = rowH * GESS_CALROW_COUNT;
+
+	// The two sticks, live: the circle is the stick's full range, the gold circle its
+	// dead zone (around where it rests), the dot where it is (green outside the dead zone)
+	const int stickH = Max( 0, area.h - rowsH - tallS * 2 - 12 );
+	const int R = Max( 6, Min( ( stickH - tallS - 4 ) / 2, area.w / 4 - 12 ) );
+	for ( int st = 0; st < 2; st++ )
+	{
+		const CGESSGamepads::StickCal_t &sc = pPads->GetStickCal( pad, st );
+		const float inner = sc.measured ? sc.inner : GESS_FixedDeadzone();
+		const int cx = area.x + ( st == 0 ? area.w / 4 : area.w * 3 / 4 ), cy = area.y + R + 2;
+		surface()->DrawSetColor( Color( 120, 120, 120, 255 ) );
+		surface()->DrawOutlinedCircle( cx, cy, R, 48 );
+		const int dzx = cx + (int)( sc.cx * R ), dzy = cy - (int)( sc.cy * R );
+		surface()->DrawSetColor( Color( 230, 200, 80, 255 ) );
+		surface()->DrawOutlinedCircle( dzx, dzy, Max( 1, (int)( inner * R ) ), 32 );
+		float x, y;
+		pPads->GetRawStick( pad, st, x, y );
+		const float dx = x - sc.cx, dy = y - sc.cy;
+		const bool bOut = dx * dx + dy * dy > inner * inner;
+		const int px = cx + (int)( clamp( x, -1.2f, 1.2f ) * R ), py = cy - (int)( clamp( y, -1.2f, 1.2f ) * R );
+		const int d = Max( 2, R / 12 );
+		surface()->DrawSetColor( bOut ? Color( 90, 230, 90, 255 ) : Color( 255, 255, 255, 255 ) );
+		surface()->DrawFilledRect( px - d, py - d, px + d + 1, py + d + 1 );
+		char label[48];
+		Q_snprintf( label, sizeof( label ), "%s stick  %.2f", st == 0 ? "Left" : "Right", inner );
+		DrawText( m_hFontSmall, cx, cy + R + 2, Color( 220, 220, 220, 255 ), label, true );
+	}
+
+	// How the measurement is going (or the R3 hint)
+	int y = area.y + R * 2 + tallS + 8;
+	char prompt[128];
+	DrawText( m_hFontSmall, area.x + area.w / 2, y, Color( 255, 220, 100, 255 ), pPads->GetCalibrationPrompt( pad, prompt, sizeof( prompt ) ), true );
+	y += tallS + 6;
+
+	const int lx = area.x + 10, rx = area.x + area.w - 10;
+	const float lo = CGESSGamepads::GetDeadzoneMin(), hi = CGESSGamepads::GetDeadzoneMax();
+	static const char *s_pszRows[GESS_CALROW_COUNT] = { "Re-measure (R3)", "Left dead zone", "Right dead zone", "Done", "Back" };
+	for ( int row = 0; row < GESS_CALROW_COUNT; row++, y += rowH )
+	{
+		const bool bSel = sel == row;
+		PaintMenuRowBack( area.x, y, area.w, rowH - 1, bSel );
+		GESS_AddMenuHit( slot, area.x, y, area.x + area.w, y + rowH - 1, GESS_MENUHIT_ROW, row );
+		DrawText( m_hFontSmall, lx, y + 3, bSel ? Color( 255, 255, 255, 255 ) : Color( 210, 210, 210, 230 ), s_pszRows[row] );
+		if ( row == GESS_CALROW_LEFT || row == GESS_CALROW_RIGHT )
+		{
+			const CGESSGamepads::StickCal_t &sc = pPads->GetStickCal( pad, row == GESS_CALROW_LEFT ? 0 : 1 );
+			const float inner = sc.measured ? sc.inner : GESS_FixedDeadzone();
+			char v[16];
+			Q_snprintf( v, sizeof( v ), "%.2f", inner );
+			const int sx = Max( lx + TextWide( m_hFontSmall, "Right dead zone" ) + 12, area.x + area.w / 2 );
+			PaintSlider( slot, row, sx, y + 1, rx - sx, rowH - 2, ( inner - lo ) / Max( 0.01f, hi - lo ), v, bSel );
+		}
+	}
+
+	return "Up / Down: choose    Left / Right: dead zone    R3: re-measure    A: select    B: back";
 }
 
 void CGESplitScreenHud::PaintMenu( int slot, const GESSViewport_t &vp )
