@@ -1,0 +1,176 @@
+; GoldenEye: Source Split Screen Mod - setup wizard (NSIS 3, Unicode)
+;
+; Build:  makensis -DVERSION=1.0.0 -DGAME_TITLE="GoldenEye: Source - Split Screen Mod" ges-splitscreen-setup.nsi
+; Expects the files to install in .\payload\ laid out like the gesource folder
+; (bin\client.dll, bin\server.dll, ..., resource\*.res, materials\..., gameinfo.txt, steam.inf).
+
+Unicode true
+ManifestDPIAware true
+SetCompressor /SOLID lzma
+
+!ifndef VERSION
+  !define VERSION "1.0.0"
+!endif
+!ifndef GAME_TITLE
+  !define GAME_TITLE "GoldenEye: Source - Split Screen Mod"
+!endif
+!define PRODUCT "GoldenEye: Source Split Screen Mod"
+!define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\GESSplitScreenMod"
+!define BACKUP_DIR "splitscreen_backup"
+
+Name "${PRODUCT} ${VERSION}"
+OutFile "GES-SplitScreenMod-Setup-${VERSION}.exe"
+RequestExecutionLevel admin
+InstallDir "$PROGRAMFILES32\Steam\steamapps\sourcemods\gesource"
+BrandingText "${PRODUCT} ${VERSION}"
+
+VIProductVersion "${VERSION}.0"
+VIAddVersionKey "ProductName" "${PRODUCT}"
+VIAddVersionKey "FileDescription" "${PRODUCT} setup"
+VIAddVersionKey "FileVersion" "${VERSION}"
+VIAddVersionKey "ProductVersion" "${VERSION}"
+VIAddVersionKey "LegalCopyright" "GoldenEye: Source by Team GoldenEye: Source. Unofficial split screen build."
+
+!include "MUI2.nsh"
+!include "LogicLib.nsh"
+!include "FileFunc.nsh"
+
+!define MUI_ABORTWARNING
+!define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
+!define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+!define MUI_WELCOMEPAGE_TITLE "${PRODUCT} ${VERSION}"
+!define MUI_WELCOMEPAGE_TEXT "This adds local split screen for up to 8 players with controllers to GoldenEye: Source, plus Big Head, Paintball, aim assist and the other new match options.$\r$\n$\r$\nYou need Steam, Source SDK Base 2013 Multiplayer (free on Steam) and GoldenEye: Source 5.0.6 installed.$\r$\n$\r$\nThe files this replaces are backed up first, and the uninstaller puts them back.$\r$\n$\r$\nPlease quit GoldenEye: Source before continuing."
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Setup found this GoldenEye: Source folder. If yours is somewhere else, pick the gesource folder that holds gameinfo.txt."
+!define MUI_DIRECTORYPAGE_TEXT_DESTINATION "GoldenEye: Source folder (gesource)"
+!define MUI_FINISHPAGE_SHOWREADME "https://github.com/T3chnobone/ges-code-Couch-Party/blob/ges-splitscreen/INSTALL_SPLITSCREEN.md#controller-quick-start"
+!define MUI_FINISHPAGE_SHOWREADME_TEXT "Open the controller quick start guide"
+!define MUI_FINISHPAGE_SHOWREADME_NOTCHECKED
+!define MUI_FINISHPAGE_TEXT "${PRODUCT} is installed. Restart Steam so the library shows the new name, then start ${GAME_TITLE} from your Steam library."
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_LICENSE "payload_docs\LICENSE_GES.txt"
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE DirLeave
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_COMPONENTS
+!insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+!insertmacro MUI_LANGUAGE "English"
+
+Var SteamPath
+
+Function .onInit
+  ; Steam keeps the source mods folder in the user's registry.
+  ReadRegStr $0 HKCU "Software\Valve\Steam" "SourceModInstallPath"
+  ${If} $0 != ""
+  ${AndIf} ${FileExists} "$0\gesource\gameinfo.txt"
+    StrCpy $INSTDIR "$0\gesource"
+  ${Else}
+    ReadRegStr $SteamPath HKCU "Software\Valve\Steam" "SteamPath"
+    ${If} ${FileExists} "$SteamPath\steamapps\sourcemods\gesource\gameinfo.txt"
+      StrCpy $INSTDIR "$SteamPath\steamapps\sourcemods\gesource"
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+Function DirLeave
+  ${IfNot} ${FileExists} "$INSTDIR\gameinfo.txt"
+    MessageBox MB_ICONEXCLAMATION|MB_OK "There's no gameinfo.txt in this folder. Pick the gesource folder of your GoldenEye: Source install (usually Steam\steamapps\sourcemods\gesource)."
+    Abort
+  ${EndIf}
+  FindWindow $0 "Valve001"
+  ${If} $0 != 0
+    MessageBox MB_ICONEXCLAMATION|MB_OK "A Source game is running. Quit it, then click Next."
+    Abort
+  ${EndIf}
+FunctionEnd
+
+; Back up a file once (first install keeps the original), or note that it was new.
+!macro BackupFile REL
+  ${If} ${FileExists} "$INSTDIR\${REL}"
+    ${IfNot} ${FileExists} "$INSTDIR\${BACKUP_DIR}\${REL}"
+      ${GetParent} "$INSTDIR\${BACKUP_DIR}\${REL}" $1
+      CreateDirectory "$1"
+      CopyFiles /SILENT "$INSTDIR\${REL}" "$INSTDIR\${BACKUP_DIR}\${REL}"
+    ${EndIf}
+  ${Else}
+    FileOpen $9 "$INSTDIR\${BACKUP_DIR}\new_files.txt" a
+    FileSeek $9 0 END
+    FileWrite $9 "${REL}$\r$\n"
+    FileClose $9
+  ${EndIf}
+!macroend
+
+Section "Split Screen Mod (required)" SecCore
+  SectionIn RO
+  CreateDirectory "$INSTDIR\${BACKUP_DIR}"
+  !include "payload_backup.nsh"   ; generated: one BackupFile line per payload file
+
+  SetOutPath "$INSTDIR"
+  SetOverwrite on
+  File /r "payload\*.*"
+
+
+  SetOutPath "$INSTDIR\${BACKUP_DIR}"
+  File /oname=SPLITSCREEN_README.md "payload_docs\INSTALL_SPLITSCREEN.md"
+  WriteUninstaller "$INSTDIR\${BACKUP_DIR}\Uninstall Split Screen Mod.exe"
+
+  WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "${PRODUCT}"
+  WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
+  WriteRegStr HKLM "${UNINST_KEY}" "Publisher" "T3chnobone"
+  WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout" "https://github.com/T3chnobone/ges-code-Couch-Party"
+  WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" '"$INSTDIR\${BACKUP_DIR}\Uninstall Split Screen Mod.exe"'
+  WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
+  WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
+SectionEnd
+
+!include "extras.nsh"   ; optional components (shortcut, Vulkan, ...), chosen with the user
+
+Section "Uninstall"
+  FindWindow $0 "Valve001"
+  ${If} $0 != 0
+    MessageBox MB_ICONEXCLAMATION|MB_OK "Quit GoldenEye: Source first, then run the uninstaller again."
+    Abort
+  ${EndIf}
+  ; $INSTDIR is the backup folder here
+  ${GetParent} "$INSTDIR" $R0
+  ; Delete files the mod added
+  ${If} ${FileExists} "$INSTDIR\new_files.txt"
+    FileOpen $9 "$INSTDIR\new_files.txt" r
+    loop:
+      FileRead $9 $1
+      StrCmp $1 "" done
+      Push $1
+      Call un.TrimNewline
+      Pop $1
+      Delete "$R0\$1"
+      Goto loop
+    done:
+    FileClose $9
+  ${EndIf}
+  ; Put the originals back
+  CopyFiles /SILENT "$INSTDIR\*.*" "$R0"
+  Delete "$R0\new_files.txt"
+  Delete "$R0\SPLITSCREEN_README.md"
+  Delete "$R0\Uninstall Split Screen Mod.exe"
+  !include "extras_uninstall.nsh"
+  SetOutPath "$TEMP"
+  RMDir /r "$INSTDIR"
+  DeleteRegKey HKLM "${UNINST_KEY}"
+SectionEnd
+
+Function un.TrimNewline
+  Exch $0
+  loop:
+    StrCpy $1 $0 1 -1
+    StrCmp $1 "$\r" trim
+    StrCmp $1 "$\n" trim
+    Goto out
+  trim:
+    StrCpy $0 $0 -1
+    Goto loop
+  out:
+  Exch $0
+FunctionEnd
