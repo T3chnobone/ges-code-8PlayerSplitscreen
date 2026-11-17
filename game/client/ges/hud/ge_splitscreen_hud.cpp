@@ -77,6 +77,12 @@ private:
 	};
 	CUtlVector<ScaledFont_t> m_ScaledFonts;
 	void PaintGameMenu( int slot, const GESSViewport_t &vp );
+	// The START menu's Controller page and Calibrate Sticks screen (return the help line)
+	const char *PaintControllerPage( int slot, const GESSViewport_t &area );
+	const char *PaintCalibrate( int slot, const GESSViewport_t &area );
+	// A row's highlight, and a slider (filled to frac) with its value at the right
+	void PaintMenuRowBack( int x, int y, int w, int h, bool bSel );
+	void PaintSlider( int slot, int row, int x, int y, int w, int h, float frac, const char *value, bool bSel );
 	void PaintLogo( const GESSViewport_t &vp );
 	void PaintJoinHint( const GESSViewport_t &vp, const char *line1, const char *line2 );
 	// GoldenEye's own health and armour dials (the normal game's CGEHudLifebars),
@@ -1208,7 +1214,7 @@ public:
 		vgui::input()->GetCursorPos( x, y );
 		const GESSMenuHit_t *h = GESS_FindMenuHit( x, y );
 		if ( h )
-			GESplitScreenClient()->OnMenuMouse( h->hit, h->arg, true );
+			GESplitScreenClient()->OnMenuMouse( h->hit, h->arg, true, Frac( h, x ) );
 	}
 
 	virtual void OnCursorMoved( int, int )
@@ -1217,7 +1223,14 @@ public:
 		vgui::input()->GetCursorPos( x, y );
 		const GESSMenuHit_t *h = GESS_FindMenuHit( x, y );
 		if ( h )
-			GESplitScreenClient()->OnMenuMouse( h->hit, h->arg, false );
+			GESplitScreenClient()->OnMenuMouse( h->hit, h->arg, false, Frac( h, x ) );
+	}
+
+private:
+	// How far along the hit area (a slider) the cursor is, 0-1
+	static float Frac( const GESSMenuHit_t *h, int x )
+	{
+		return h->x1 > h->x0 ? clamp( (float)( x - h->x0 ) / (float)( h->x1 - h->x0 ), 0.0f, 1.0f ) : 0.0f;
 	}
 };
 
@@ -1268,7 +1281,7 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 		surface()->DrawFilledRect( box.x, box.y, box.x + box.w, box.y + box.h );
 	}
 
-	static const char *s_pszPages[GESS_GAMEPAGE_COUNT] = { "Leaderboard", "Swap team", "Exit game" };
+	static const char *s_pszPages[GESS_GAMEPAGE_COUNT] = { "Leaderboard", "Swap team", "Controller", "Exit game" };
 	const int cx = box.x + box.w / 2;
 	int y = box.y + 6;
 
@@ -1283,15 +1296,23 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 		GESS_AddMenuHit( slot, vp.x + vp.w - 16 - aw * 2, ay - tallL, vp.x + vp.w, ay + tallL * 2, GESS_MENUHIT_NEXT );
 	}
 
-	// The page name, arrows and page dots on the other pages
+	// The page name, arrows and page dots on the other pages (Calibrate Sticks: its own
+	// title, no arrows: it's left with Done / Back)
+	const bool bCal = page == GESS_GAMEPAGE_CONTROLLER && pSS->IsSlotCalibrateOpen( slot );
 	if ( !bBoard )
 	{
-		DrawText( m_hFontLarge, cx, y, Color( 230, 200, 80, 255 ), s_pszPages[clamp( page, 0, GESS_GAMEPAGE_COUNT - 1 )], true );
-		const int aw = TextWide( m_hFontLarge, ">" );
-		DrawText( m_hFontLarge, box.x + 12, y, Color( 230, 200, 80, 200 ), "<" );
-		DrawText( m_hFontLarge, box.x + box.w - 12 - aw, y, Color( 230, 200, 80, 200 ), ">" );
-		GESS_AddMenuHit( slot, box.x, y - 4, box.x + 24 + aw * 2, y + tallL + 4, GESS_MENUHIT_PREV );
-		GESS_AddMenuHit( slot, box.x + box.w - 24 - aw * 2, y - 4, box.x + box.w, y + tallL + 4, GESS_MENUHIT_NEXT );
+		DrawText( m_hFontLarge, cx, y, Color( 230, 200, 80, 255 ), bCal ? "Calibrate Sticks" : s_pszPages[clamp( page, 0, GESS_GAMEPAGE_COUNT - 1 )], true );
+		if ( !bCal )
+		{
+			const int aw = TextWide( m_hFontLarge, ">" );
+			// On the Controller page, the title row is highlighted while left / right change page
+			const bool bTitleSel = page == GESS_GAMEPAGE_CONTROLLER && pSS->GetSlotCtrlRow( slot ) == GESS_CTRLROW_PAGE;
+			const int a = bTitleSel || page != GESS_GAMEPAGE_CONTROLLER ? 200 : 90;
+			DrawText( m_hFontLarge, box.x + 12, y, Color( 230, 200, 80, a ), "<" );
+			DrawText( m_hFontLarge, box.x + box.w - 12 - aw, y, Color( 230, 200, 80, a ), ">" );
+			GESS_AddMenuHit( slot, box.x, y - 4, box.x + 24 + aw * 2, y + tallL + 4, GESS_MENUHIT_PREV );
+			GESS_AddMenuHit( slot, box.x + box.w - 24 - aw * 2, y - 4, box.x + box.w, y + tallL + 4, GESS_MENUHIT_NEXT );
+		}
 		y += tallL + 2;
 
 		int numPages = 0;
@@ -1349,6 +1370,10 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 		break;
 	}
 
+	case GESS_GAMEPAGE_CONTROLLER:
+		help = bCal ? PaintCalibrate( slot, content ) : PaintControllerPage( slot, content );
+		break;
+
 	case GESS_GAMEPAGE_EXIT:
 	{
 		// Exit game, with Commit Suicide under it. Each asks "are you sure" first.
@@ -1404,6 +1429,148 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 	}
 
 	DrawText( m_hFontSmall, cx, helpY, Color( 200, 200, 200, 230 ), help, true );
+}
+
+// The dead zone a stick has before it's measured (ges_ss_pad_deadzone)
+static float GESS_FixedDeadzone()
+{
+	static ConVarRef ges_ss_pad_deadzone( "ges_ss_pad_deadzone" );
+	return ges_ss_pad_deadzone.IsValid() ? ges_ss_pad_deadzone.GetFloat() : 0.22f;
+}
+
+void CGESplitScreenHud::PaintMenuRowBack( int x, int y, int w, int h, bool bSel )
+{
+	if ( !bSel )
+		return;
+	surface()->DrawSetColor( Color( 230, 200, 80, 70 ) );
+	surface()->DrawFilledRect( x, y, x + w, y + h );
+}
+
+void CGESplitScreenHud::PaintSlider( int slot, int row, int x, int y, int w, int h, float frac, const char *value, bool bSel )
+{
+	// The track, filled up to the value (no border), and the value after it
+	const int vw = TextWide( m_hFontSmall, "0.00" ) + 8;
+	const int tw = Max( 10, w - vw ), th = Max( 4, h / 3 ), ty = y + ( h - th ) / 2;
+	surface()->DrawSetColor( Color( 60, 60, 60, 255 ) );
+	surface()->DrawFilledRect( x, ty, x + tw, ty + th );
+	surface()->DrawSetColor( bSel ? Color( 255, 220, 100, 255 ) : Color( 185, 160, 70, 255 ) );
+	surface()->DrawFilledRect( x, ty, x + (int)( tw * clamp( frac, 0.0f, 1.0f ) ), ty + th );
+	DrawText( m_hFontSmall, x + tw + 6, y + ( h - surface()->GetFontTall( m_hFontSmall ) ) / 2, Color( 255, 255, 255, 255 ), value );
+	GESS_AddMenuHit( slot, x, y, x + tw, y + h, GESS_MENUHIT_SLIDER, row );
+}
+
+const char *CGESplitScreenHud::PaintControllerPage( int slot, const GESSViewport_t &area )
+{
+	CGESplitScreenClient *pSS = GESplitScreenClient();
+	const int sel = pSS->GetSlotCtrlRow( slot );
+	// Large text when the three rows fit, small in a small view
+	const HFont font = ( surface()->GetFontTall( m_hFontLarge ) + 10 ) * 3 <= area.h ? m_hFontLarge : m_hFontSmall;
+	const int tall = surface()->GetFontTall( font ), rowH = tall + 10;
+	int y = area.y + Max( 0, ( area.h - rowH * 3 ) / 2 );
+	const int lx = area.x + 10, rx = area.x + area.w - 10;
+
+	for ( int row = GESS_CTRLROW_INVERT; row < GESS_CTRLROW_COUNT; row++, y += rowH )
+	{
+		const bool bSel = sel == row;
+		PaintMenuRowBack( area.x, y, area.w, rowH - 2, bSel );
+		GESS_AddMenuHit( slot, area.x, y, area.x + area.w, y + rowH - 2, GESS_MENUHIT_ROW, row );
+		const int ty = y + ( rowH - 2 - tall ) / 2;
+		const Color col = bSel ? Color( 255, 255, 255, 255 ) : Color( 210, 210, 210, 230 );
+		switch ( row )
+		{
+		case GESS_CTRLROW_INVERT:
+		{
+			DrawText( font, lx, ty, col, "Invert Look Up/Down" );
+			const char *v = pSS->GetSlotInvert( slot ) ? "On" : "Off";
+			DrawText( font, rx - TextWide( font, v ), ty, Color( 255, 220, 100, 255 ), v );
+			break;
+		}
+		case GESS_CTRLROW_SENS:
+		{
+			DrawText( font, lx, ty, col, "Look Sensitivity" );
+			const int step = pSS->GetSlotSensStep( slot );
+			char v[8];
+			Q_snprintf( v, sizeof( v ), "%d", step );
+			const int sx = Max( lx + TextWide( font, "Look Sensitivity" ) + 12, area.x + area.w / 2 );
+			PaintSlider( slot, row, sx, y + 2, rx - sx, rowH - 6, (float)( step - 1 ) / (float)( GESS_SENS_STEPS - 1 ), v, bSel );
+			break;
+		}
+		case GESS_CTRLROW_CALIBRATE:
+			DrawText( font, lx, ty, col, "Calibrate Sticks" );
+			DrawText( font, rx - TextWide( font, "..." ), ty, Color( 255, 220, 100, 255 ), "..." );
+			break;
+		}
+	}
+
+	if ( sel == GESS_CTRLROW_PAGE )
+		return "Left / Right: more    Down: settings    START / B: close";
+	return "Up / Down: choose    Left / Right: change    A: select    B: close";
+}
+
+const char *CGESplitScreenHud::PaintCalibrate( int slot, const GESSViewport_t &area )
+{
+	CGESplitScreenClient *pSS = GESplitScreenClient();
+	CGESSGamepads *pPads = GESSGamepads();
+	const int pad = pSS->GetSlotPad( slot );
+	const int sel = pSS->GetSlotCalRow( slot );
+	const int tallS = surface()->GetFontTall( m_hFontSmall );
+	const int rowH = tallS + 6;
+	const int rowsH = rowH * GESS_CALROW_COUNT;
+
+	// The two sticks, live: the circle is the stick's full range, the gold circle its
+	// dead zone (around where it rests), the dot where it is (green outside the dead zone)
+	const int stickH = Max( 0, area.h - rowsH - tallS * 2 - 12 );
+	const int R = Max( 6, Min( ( stickH - tallS - 4 ) / 2, area.w / 4 - 12 ) );
+	for ( int st = 0; st < 2; st++ )
+	{
+		const CGESSGamepads::StickCal_t &sc = pPads->GetStickCal( pad, st );
+		const float inner = sc.measured ? sc.inner : GESS_FixedDeadzone();
+		const int cx = area.x + ( st == 0 ? area.w / 4 : area.w * 3 / 4 ), cy = area.y + R + 2;
+		surface()->DrawSetColor( Color( 120, 120, 120, 255 ) );
+		surface()->DrawOutlinedCircle( cx, cy, R, 48 );
+		const int dzx = cx + (int)( sc.cx * R ), dzy = cy - (int)( sc.cy * R );
+		surface()->DrawSetColor( Color( 230, 200, 80, 255 ) );
+		surface()->DrawOutlinedCircle( dzx, dzy, Max( 1, (int)( inner * R ) ), 32 );
+		float x, y;
+		pPads->GetRawStick( pad, st, x, y );
+		const float dx = x - sc.cx, dy = y - sc.cy;
+		const bool bOut = dx * dx + dy * dy > inner * inner;
+		const int px = cx + (int)( clamp( x, -1.2f, 1.2f ) * R ), py = cy - (int)( clamp( y, -1.2f, 1.2f ) * R );
+		const int d = Max( 2, R / 12 );
+		surface()->DrawSetColor( bOut ? Color( 90, 230, 90, 255 ) : Color( 255, 255, 255, 255 ) );
+		surface()->DrawFilledRect( px - d, py - d, px + d + 1, py + d + 1 );
+		char label[48];
+		Q_snprintf( label, sizeof( label ), "%s stick  %.2f", st == 0 ? "Left" : "Right", inner );
+		DrawText( m_hFontSmall, cx, cy + R + 2, Color( 220, 220, 220, 255 ), label, true );
+	}
+
+	// How the measurement is going (or the R3 hint)
+	int y = area.y + R * 2 + tallS + 8;
+	char prompt[128];
+	DrawText( m_hFontSmall, area.x + area.w / 2, y, Color( 255, 220, 100, 255 ), pPads->GetCalibrationPrompt( pad, prompt, sizeof( prompt ) ), true );
+	y += tallS + 6;
+
+	const int lx = area.x + 10, rx = area.x + area.w - 10;
+	const float lo = CGESSGamepads::GetDeadzoneMin(), hi = CGESSGamepads::GetDeadzoneMax();
+	static const char *s_pszRows[GESS_CALROW_COUNT] = { "Re-measure (R3)", "Left dead zone", "Right dead zone", "Done", "Back" };
+	for ( int row = 0; row < GESS_CALROW_COUNT; row++, y += rowH )
+	{
+		const bool bSel = sel == row;
+		PaintMenuRowBack( area.x, y, area.w, rowH - 1, bSel );
+		GESS_AddMenuHit( slot, area.x, y, area.x + area.w, y + rowH - 1, GESS_MENUHIT_ROW, row );
+		DrawText( m_hFontSmall, lx, y + 3, bSel ? Color( 255, 255, 255, 255 ) : Color( 210, 210, 210, 230 ), s_pszRows[row] );
+		if ( row == GESS_CALROW_LEFT || row == GESS_CALROW_RIGHT )
+		{
+			const CGESSGamepads::StickCal_t &sc = pPads->GetStickCal( pad, row == GESS_CALROW_LEFT ? 0 : 1 );
+			const float inner = sc.measured ? sc.inner : GESS_FixedDeadzone();
+			char v[16];
+			Q_snprintf( v, sizeof( v ), "%.2f", inner );
+			const int sx = Max( lx + TextWide( m_hFontSmall, "Right dead zone" ) + 12, area.x + area.w / 2 );
+			PaintSlider( slot, row, sx, y + 1, rx - sx, rowH - 2, ( inner - lo ) / Max( 0.01f, hi - lo ), v, bSel );
+		}
+	}
+
+	return "Up / Down: choose    Left / Right: dead zone    R3: re-measure    A: select    B: back";
 }
 
 void CGESplitScreenHud::PaintMenu( int slot, const GESSViewport_t &vp )

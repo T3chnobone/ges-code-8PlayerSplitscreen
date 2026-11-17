@@ -21,6 +21,8 @@
 
 #include "igamesystem.h"
 #include "ge_splitscreen_shared.h"
+#include "ge_splitscreen_gamepad.h"
+#include "ge_splitscreen_profiles.h"
 
 class C_BaseEntity;
 class C_BasePlayer;
@@ -49,9 +51,53 @@ enum
 {
 	GESS_GAMEPAGE_LEADERBOARD = 0,
 	GESS_GAMEPAGE_TEAM,			// Swap team (team games only)
+	GESS_GAMEPAGE_CONTROLLER,	// Invert look, look sensitivity, Calibrate Sticks
 	GESS_GAMEPAGE_EXIT,			// Exit game, and Commit Suicide under it
 	GESS_GAMEPAGE_COUNT
 };
+
+// The Controller page's rows. The first is the page title: left / right there change
+// page as on the other pages; on the settings below they change the setting.
+enum
+{
+	GESS_CTRLROW_PAGE = 0,
+	GESS_CTRLROW_INVERT,
+	GESS_CTRLROW_SENS,
+	GESS_CTRLROW_CALIBRATE,
+	GESS_CTRLROW_COUNT
+};
+
+// The Calibrate Sticks screen's rows
+enum
+{
+	GESS_CALROW_REMEASURE = 0,	// The lobby's R3 measurement (R3 works anywhere on the screen)
+	GESS_CALROW_LEFT,			// Left stick dead zone
+	GESS_CALROW_RIGHT,			// Right stick dead zone
+	GESS_CALROW_DONE,			// Keep the changes
+	GESS_CALROW_BACK,			// Put the sticks back as they were
+	GESS_CALROW_COUNT
+};
+
+// Look sensitivity steps 1-10 in the START menu: 5 is the normal look speed (1.0x),
+// 1 is 0.4x, 10 is 2x (0.15 a step below 5, 0.2 a step above)
+#define GESS_SENS_STEPS		10
+#define GESS_SENS_DEFAULT	5
+inline float GESS_SensFromStep( int step )
+{
+	step = step < 1 ? 1 : ( step > GESS_SENS_STEPS ? GESS_SENS_STEPS : step );
+	return step <= GESS_SENS_DEFAULT ? 1.0f - ( GESS_SENS_DEFAULT - step ) * 0.15f : 1.0f + ( step - GESS_SENS_DEFAULT ) * 0.2f;
+}
+inline int GESS_StepFromSens( float sens )
+{
+	int best = 1;
+	for ( int s = 2; s <= GESS_SENS_STEPS; s++ )
+	{
+		const float d = GESS_SensFromStep( s ) - sens, db = GESS_SensFromStep( best ) - sens;
+		if ( d * d < db * db )
+			best = s;
+	}
+	return best;
+}
 
 // The Exit page's buttons (top to bottom), and what a confirmation box is asking
 enum
@@ -76,6 +122,8 @@ enum
 	GESS_MENUHIT_BUTTON,	// A button on the page (arg: which)
 	GESS_MENUHIT_CONFIRM,	// A confirmation box answer (arg: 0 cancel, 1 confirm)
 	GESS_MENUHIT_TEAM,		// Swap team
+	GESS_MENUHIT_ROW,		// A row of the Controller page or Calibrate Sticks screen (arg: which)
+	GESS_MENUHIT_SLIDER,	// Its slider (arg: the row; where along it: frac 0-1)
 };
 
 // Team menu entries
@@ -116,7 +164,16 @@ public:
 	// Player 1's START menu takes the mouse (a cursor shows; clicks don't fire)
 	bool WantsMenuMouse() const;
 	// The mouse over (bClick false) or clicking (true) something in player 1's START menu
-	void OnMenuMouse( int hit, int arg, bool bClick );
+	// (frac: how far along a slider, 0-1)
+	void OnMenuMouse( int hit, int arg, bool bClick, float frac = 0.0f );
+	// The Controller page: the highlighted row (GESS_CTRLROW_), whether the Calibrate
+	// Sticks screen is open, its highlighted row (GESS_CALROW_)
+	int  GetSlotCtrlRow( int slot ) const				{ return m_Slots[slot].ctrlRow; }
+	bool IsSlotCalibrateOpen( int slot ) const			{ return m_Slots[slot].calOpen; }
+	int  GetSlotCalRow( int slot ) const				{ return m_Slots[slot].calRow; }
+	// The player's look settings (their profile's; a Guest's last until they leave)
+	bool GetSlotInvert( int slot ) const;
+	int  GetSlotSensStep( int slot ) const;
 	// Right click: back (closes a confirmation box, else the menu)
 	void OnMenuMouseBack();
 	bool IsGameMenuPageAvailable( int page ) const;
@@ -254,9 +311,25 @@ private:
 		bool	debugNoPad;		// Joined with ges_ss_debug_join: works without a controller
 		float	menuRepeatTime;		// Stick navigation repeat timer
 		int		team;				// Chosen team (TEAM_MI6 / TEAM_JANUS / MAX_GE_TEAMS = auto), 0 = not asked yet
+		// START menu Controller page
+		int		ctrlRow;			// Highlighted row (GESS_CTRLROW_)
+		bool	calOpen;			// Calibrate Sticks screen open
+		int		calRow;				// Its highlighted row (GESS_CALROW_)
+		int		calPad;				// The controller it opened for (-1 none)
+		CGESSGamepads::StickCal_t calBackup[2];	// The sticks as they were (Back puts them back)
 	};
 
 	const struct GESSProfile_t &GetSlotProfileData( int slot ) const;
+	// Look settings changed in the START menu go here: the profile, or for Guest this slot's copy
+	GESSProfile_t *GetSlotProfileForEdit( int slot );
+	GESSProfile_t m_GuestProfile[GES_SS_MAX_PLAYERS];
+	void SetSlotSensStep( int slot, int step );
+	void ToggleSlotInvert( int slot );
+	void OpenCalibrate( int slot );
+	void CloseCalibrate( int slot, bool bKeep );
+	void SetCalDeadzone( int slot, int stick, float inner );
+	// The Controller page and Calibrate Sticks screen with a controller (false: not on them)
+	bool UpdateControllerPage( int slot, const GESSPadState_t &pad, int vdir, float dt );
 	bool IsInGame() const;
 	bool IsGameUIVisible() const;
 

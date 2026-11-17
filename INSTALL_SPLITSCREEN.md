@@ -110,7 +110,7 @@ In the game:
 | A | Use (doors, buttons) |
 | B or left stick click | Crouch |
 | Right stick click | Jump (when the match allows jumping) |
-| START | Your menu: scoreboard, swap team, exit, commit suicide (player 1: the mouse works there too) |
+| START | Your menu: scoreboard, swap team, controller settings (invert, sensitivity, calibrate sticks), exit, commit suicide (player 1: the mouse works there too) |
 
 Keyboard and mouse are off during split screen matches. The game's pause menu doesn't open during
 a match: Esc (or a controller's own pause button) opens player 1's START menu instead, which has

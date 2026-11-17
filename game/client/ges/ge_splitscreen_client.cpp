@@ -362,6 +362,12 @@ CGESplitScreenClient::CGESplitScreenClient() : CAutoGameSystemPerFrame( "CGESpli
 		s.profileChosen = false;
 		s.debugNoPad = false;
 		s.team = 0;
+		s.ctrlRow = GESS_CTRLROW_PAGE;
+		s.calOpen = false;
+		s.calRow = GESS_CALROW_REMEASURE;
+		s.calPad = -1;
+		memset( s.calBackup, 0, sizeof( s.calBackup ) );
+		m_GuestProfile[i] = CGESSProfiles::DefaultProfile();
 		m_iSlotPad[i] = -1;
 		m_bSlotHadPad[i] = false;
 		m_SlotViews[i].frame = 0;
@@ -685,7 +691,13 @@ C_BasePlayer *CGESplitScreenClient::GetSlotPlayer( int slot ) const
 const GESSProfile_t &CGESplitScreenClient::GetSlotProfileData( int slot ) const
 {
 	const GESSProfile_t *p = GESSProfiles()->Get( m_Slots[slot].profile );
-	return p ? *p : CGESSProfiles::DefaultProfile();
+	return p ? *p : m_GuestProfile[slot];
+}
+
+GESSProfile_t *CGESplitScreenClient::GetSlotProfileForEdit( int slot )
+{
+	GESSProfile_t *p = GESSProfiles()->Get( m_Slots[slot].profile );
+	return p ? p : &m_GuestProfile[slot];
 }
 
 const char *CGESplitScreenClient::GetSlotName( int slot ) const
@@ -1218,6 +1230,14 @@ void CGESplitScreenClient::Update( float frametime )
 			joystick.SetValue( 0 );
 			DevMsg( "Split screen: turned the engine's joystick input off (split screen reads the controllers)\n" );
 		}
+	}
+
+	// A player with their START menu open isn't playing: their sticks can be measured
+	// at rest (the Controller page's Calibrate Sticks) even in a match
+	for ( int pad = 0; pad < GES_SS_MAX_PADS; pad++ )
+	{
+		const int slot = GetPadSlot( pad );
+		GESSGamepads()->SetPadInMenu( pad, slot >= 0 && m_Slots[slot].menu != GESS_MENU_NONE );
 	}
 
 	GESSGamepads()->Poll();
@@ -1877,6 +1897,8 @@ void CGESplitScreenClient::OpenGameMenu( int slot )
 	s.menuConfirm = GESS_CONFIRM_NONE;
 	s.menuConfirmSel = 0;
 	s.menuRepeatTime = 0;
+	s.ctrlRow = GESS_CTRLROW_PAGE;
+	s.calOpen = false;
 }
 
 void CGESplitScreenClient::CycleGameMenuPage( int slot, int dir )
@@ -1892,6 +1914,7 @@ void CGESplitScreenClient::CycleGameMenuPage( int slot, int dir )
 	s.menuSel = page;
 	s.menuSub = GESS_EXITBTN_EXIT;
 	s.menuConfirm = GESS_CONFIRM_NONE;
+	s.ctrlRow = GESS_CTRLROW_PAGE;
 }
 
 // The suicide button's label: the localization string #GES_SS_Suicide
@@ -2028,6 +2051,13 @@ void CGESplitScreenClient::UpdateGameMenu( int slot, const GESSPadState_t &pad, 
 		return;
 	}
 
+	// The Controller page's settings and its Calibrate Sticks screen
+	if ( UpdateControllerPage( slot, pad, vdir, dt ) )
+	{
+		GESSGamepads()->ConsumeEdges( GetSlotPad( slot ) );
+		return;
+	}
+
 	// Left / right: next page (d-pad or left stick, with repeat)
 	int dir = 0;
 	if ( pad.WasPressed( GESS_PAD_DPAD_LEFT ) )
@@ -2083,7 +2113,7 @@ bool CGESplitScreenClient::WantsMenuMouse() const
 		engine->IsInGame() && !engine->IsLevelMainMenuBackground() && !enginevgui->IsGameUIVisible() && !engine->Con_IsVisible();
 }
 
-void CGESplitScreenClient::OnMenuMouse( int hit, int arg, bool bClick )
+void CGESplitScreenClient::OnMenuMouse( int hit, int arg, bool bClick, float frac )
 {
 	LocalSlot_t &s = m_Slots[0];
 	if ( s.menu != GESS_MENU_PAUSE || hit == GESS_MENUHIT_NONE )
@@ -2091,6 +2121,38 @@ void CGESplitScreenClient::OnMenuMouse( int hit, int arg, bool bClick )
 
 	switch ( hit )
 	{
+	case GESS_MENUHIT_ROW:
+	case GESS_MENUHIT_SLIDER:
+		if ( s.menuConfirm != GESS_CONFIRM_NONE || s.menuSel != GESS_GAMEPAGE_CONTROLLER )
+			break;
+		frac = clamp( frac, 0.0f, 1.0f );
+		if ( s.calOpen )
+		{
+			s.calRow = clamp( arg, 0, GESS_CALROW_COUNT - 1 );	// Pointing at it highlights it
+			if ( !bClick )
+				break;
+			if ( hit == GESS_MENUHIT_SLIDER && ( arg == GESS_CALROW_LEFT || arg == GESS_CALROW_RIGHT ) )
+			{
+				const float lo = CGESSGamepads::GetDeadzoneMin(), hi = CGESSGamepads::GetDeadzoneMax();
+				SetCalDeadzone( 0, arg == GESS_CALROW_LEFT ? 0 : 1, lo + ( hi - lo ) * frac );
+			}
+			else if ( arg == GESS_CALROW_REMEASURE )
+				GESSGamepads()->RecalibratePad( s.calPad );
+			else if ( arg == GESS_CALROW_DONE || arg == GESS_CALROW_BACK )
+				CloseCalibrate( 0, arg == GESS_CALROW_DONE );
+			break;
+		}
+		s.ctrlRow = clamp( arg, 0, GESS_CTRLROW_COUNT - 1 );
+		if ( !bClick )
+			break;
+		if ( arg == GESS_CTRLROW_INVERT )
+			ToggleSlotInvert( 0 );
+		else if ( arg == GESS_CTRLROW_SENS && hit == GESS_MENUHIT_SLIDER )
+			SetSlotSensStep( 0, 1 + (int)( frac * ( GESS_SENS_STEPS - 1 ) + 0.5f ) );
+		else if ( arg == GESS_CTRLROW_CALIBRATE )
+			OpenCalibrate( 0 );
+		break;
+
 	case GESS_MENUHIT_PREV:
 	case GESS_MENUHIT_NEXT:
 		if ( bClick && s.menuConfirm == GESS_CONFIRM_NONE )
@@ -2125,8 +2187,177 @@ void CGESplitScreenClient::OnMenuMouseBack()
 	LocalSlot_t &s = m_Slots[0];
 	if ( s.menuConfirm != GESS_CONFIRM_NONE )
 		s.menuConfirm = GESS_CONFIRM_NONE;
+	else if ( s.calOpen )
+		CloseCalibrate( 0, false );
 	else
 		s.menu = GESS_MENU_NONE;
+}
+
+//-----------------------------------------------------------------------------
+// The START menu's Controller page
+//
+// Rows: the page title (left / right change page there, as on every page), Invert
+// Look Up/Down (A or left / right toggle it), Look Sensitivity (left / right, 1-10,
+// 5 = the normal look speed) and Calibrate Sticks (A opens it). Invert and
+// sensitivity are the player's profile's (saved with it, used at once); a Guest's
+// last until they leave.
+//
+// Calibrate Sticks shows both sticks live with their dead zone circles. Re-measure
+// (or R3) is the lobby's R3 measurement: leave the sticks alone, then turn them
+// round. The dead zone sliders set them by hand (0.01 steps). Done keeps it all
+// (saved per controller in cfg/ges_splitscreen_pads.txt), Back (or B) puts the
+// sticks back as they were when the screen opened.
+//-----------------------------------------------------------------------------
+bool CGESplitScreenClient::GetSlotInvert( int slot ) const
+{
+	return GetSlotProfileData( slot ).invertY;
+}
+
+int CGESplitScreenClient::GetSlotSensStep( int slot ) const
+{
+	return GESS_StepFromSens( GetSlotProfileData( slot ).sensitivity );
+}
+
+void CGESplitScreenClient::SetSlotSensStep( int slot, int step )
+{
+	GESSProfile_t *p = GetSlotProfileForEdit( slot );
+	const float sens = clamp( GESS_SensFromStep( step ), GES_SS_SENS_MIN, GES_SS_SENS_MAX );
+	if ( p->sensitivity == sens )
+		return;
+	p->sensitivity = sens;
+	if ( m_Slots[slot].profile >= 0 )
+		GESSProfiles()->Save();
+}
+
+void CGESplitScreenClient::ToggleSlotInvert( int slot )
+{
+	GESSProfile_t *p = GetSlotProfileForEdit( slot );
+	p->invertY = !p->invertY;
+	if ( m_Slots[slot].profile >= 0 )
+		GESSProfiles()->Save();
+}
+
+void CGESplitScreenClient::OpenCalibrate( int slot )
+{
+	LocalSlot_t &s = m_Slots[slot];
+	const int pad = GetSlotPad( slot );
+	if ( pad < 0 || !GESSGamepads()->GetPad( pad ).connected )
+		return;
+	s.calOpen = true;
+	s.calRow = GESS_CALROW_REMEASURE;
+	s.calPad = pad;
+	for ( int st = 0; st < 2; st++ )
+		s.calBackup[st] = GESSGamepads()->GetStickCal( pad, st );
+}
+
+void CGESplitScreenClient::CloseCalibrate( int slot, bool bKeep )
+{
+	LocalSlot_t &s = m_Slots[slot];
+	if ( !s.calOpen )
+		return;
+	s.calOpen = false;
+	s.ctrlRow = GESS_CTRLROW_CALIBRATE;
+	if ( s.calPad < 0 )
+		return;
+	if ( !bKeep )
+	{
+		for ( int st = 0; st < 2; st++ )
+			GESSGamepads()->RestoreStickCal( s.calPad, st, s.calBackup[st] );
+	}
+	GESSGamepads()->SaveCalibration();
+}
+
+void CGESplitScreenClient::SetCalDeadzone( int slot, int stick, float inner )
+{
+	const LocalSlot_t &s = m_Slots[slot];
+	// Whole hundredths, as the slider shows them
+	GESSGamepads()->SetStickDeadzone( s.calPad, stick, floorf( inner * 100.0f + 0.5f ) / 100.0f );
+}
+
+bool CGESplitScreenClient::UpdateControllerPage( int slot, const GESSPadState_t &pad, int vdir, float dt )
+{
+	LocalSlot_t &s = m_Slots[slot];
+	if ( s.menuSel != GESS_GAMEPAGE_CONTROLLER )
+	{
+		s.calOpen = false;
+		return false;
+	}
+
+	// The controller went away (or changed) while calibrating: keep what was done
+	if ( s.calOpen && s.calPad != GetSlotPad( slot ) )
+		CloseCalibrate( slot, true );
+
+	// On the title row left / right change page as usual; down goes into the settings
+	if ( !s.calOpen && s.ctrlRow == GESS_CTRLROW_PAGE )
+	{
+		if ( vdir > 0 || ( pad.ly < -0.6f && fabsf( pad.lx ) < 0.3f ) )
+		{
+			s.ctrlRow = GESS_CTRLROW_INVERT;
+			s.menuRepeatTime = GESS_MENU_REPEAT;
+			return true;
+		}
+		return false;
+	}
+
+	// Left stick up / down / left / right with repeat, as well as the d-pad
+	int hdir = pad.WasPressed( GESS_PAD_DPAD_LEFT ) ? -1 : ( pad.WasPressed( GESS_PAD_DPAD_RIGHT ) ? 1 : 0 );
+	if ( !vdir && !hdir )
+	{
+		const bool bV = fabsf( pad.ly ) > 0.5f && fabsf( pad.ly ) >= fabsf( pad.lx );
+		const bool bH = fabsf( pad.lx ) > 0.5f && fabsf( pad.lx ) > fabsf( pad.ly );
+		if ( bV || bH )
+		{
+			s.menuRepeatTime -= dt;
+			if ( s.menuRepeatTime <= 0 )
+			{
+				if ( bV )
+					vdir = pad.ly > 0 ? -1 : 1;
+				else
+					hdir = pad.lx > 0 ? 1 : -1;
+				s.menuRepeatTime = GESS_MENU_REPEAT;
+			}
+		}
+		else
+		{
+			s.menuRepeatTime = 0;
+		}
+	}
+	const bool bA = pad.WasPressed( GESS_PAD_A ) || pad.WasPressed( GESS_PAD_RT );
+
+	if ( s.calOpen )
+	{
+		if ( vdir )
+			s.calRow = clamp( s.calRow + vdir, 0, GESS_CALROW_COUNT - 1 );
+		if ( pad.WasPressed( GESS_PAD_RSTICK ) || ( bA && s.calRow == GESS_CALROW_REMEASURE ) )
+			GESSGamepads()->RecalibratePad( s.calPad );
+		else if ( hdir && ( s.calRow == GESS_CALROW_LEFT || s.calRow == GESS_CALROW_RIGHT ) )
+		{
+			const int st = s.calRow == GESS_CALROW_LEFT ? 0 : 1;
+			SetCalDeadzone( slot, st, GESSGamepads()->GetStickCal( s.calPad, st ).inner + hdir * 0.01f );
+		}
+		else if ( bA && ( s.calRow == GESS_CALROW_DONE || s.calRow == GESS_CALROW_BACK ) )
+			CloseCalibrate( slot, s.calRow == GESS_CALROW_DONE );
+		else if ( pad.WasPressed( GESS_PAD_B ) )
+			CloseCalibrate( slot, false );
+		else if ( pad.WasPressed( GESS_PAD_START ) )
+		{
+			CloseCalibrate( slot, true );
+			s.menu = GESS_MENU_NONE;
+		}
+		return true;
+	}
+
+	if ( vdir )
+		s.ctrlRow = clamp( s.ctrlRow + vdir, (int) GESS_CTRLROW_PAGE, GESS_CTRLROW_COUNT - 1 );
+	else if ( s.ctrlRow == GESS_CTRLROW_INVERT && ( hdir || bA ) )
+		ToggleSlotInvert( slot );
+	else if ( s.ctrlRow == GESS_CTRLROW_SENS && hdir )
+		SetSlotSensStep( slot, GetSlotSensStep( slot ) + hdir );
+	else if ( s.ctrlRow == GESS_CTRLROW_CALIBRATE && bA )
+		OpenCalibrate( slot );
+	else if ( pad.WasPressed( GESS_PAD_B ) || pad.WasPressed( GESS_PAD_START ) )
+		s.menu = GESS_MENU_NONE;
+	return true;
 }
 
 void CGESplitScreenClient::UpdateMenu( int slot, const GESSPadState_t &pad, float dt )
@@ -2388,6 +2619,8 @@ void CGESplitScreenClient::LeaveSlot( int slot )
 	s.menu = GESS_MENU_NONE;
 	s.profile = -1;
 	s.team = 0;
+	s.calOpen = false;
+	m_GuestProfile[slot] = CGESSProfiles::DefaultProfile();	// A Guest's look settings go with them
 	m_bSlotHadPad[slot] = m_iSlotPad[slot] >= 0;
 	s.angleResetSeen = -1;
 	s.pendingCycle = 0;

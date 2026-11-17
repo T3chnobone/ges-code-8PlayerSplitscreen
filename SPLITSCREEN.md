@@ -187,7 +187,8 @@ out again for the players who are playing. The spare cell lists who is in while 
 - **While playing**: START opens that player's menu in their own view (the game carries on). It
   opens on the **leaderboard** (GoldenEye's own scoreboard, with their row highlighted and their health and armour shown); left / right go to the
   other pages: **Swap team** (team games: A or the right trigger moves them to the other team and
-  respawns them at once) and **Exit game**. The pages have a dark background and no border. The
+  respawns them at once), **Controller** (below) and **Exit game**. The pages have a dark
+  background and no border. The
   Exit game page has two buttons, chosen with up / down and A or the right trigger: **Exit game**
   and, under it, **Commit Suicide and Respawn**. Each asks first (Cancel / Confirm, starting on
   Cancel; B also cancels). A player who exits leaves the match and the screen is split again for
@@ -199,11 +200,31 @@ out again for the players who are playing. The spare cell lists who is in while 
   `ges_ss_suicide_instant_respawn 1` respawns them straight away instead, skipping the death
   screen. START or B closes the menu. The Back button does nothing in split screen. There is no
   Change profile page any more: players pick their profile in the lobby.
+- **Controller page** (in the START menu): the page title is a row of its own; while it's
+  highlighted left / right change page as on every page, down goes into the settings. There,
+  up / down choose and left / right change:
+  - **Invert Look Up/Down**: On / Off (A also toggles it).
+  - **Look Sensitivity**: 1 to 10. 5 is the normal look speed; 1 is 0.4x, 10 is 2x.
+  - **Calibrate Sticks** (A): both sticks live, each in a circle (its full range) with a gold
+    circle for its dead zone around where it rests, and a dot where the stick is (green once it's
+    outside the dead zone). **Re-measure (R3)** (or R3 anywhere on the screen) is the lobby's R3
+    measurement: leave both sticks alone, then turn them all the way round; the line above the
+    rows says how it's going. **Left dead zone** / **Right dead zone** set them by hand in 0.01
+    steps (later automatic measurements only make them wider). **Done** keeps it all; **Back**
+    (or B) puts the sticks back as they were when the screen opened.
+
+  Invert and sensitivity are saved with the player's profile (the same settings as on the Profiles
+  page) and apply at once. A Guest's last until they leave. Dead zones belong to the controller,
+  not the player: they're saved per physical pad in `cfg\ges_splitscreen_pads.txt`, and apply at
+  once. While a player's START menu is open their sticks count as resting, so a measurement works
+  in the middle of a match.
 - **The mouse in player 1's START menu**: there's one mouse and it's player 1's, so while their
   START menu is open in a match a cursor shows. Click **<** / **>** to change page (on the
   leaderboard they sit halfway down its sides), click a button to choose it, click Cancel / Confirm
-  to answer; the right button goes back (closes the question, else the menu). Clicks don't fire
-  while it's open, and the controller still works as before. `ges_ss_menu_mouse 0` turns it off.
+  to answer; the right button goes back (closes the question or Calibrate Sticks, else the menu).
+  On the Controller page, click a row (Invert toggles), click along a slider to set it. Clicks
+  don't fire while it's open, and the controller still works as before. `ges_ss_menu_mouse 0`
+  turns it off.
 - Guests stay through map changes. They leave when player 1 leaves.
 
 Controllers belong to players in the order they press a button. When the game starts no
