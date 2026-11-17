@@ -46,6 +46,10 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
+// The menu is laid out in 1080p pixels, grown by GEMenuScale() (1080p and up,
+// like the font sizes in GESMenuScheme.res, see ge_panelhelper.h)
+#define GESS_PX( v ) GEMenuScaled( v )
+
 using namespace vgui;
 
 #define GES_SS_SENS_SLIDER_SCALE 100.0f
@@ -295,22 +299,22 @@ public:
 		surface()->DrawOutlinedRect( 0, 0, w, h );
 
 		// Title and the text being typed
-		DrawString( m_hSmallFont, 12, 8, Color( 230, 200, 80, 255 ), m_szTitle );
+		DrawString( m_hSmallFont, GESS_PX( 12 ), GESS_PX( 8 ), Color( 230, 200, 80, 255 ), m_szTitle );
 
-		const int fieldY = 30, fieldH = 32;
+		const int fieldY = GESS_PX( 30 ), fieldH = GESS_PX( 32 ), margin = GESS_PX( 12 );
 		surface()->DrawSetColor( Color( 38, 38, 38, 255 ) );
-		surface()->DrawFilledRect( 12, fieldY, w - 12, fieldY + fieldH );
+		surface()->DrawFilledRect( margin, fieldY, w - margin, fieldY + fieldH );
 		surface()->DrawSetColor( Color( 90, 90, 90, 255 ) );
-		surface()->DrawOutlinedRect( 12, fieldY, w - 12, fieldY + fieldH );
+		surface()->DrawOutlinedRect( margin, fieldY, w - margin, fieldY + fieldH );
 
 		char shown[80];
 		const bool bBlink = ( (int)( gpGlobals->realtime * 2.0f ) & 1 ) == 0;
 		Q_snprintf( shown, sizeof( shown ), "%s%s", m_szText, bBlink ? "_" : " " );
-		DrawString( m_hFont, 20, fieldY + ( fieldH - surface()->GetFontTall( m_hFont ) ) / 2, Color( 255, 255, 255, 255 ), shown );
+		DrawString( m_hFont, GESS_PX( 20 ), fieldY + ( fieldH - surface()->GetFontTall( m_hFont ) ) / 2, Color( 255, 255, 255, 255 ), shown );
 
 		char count[16];
 		Q_snprintf( count, sizeof( count ), "%d/%d", Q_strlen( m_szText ), m_iMaxLen );
-		DrawString( m_hSmallFont, w - 12 - TextWide( m_hSmallFont, count ) - 6, fieldY + fieldH + 2, Color( 150, 150, 150, 255 ), count );
+		DrawString( m_hSmallFont, w - margin - TextWide( m_hSmallFont, count ) - GESS_PX( 6 ), fieldY + fieldH + GESS_PX( 2 ), Color( 150, 150, 150, 255 ), count );
 
 		// Keys
 		for ( int row = 0; row < GESS_OSK_ROWS; row++ )
@@ -340,7 +344,7 @@ public:
 		}
 
 		const char *hint = "A: type   X: delete   Y: space   LB: shift   RB: done   B: cancel";
-		DrawString( m_hSmallFont, ( w - TextWide( m_hSmallFont, hint ) ) / 2, h - 22, Color( 190, 190, 190, 255 ), hint );
+		DrawString( m_hSmallFont, ( w - TextWide( m_hSmallFont, hint ) ) / 2, h - GESS_PX( 22 ), Color( 190, 190, 190, 255 ), hint );
 	}
 
 private:
@@ -378,9 +382,9 @@ private:
 	// Key rectangles: rows of 10 equal keys, the bottom row split into the special keys
 	void KeyRect( int row, int key, int &x0, int &y0, int &x1, int &y1 )
 	{
-		const int top = 82, margin = 12, gap = 4;
+		const int top = GESS_PX( 82 ), margin = GESS_PX( 12 ), gap = GESS_PX( 4 );
 		const int keyW = ( GetWide() - margin * 2 - gap * ( GESS_OSK_COLS - 1 ) ) / GESS_OSK_COLS;
-		const int keyH = ( GetTall() - top - 30 - gap * ( GESS_OSK_ROWS - 1 ) ) / GESS_OSK_ROWS;
+		const int keyH = ( GetTall() - top - GESS_PX( 30 ) - gap * ( GESS_OSK_ROWS - 1 ) ) / GESS_OSK_ROWS;
 
 		const int c0 = row < 4 ? key : s_OSKSpecialCol[key];
 		const int c1 = row < 4 ? key + 1 : s_OSKSpecialCol[key + 1];
@@ -607,7 +611,7 @@ public:
 		surface()->DrawFilledRect( 0, 0, w, h );
 		surface()->DrawSetColor( Color( 185, 168, 90, 255 ) );
 		surface()->DrawOutlinedRect( 0, 0, w, h );
-		DrawString( m_hSmallFont, 12, 8, Color( 230, 200, 80, 255 ), "Choose a character" );
+		DrawString( m_hSmallFont, GESS_PX( 12 ), GESS_PX( 8 ), Color( 230, 200, 80, 255 ), "Choose a character" );
 
 		// Portrait grid
 		int cell, gx, gy, rows;
@@ -633,31 +637,37 @@ public:
 		// More rows above / below
 		const int totalRows = ( m_Chars.Count() + m_iCols - 1 ) / m_iCols;
 		if ( m_iFirstRow > 0 )
-			DrawString( m_hSmallFont, gx + m_iCols * cell / 2 - 4, gy - 16, Color( 230, 200, 80, 255 ), "^" );
+			DrawString( m_hSmallFont, gx + m_iCols * cell / 2 - GESS_PX( 4 ), gy - GESS_PX( 16 ), Color( 230, 200, 80, 255 ), "^" );
 		if ( m_iFirstRow + rows < totalRows )
-			DrawString( m_hSmallFont, gx + m_iCols * cell / 2 - 4, gy + rows * cell + 2, Color( 230, 200, 80, 255 ), "v" );
+			DrawString( m_hSmallFont, gx + m_iCols * cell / 2 - GESS_PX( 4 ), gy + rows * cell + GESS_PX( 2 ), Color( 230, 200, 80, 255 ), "v" );
 
 		// Preview of the selected character
 		if ( m_Chars.IsValidIndex( m_iSel ) )
 		{
 			const CGECharData *pChar = m_Chars[m_iSel];
-			const int px = gx + m_iCols * cell + 20;
-			const int pw = w - px - 14;
-			const int pSize = Min( pw, h / 2 );
+			const int px = gx + m_iCols * cell + GESS_PX( 20 );
+			const int pw = w - px - GESS_PX( 14 );
+			const int pTop = GESS_PX( 34 );
+			char bio[1024];
+			Localized( pChar->szBio, bio, sizeof( bio ) );
+
+			// The portrait gives up room so the whole bio fits under it
+			const int bioBottom = h - GESS_PX( 60 );
+			const int nameTall = surface()->GetFontTall( m_hFont ) + GESS_PX( 6 );
+			const int bioTall = DrawWrapped( m_hSmallFont, px, 0, pw, 100000, Color( 0, 0, 0, 0 ), bio, false );
+			const int pSize = Max( GESS_PX( 48 ), Min( Min( pw, h / 2 ), bioBottom - bioTall - nameTall - GESS_PX( 10 ) - pTop ) );
 			const int pLeft = px + ( pw - pSize ) / 2;
-			DrawPortrait( pChar, true, pLeft, 34, pSize, pSize );
+			DrawPortrait( pChar, true, pLeft, pTop, pSize, pSize );
 			surface()->DrawSetColor( Color( 185, 168, 90, 255 ) );
-			surface()->DrawOutlinedRect( pLeft - 1, 33, pLeft + pSize + 1, 35 + pSize );
+			surface()->DrawOutlinedRect( pLeft - 1, pTop - 1, pLeft + pSize + 1, pTop + 1 + pSize );
 
 			char name[128];
 			Localized( pChar == GECharacters()->GetRandomChar() ? "Random" : pChar->szPrintName, name, sizeof( name ) );
-			int y = 44 + pSize;
+			int y = pTop + GESS_PX( 10 ) + pSize;
 			DrawString( m_hFont, px + ( pw - TextWide( m_hFont, name ) ) / 2, y, Color( 255, 255, 255, 255 ), name );
-			y += surface()->GetFontTall( m_hFont ) + 6;
+			y += nameTall;
 
-			char bio[1024];
-			Localized( pChar->szBio, bio, sizeof( bio ) );
-			DrawWrapped( m_hSmallFont, px, y, pw, h - 60 - y, Color( 200, 200, 200, 255 ), bio );
+			DrawWrapped( m_hSmallFont, px, y, pw, bioBottom - y, Color( 200, 200, 200, 255 ), bio );
 		}
 
 		// Choose / Cancel
@@ -673,7 +683,7 @@ public:
 			DrawString( m_hSmallFont, ( x0 + x1 - TextWide( m_hSmallFont, label ) ) / 2, ( y0 + y1 - surface()->GetFontTall( m_hSmallFont ) ) / 2, Color( 255, 255, 255, 255 ), label );
 		}
 
-		DrawString( m_hSmallFont, 12, h - 22, Color( 190, 190, 190, 255 ), "D-pad / stick: move   A: choose   B: cancel" );
+		DrawString( m_hSmallFont, GESS_PX( 12 ), h - GESS_PX( 22 ), Color( 190, 190, 190, 255 ), "D-pad / stick: move   A: choose   B: cancel" );
 	}
 
 private:
@@ -703,11 +713,11 @@ private:
 	void GridLayout( int &cell, int &gx, int &gy, int &rows )
 	{
 		const int w = GetWide(), h = GetTall();
-		gx = 14;
-		gy = 34;
+		gx = GESS_PX( 14 );
+		gy = GESS_PX( 34 );
 		const int gridW = w * 6 / 10 - gx;
-		const int gridH = h - gy - 60;
-		cell = Max( 24, gridW / m_iCols );
+		const int gridH = h - gy - GESS_PX( 60 );
+		cell = Max( GESS_PX( 24 ), gridW / m_iCols );
 		rows = Max( 1, gridH / cell );
 	}
 
@@ -736,10 +746,10 @@ private:
 	void ButtonRect( bool bChoose, int &x0, int &y0, int &x1, int &y1 )
 	{
 		const int w = GetWide(), h = GetTall();
-		x1 = bChoose ? w - 14 - 110 : w - 14;
-		x0 = x1 - 100;
-		y0 = h - 44;
-		y1 = h - 14;
+		x1 = bChoose ? w - GESS_PX( 14 + 110 ) : w - GESS_PX( 14 );
+		x0 = x1 - GESS_PX( 100 );
+		y0 = h - GESS_PX( 44 );
+		y1 = h - GESS_PX( 14 );
 	}
 
 	bool HitButton( bool bChoose )
@@ -793,10 +803,12 @@ private:
 		surface()->DrawPrintText( wbuf, wcslen( wbuf ) );
 	}
 
-	// Word wrapped text inside a box
-	void DrawWrapped( HFont font, int x, int y, int w, int h, Color col, const char *text )
+	// Word wrapped text inside a box; returns the height of the lines (bDraw false:
+	// only measures)
+	int DrawWrapped( HFont font, int x, int y, int w, int h, Color col, const char *text, bool bDraw = true )
 	{
 		const int lineTall = surface()->GetFontTall( font ) + 2;
+		const int y0 = y;
 		char line[256] = "";
 		const char *p = text;
 		while ( *p && h >= lineTall )
@@ -810,7 +822,8 @@ private:
 			Q_snprintf( test, sizeof( test ), "%s%s%.*s", line, line[0] ? " " : "", (int)( wordEnd - p ), p );
 			if ( line[0] && TextWide( font, test ) > w )
 			{
-				DrawString( font, x, y, col, line );
+				if ( bDraw )
+					DrawString( font, x, y, col, line );
 				y += lineTall; h -= lineTall;
 				line[0] = 0;
 				continue;	// same word on the next line
@@ -819,14 +832,20 @@ private:
 			p = wordEnd;
 			if ( *p == '\n' )
 			{
-				DrawString( font, x, y, col, line );
+				if ( bDraw )
+					DrawString( font, x, y, col, line );
 				y += lineTall; h -= lineTall;
 				line[0] = 0;
 				p++;
 			}
 		}
 		if ( line[0] && h >= lineTall )
-			DrawString( font, x, y, col, line );
+		{
+			if ( bDraw )
+				DrawString( font, x, y, col, line );
+			y += lineTall;
+		}
+		return y - y0;
 	}
 
 	CUtlVector<const CGECharData *> m_Chars;
@@ -942,12 +961,12 @@ public:
 		surface()->DrawSetColor( Color( 185, 168, 90, 255 ) );
 		surface()->DrawOutlinedRect( bx0, by0, bx1, by1 );
 
-		const int pad = 18;
+		const int pad = GESS_PX( 18 );
 		int y = by0 + pad;
 		DrawString( m_hFont, bx0 + pad, y, Color( 230, 200, 80, 255 ), "Split screen is played with controllers" );
-		y += surface()->GetFontTall( m_hFont ) + 12;
+		y += surface()->GetFontTall( m_hFont ) + GESS_PX( 12 );
 
-		DrawWrapped( m_hSmallFont, bx0 + pad, y, bx1 - bx0 - pad * 2, by1 - y - 90, Color( 230, 230, 230, 255 ),
+		DrawWrapped( m_hSmallFont, bx0 + pad, y, bx1 - bx0 - pad * 2, by1 - y - GESS_PX( 90 ), Color( 230, 230, 230, 255 ),
 			"Keyboard and mouse are turned off during split screen matches (Esc and the console still work).\n"
 			"\n"
 			"Player 1 is the first controller to press a button. The other players press START here to join.\n"
@@ -966,7 +985,7 @@ public:
 		surface()->DrawOutlinedRect( x0, y0, x0 + box, y1 );
 		if ( m_bDontShow )
 			DrawString( m_hSmallFont, x0 + ( box - TextWide( m_hSmallFont, "X" ) ) / 2, y0 + ( box - surface()->GetFontTall( m_hSmallFont ) ) / 2, Color( 230, 200, 80, 255 ), "X" );
-		DrawString( m_hSmallFont, x0 + box + 8, y0 + ( box - surface()->GetFontTall( m_hSmallFont ) ) / 2, Color( 255, 255, 255, 255 ), "Don't show this again" );
+		DrawString( m_hSmallFont, x0 + box + GESS_PX( 8 ), y0 + ( box - surface()->GetFontTall( m_hSmallFont ) ) / 2, Color( 255, 255, 255, 255 ), "Don't show this again" );
 
 		Rect( 1, x0, y0, x1, y1 );
 		surface()->DrawSetColor( Color( 52, 52, 52, 255 ) );
@@ -978,10 +997,10 @@ public:
 		// Gold outline on the controller's choice
 		Rect( m_iFocus, x0, y0, x1, y1 );
 		surface()->DrawSetColor( Color( 230, 200, 80, 255 ) );
-		surface()->DrawOutlinedRect( x0 - 3, y0 - 3, x1 + 3, y1 + 3 );
-		surface()->DrawOutlinedRect( x0 - 2, y0 - 2, x1 + 2, y1 + 2 );
+		for ( int t = GESS_PX( 2 ); t <= GESS_PX( 3 ); t++ )
+			surface()->DrawOutlinedRect( x0 - t, y0 - t, x1 + t, y1 + t );
 
-		DrawString( m_hSmallFont, bx0 + pad, by1 - 22, Color( 190, 190, 190, 255 ), "D-pad: move   A: select   B: close" );
+		DrawString( m_hSmallFont, bx0 + pad, by1 - GESS_PX( 22 ), Color( 190, 190, 190, 255 ), "D-pad: move   A: select   B: close" );
 	}
 
 private:
@@ -1000,7 +1019,7 @@ private:
 	void BoxRect( int &x0, int &y0, int &x1, int &y1 )
 	{
 		const int w = GetWide(), h = GetTall();
-		const int bw = Min( w - 40, 560 ), bh = Min( h - 40, 440 );
+		const int bw = Min( w - GESS_PX( 40 ), GESS_PX( 560 ) ), bh = Min( h - GESS_PX( 40 ), GESS_PX( 440 ) );
 		x0 = ( w - bw ) / 2; y0 = ( h - bh ) / 2;
 		x1 = x0 + bw; y1 = y0 + bh;
 	}
@@ -1010,18 +1029,18 @@ private:
 	{
 		int bx0, by0, bx1, by1;
 		BoxRect( bx0, by0, bx1, by1 );
-		const int rowTall = Max( 22, surface()->GetFontTall( m_hSmallFont ) + 8 );
-		y1 = by1 - 34;
+		const int rowTall = Max( GESS_PX( 22 ), surface()->GetFontTall( m_hSmallFont ) + GESS_PX( 8 ) );
+		y1 = by1 - GESS_PX( 34 );
 		y0 = y1 - rowTall;
 		if ( which == 0 )
 		{
-			x0 = bx0 + 18;
-			x1 = x0 + rowTall + 8 + TextWide( m_hSmallFont, "Don't show this again" );
+			x0 = bx0 + GESS_PX( 18 );
+			x1 = x0 + rowTall + GESS_PX( 8 ) + TextWide( m_hSmallFont, "Don't show this again" );
 		}
 		else
 		{
-			x1 = bx1 - 18;
-			x0 = x1 - 100;
+			x1 = bx1 - GESS_PX( 18 );
+			x0 = x1 - GESS_PX( 100 );
 		}
 	}
 
@@ -1160,14 +1179,14 @@ public:
 
 		const int w = GetWide(), h = GetTall();
 		const int textTall = surface()->GetFontTall( m_hSmallFont );
-		const int gap = 12;
+		const int gap = GESS_PX( 12 );
 
 		// Displays as 16:9 screens side by side, as big as fit
 		int dw = ( w - gap * ( displays - 1 ) ) / displays;
 		int dh = dw * 9 / 16;
-		if ( dh > h - textTall - 8 )
+		if ( dh > h - textTall - GESS_PX( 8 ) )
 		{
-			dh = h - textTall - 8;
+			dh = h - textTall - GESS_PX( 8 );
 			dw = dh * 16 / 9;
 		}
 		const int totalW = dw * displays + gap * ( displays - 1 );
@@ -1220,7 +1239,7 @@ public:
 			Q_snprintf( text, sizeof( text ), "2 displays: up to %d players", total );
 		else
 			Q_snprintf( text, sizeof( text ), "1 display: up to %d players", total );
-		DrawString( m_hSmallFont, ( w - TextWide( m_hSmallFont, text ) ) / 2, dh + 6, Color( 230, 230, 230, 255 ), text );
+		DrawString( m_hSmallFont, ( w - TextWide( m_hSmallFont, text ) ) / 2, dh + GESS_PX( 6 ), Color( 230, 230, 230, 255 ), text );
 	}
 
 private:
@@ -1740,7 +1759,7 @@ static GameUI<CGESplitScreenMenu> g_GESplitScreenMenu;
 CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL, "GESplitScreenMenu" )
 {
 	SetParent( parent );
-	SetScheme( vgui::scheme()->LoadSchemeFromFile( "resource/SourceScheme.res", "SourceScheme" ) );
+	SetScheme( vgui::scheme()->LoadSchemeFromFile( "resource/GESMenuScheme.res", "GESMenuScheme" ) );	// SourceScheme with bigger fonts from 1080p, see ge_panelhelper.h
 	SetTitle( "Split Screen", true );
 	SetSizeable( false );
 	SetMoveable( true );
@@ -1925,7 +1944,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pCheatsBack, GESS_NAV_BUTTON, GESS_PAGE_CHEATS );
 	AddNav( m_pCloseButton, GESS_NAV_BUTTON, -1 );
 
-	SetSize( 600, 540 );
+	SetSize( GESS_PX( 600 ), GESS_PX( 540 ) );
 	SetVisible( false );
 }
 
@@ -2004,6 +2023,7 @@ void CGESplitScreenMenu::Activate()
 
 	m_Pads.Reset();
 	m_bPadFocusShown = GESSGamepads()->GetConnectedCount() > 0;
+	SetSize( GESS_PX( 600 ), GESS_PX( 540 ) );	// for the current resolution
 	MoveToCenterOfScreen();
 }
 
@@ -2053,97 +2073,116 @@ void CGESplitScreenMenu::SetPage( int page )
 void CGESplitScreenMenu::PerformLayout()
 {
 	BaseClass::PerformLayout();
+	GEMenuLayoutFrameButtons( this, GEMenuScale() );
 
-	const int x = 20, labelW = 170, fieldX = x + labelW, fieldW = GetWide() - fieldX - 20;
+	// In 1080p pixels, GESS_PX scales them for 1440p / 4K (the frame is GESS_PX( 600 ) x GESS_PX( 540 ))
+	#define P( v ) GESS_PX( v )
+	const int x = P( 20 ), labelW = P( 170 ), fieldX = x + labelW, fieldW = GetWide() - fieldX - P( 20 );
 	const int W = GetWide(), H = GetTall();
+	const int rowH = P( 24 );
 
-	m_pTabs[GESS_PAGE_PROFILES]->SetBounds( x, 36, 120, 26 );
-	m_pTabs[GESS_PAGE_MATCH]->SetBounds( x + 126, 36, 120, 26 );
+	m_pTabs[GESS_PAGE_PROFILES]->SetBounds( x, P( 36 ), P( 120 ), P( 26 ) );
+	m_pTabs[GESS_PAGE_MATCH]->SetBounds( x + P( 126 ), P( 36 ), P( 120 ), P( 26 ) );
 
 	// ---- Profiles ----
-	int y = 76;
-	m_pProfileList->SetBounds( x, y, W - 40 - 200, 24 );
-	m_pNewButton->SetBounds( W - 20 - 190, y, 110, 24 );
-	m_pDeleteButton->SetBounds( W - 20 - 70, y, 70, 24 );
-	y += 40;
-	m_pNameLabel->SetBounds( x, y, labelW, 24 );
-	m_pName->SetBounds( fieldX, y, fieldW, 24 );
-	y += 32;
+	int y = P( 76 );
+	m_pProfileList->SetBounds( x, y, W - P( 40 + 200 ), rowH );
+	m_pNewButton->SetBounds( W - P( 20 + 190 ), y, P( 110 ), rowH );
+	m_pDeleteButton->SetBounds( W - P( 20 + 70 ), y, P( 70 ), rowH );
+	y += P( 40 );
+	m_pNameLabel->SetBounds( x, y, labelW, rowH );
+	m_pName->SetBounds( fieldX, y, fieldW, rowH );
+	y += P( 32 );
 	// Character: the chosen portrait and a button that opens the picker
-	m_pCharLabel->SetBounds( x, y + 12, labelW, 24 );
-	m_pCharPortrait->SetBounds( fieldX, y, 48, 48 );
-	m_pCharButton->SetBounds( fieldX + 56, y + 12, fieldW - 56, 24 );
-	y += 56;
-	m_pSensLabel->SetBounds( x, y, labelW, 24 );
-	m_pSensitivity->SetBounds( fieldX, y, fieldW - 50, 28 );
-	m_pSensValue->SetBounds( fieldX + fieldW - 44, y, 44, 24 );
-	y += 36;
-	m_pInvert->SetBounds( fieldX - 4, y, fieldW, 24 );
-	y += 28;
-	m_pInvited->SetBounds( fieldX - 4, y, fieldW, 24 );
-	y += 40;
-	m_pHelp->SetBounds( x, y, W - 40, 44 );
+	m_pCharLabel->SetBounds( x, y + P( 12 ), labelW, rowH );
+	m_pCharPortrait->SetBounds( fieldX, y, P( 48 ), P( 48 ) );
+	m_pCharButton->SetBounds( fieldX + P( 56 ), y + P( 12 ), fieldW - P( 56 ), rowH );
+	y += P( 56 );
+	m_pSensLabel->SetBounds( x, y, labelW, rowH );
+	m_pSensitivity->SetBounds( fieldX, y, fieldW - P( 50 ), P( 28 ) );
+	m_pSensValue->SetBounds( fieldX + fieldW - P( 44 ), y, P( 44 ), rowH );
+	y += P( 36 );
+	m_pInvert->SetBounds( fieldX - P( 4 ), y, fieldW, rowH );
+	y += P( 28 );
+	m_pInvited->SetBounds( fieldX - P( 4 ), y, fieldW, rowH );
+	y += P( 40 );
+	m_pHelp->SetBounds( x, y, W - P( 40 ), P( 44 ) );
 
 	// ---- Match ----
-	y = 76;
-	m_pMapLabel->SetBounds( x, y, labelW, 24 );
-	m_pMap->SetBounds( fieldX, y, fieldW, 24 );
-	y += 32;
-	m_pModeLabel->SetBounds( x, y, labelW, 24 );
-	m_pMode->SetBounds( fieldX, y, fieldW, 24 );
-	y += 32;
-	m_pWeaponsLabel->SetBounds( x, y, labelW, 24 );
-	m_pWeapons->SetBounds( fieldX, y, fieldW, 24 );
-	y += 30;
-	m_pTeams->SetBounds( fieldX - 4, y, fieldW, 24 );
-	y += 28;
-	m_pJump->SetBounds( fieldX - 4, y, fieldW / 2 + 40, 24 );
-	m_pRadar->SetBounds( fieldX - 4 + fieldW / 2 + 50, y, fieldW / 2 - 50, 24 );
-	y += 32;
-	m_pAimLabel->SetBounds( x, y, labelW, 24 );
-	m_pAim->SetBounds( fieldX, y, fieldW, 24 );
-	y += 32;
-	m_pWinLabel->SetBounds( x, y, labelW, 24 );
-	m_pWin->SetBounds( fieldX, y, fieldW, 24 );
-	y += 32;
-	m_pTimeLabel->SetBounds( x, y, labelW, 24 );
-	m_pTime->SetBounds( fieldX, y, 60, 24 );
-	y += 32;
-	m_pKillsLabel->SetBounds( x, y, labelW, 24 );
-	m_pKills->SetBounds( fieldX, y, 60, 24 );
-	y += 32;
-	m_pPerDisplayLabel->SetBounds( x, y, labelW, 24 );
-	m_pPerDisplay->SetBounds( fieldX, y, 60, 24 );
-	m_pPadCount->SetBounds( fieldX + 70, y, fieldW - 70, 24 );
-	y += 36;
-	// What the match is, and a picture of how the screens will be split
-	m_pSummary->SetBounds( x, y, ( W - 40 ) / 2 - 10, H - y - 80 );
-	m_pDiagram->SetBounds( x + ( W - 40 ) / 2, y, ( W - 40 ) / 2, H - y - 80 );
+	y = P( 76 );
+	m_pMapLabel->SetBounds( x, y, labelW, rowH );
+	m_pMap->SetBounds( fieldX, y, fieldW, rowH );
+	y += P( 32 );
+	m_pModeLabel->SetBounds( x, y, labelW, rowH );
+	m_pMode->SetBounds( fieldX, y, fieldW, rowH );
+	y += P( 32 );
+	m_pWeaponsLabel->SetBounds( x, y, labelW, rowH );
+	m_pWeapons->SetBounds( fieldX, y, fieldW, rowH );
+	y += P( 30 );
+	m_pTeams->SetBounds( fieldX - P( 4 ), y, fieldW, rowH );
+	y += P( 28 );
+	m_pJump->SetBounds( fieldX - P( 4 ), y, fieldW / 2 + P( 40 ), rowH );
+	m_pRadar->SetBounds( fieldX - P( 4 ) + fieldW / 2 + P( 50 ), y, fieldW / 2 - P( 50 ), rowH );
+	y += P( 32 );
+	m_pAimLabel->SetBounds( x, y, labelW, rowH );
+	m_pAim->SetBounds( fieldX, y, fieldW, rowH );
+	y += P( 32 );
+	m_pWinLabel->SetBounds( x, y, labelW, rowH );
+	m_pWin->SetBounds( fieldX, y, fieldW, rowH );
+	y += P( 32 );
+	// The picture of how the screens will be split: right of the short time,
+	// kills and players per display fields
+	const int diagramX = fieldX + P( 200 );
+	m_pDiagram->SetBounds( diagramX, y, W - P( 20 ) - diagramX, P( 32 + 32 ) + rowH );
+	m_pTimeLabel->SetBounds( x, y, labelW, rowH );
+	m_pTime->SetBounds( fieldX, y, P( 60 ), rowH );
+	y += P( 32 );
+	m_pKillsLabel->SetBounds( x, y, labelW, rowH );
+	m_pKills->SetBounds( fieldX, y, P( 60 ), rowH );
+	y += P( 32 );
+	m_pPerDisplayLabel->SetBounds( x, y, labelW, rowH );
+	m_pPerDisplay->SetBounds( fieldX, y, P( 60 ), rowH );
+	m_pPadCount->SetBounds( fieldX + P( 70 ), y, P( 125 ), rowH );	// "8 players joined"
+	y += P( 30 );
+	// What the match is: the full width, down to the controller hint
+	m_pSummary->SetBounds( x, y, W - P( 40 ), H - y - P( 72 ) );
 
 	// ---- Bottom ----
-	m_pPadHint->SetBounds( x, H - 70, W - 40, 20 );
-	m_pSaveButton->SetBounds( W - 20 - 170, H - 40, 80, 26 );
-	m_pStartButton->SetBounds( W - 20 - 210, H - 40, 120, 26 );
-	m_pCheatsButton->SetBounds( 20, H - 40, 100, 26 );
+	const int buttonY = H - P( 40 ), buttonH = P( 26 );
+	m_pPadHint->SetBounds( x, H - P( 70 ), W - P( 40 ), P( 20 ) );
+	m_pSaveButton->SetBounds( W - P( 20 + 170 ), buttonY, P( 80 ), buttonH );
+	m_pStartButton->SetBounds( W - P( 20 + 210 ), buttonY, P( 120 ), buttonH );
+	m_pCheatsButton->SetBounds( P( 20 ), buttonY, P( 100 ), buttonH );
 
 	// ---- Cheats ----
-	y = 76;
-	m_pCheatsTitle->SetBounds( x, y, W - 40, 24 );
-	y += 28;
-	m_pCheatsIntro->SetBounds( x, y, W - 40, 24 );
-	y += 36;
+	y = P( 76 );
+	m_pCheatsTitle->SetBounds( x, y, W - P( 40 ), rowH );
+	y += P( 28 );
+	m_pCheatsIntro->SetBounds( x, y, W - P( 40 ), rowH );
+	y += P( 36 );
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
 	{
-		m_pCheat[i]->SetBounds( x, y, W - 40, 24 );
-		m_pCheatHelp[i]->SetBounds( x + 26, y + 24, W - 66, 20 );
-		y += 52;
+		m_pCheat[i]->SetBounds( x, y, W - P( 40 ), rowH );
+		m_pCheatHelp[i]->SetBounds( x + P( 26 ), y + rowH, W - P( 66 ), P( 20 ) );
+		y += P( 52 );
 	}
-	m_pCheatsBack->SetBounds( 20, H - 40, 100, 26 );
-	m_pCloseButton->SetBounds( W - 20 - 80, H - 40, 80, 26 );
+	m_pCheatsBack->SetBounds( P( 20 ), buttonY, P( 100 ), buttonH );
+	m_pCloseButton->SetBounds( W - P( 20 + 80 ), buttonY, P( 80 ), buttonH );
 
 	// The keyboard covers the page area
-	m_pKeyboard->SetBounds( 14, 70, W - 28, H - 146 );	// stops above the controller hint
-	m_pCharPicker->SetBounds( 14, 70, W - 28, H - 146 );
+	m_pKeyboard->SetBounds( P( 14 ), P( 70 ), W - P( 28 ), H - P( 146 ) );	// stops above the controller hint
+	m_pCharPicker->SetBounds( P( 14 ), P( 70 ), W - P( 28 ), H - P( 146 ) );
+
+	// A margin before the text of the tabs and buttons (vgui's is 0: the text
+	// touched the left edge), growing with the menu
+	Button *pButtons[] = { m_pTabs[GESS_PAGE_PROFILES], m_pTabs[GESS_PAGE_MATCH], m_pNewButton, m_pDeleteButton, m_pCharButton,
+		m_pSaveButton, m_pStartButton, m_pCheatsButton, m_pCheatsBack, m_pCloseButton };
+	for ( int i = 0; i < ARRAYSIZE( pButtons ); i++ )
+	{
+		if ( pButtons[i] )
+			pButtons[i]->SetTextInset( P( 6 ), 0 );
+	}
+	#undef P
 
 	// The introduction covers the whole menu
 	m_pIntro->SetBounds( 0, 0, W, H );
@@ -2326,8 +2365,8 @@ void CGESplitScreenMenu::PostChildPaint()
 	int x, y, w, h;
 	m_Nav[m_iFocus].panel->GetBounds( x, y, w, h );
 	surface()->DrawSetColor( Color( 230, 200, 80, 255 ) );
-	surface()->DrawOutlinedRect( x - 3, y - 3, x + w + 3, y + h + 3 );
-	surface()->DrawOutlinedRect( x - 2, y - 2, x + w + 2, y + h + 2 );
+	for ( int t = GESS_PX( 2 ); t <= GESS_PX( 3 ); t++ )
+		surface()->DrawOutlinedRect( x - t, y - t, x + w + t, y + h + t );
 }
 
 void CGESplitScreenMenu::OpenKeyboard( TextEntry *pEntry, const char *title, int maxLen )

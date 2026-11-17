@@ -38,11 +38,12 @@ CGEIntroVideoPanel::CGEIntroVideoPanel( vgui::VPANEL parent ) : BaseClass( NULL,
 	SetParent( parent );
 
 	// load the new scheme early!!
-	SetScheme(vgui::scheme()->LoadSchemeFromFile("resource/SourceScheme.res", "SourceScheme"));
+	SetScheme(vgui::scheme()->LoadSchemeFromFile("resource/GESPropScheme.res", "GESPropScheme"));	// SourceScheme with proportional font sizes, see ge_panelhelper.h
 	SetProportional( true );
 
 	LoadControlSettings("resource/GESIntroVideo.res");
 	SetSize( ScreenWidth(), ScreenHeight() );
+	GEMenuZoomChildren( this, GEMenuPropScale(), true );	// bigger from 1080p up, see ge_panelhelper.h
 
 	InvalidateLayout();
 

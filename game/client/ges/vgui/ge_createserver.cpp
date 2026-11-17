@@ -42,6 +42,7 @@ public:
 	virtual bool HasInputElements( void ) { return true; }
 
 	virtual void SetVisible( bool state );
+	virtual void PerformLayout() { BaseClass::PerformLayout(); GEMenuLayoutFrameButtons( this, GEMenuScale() ); }	// bigger close button at 1440p / 4K
 
 	// both Frame and IViewPortPanel define these, so explicitly define them here as passthroughs to vgui
 	VPANEL GetVPanel( void ) { return BaseClass::GetVPanel(); }
@@ -87,10 +88,11 @@ CGECreateServer::CGECreateServer( VPANEL parent ) : BaseClass( NULL, GetName() )
 {
 	SetParent( parent );
 
-	SetScheme( scheme()->LoadSchemeFromFile("resource/SourceScheme.res", "SourceScheme") );
+	SetScheme( scheme()->LoadSchemeFromFile("resource/GESMenuScheme.res", "GESMenuScheme") );	// SourceScheme with bigger fonts from 1080p, see ge_panelhelper.h
 //	SetProportional( true );
 
 	LoadControlSettings("resource/GESCreateServer.res");
+	GEMenuZoomFrame( this, GEMenuScale() );	// laid out in 1080p pixels: bigger from 1080p up, see ge_panelhelper.h
 
 	InvalidateLayout();
 	MakePopup();

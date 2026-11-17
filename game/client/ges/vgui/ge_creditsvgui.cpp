@@ -39,7 +39,7 @@ CGECreditsPanel::CGECreditsPanel( vgui::VPANEL parent ) : Frame(NULL, PANEL_CRED
 	SetParent( parent );
 
 	// load the new scheme early!!
-	SetScheme(vgui::scheme()->LoadSchemeFromFile("resource/SourceScheme.res", "SourceScheme"));
+	SetScheme(vgui::scheme()->LoadSchemeFromFile("resource/GESPropScheme.res", "GESPropScheme"));	// SourceScheme with proportional font sizes, see ge_panelhelper.h
 	SetProportional( true );
 	SetSizeable( false );
 
@@ -50,6 +50,7 @@ CGECreditsPanel::CGECreditsPanel( vgui::VPANEL parent ) : Frame(NULL, PANEL_CRED
 	SetMouseInputEnabled( true );
 
 	LoadControlSettings("resource/GESCredits.res");
+	GEMenuZoomFrame( this, GEMenuPropScale() );	// bigger from 1080p up, see ge_panelhelper.h
 
 	InvalidateLayout();
 	MakePopup();

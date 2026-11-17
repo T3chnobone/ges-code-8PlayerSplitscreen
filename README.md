@@ -26,6 +26,8 @@ GoldenEye: Source maps, models and sounds are unchanged.
   profile, and exit with a confirmation (player 1 exiting ends the match and shows the results).
   The game's own pause menu no longer covers everyone's view during a match.
 - A grid cell nobody plays in shows the live scoreboard.
+- Menus readable on big screens: the main menu text and the Split Screen, Create Server and credits
+  menus grow with the resolution (1.5x at 1080p, 2.25x at 1440p, 3.75x at 4K).
 
 ### Controllers
 - Xbox, PlayStation, Switch Pro and other pads through SDL2 (XInput, up to 4 Xbox-style pads,

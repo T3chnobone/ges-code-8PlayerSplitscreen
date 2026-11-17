@@ -30,10 +30,11 @@ CGEUpdateChecker::CGEUpdateChecker( vgui::VPANEL parent ) : BaseClass( NULL, Get
 
 	SetParent( parent );
 
-	SetScheme( vgui::scheme()->LoadSchemeFromFile("resource/SourceScheme.res", "SourceScheme") );
+	SetScheme( vgui::scheme()->LoadSchemeFromFile("resource/GESPropScheme.res", "GESPropScheme") );	// SourceScheme with proportional font sizes, see ge_panelhelper.h
 	SetProportional( true );
 
 	LoadControlSettings("resource/GESUpdateTool.res");
+	GEMenuZoomFrame( this, GEMenuPropScale() );	// bigger from 1080p up, see ge_panelhelper.h
 
 	InvalidateLayout();
 	MakePopup();

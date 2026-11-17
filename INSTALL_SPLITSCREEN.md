@@ -33,6 +33,9 @@ backups described below.
 | `materials\VGUI\hud\paintscreen\` | `materials\VGUI\hud\paintscreen\` (the Paintball cheat's death screen) |
 | `resource\GameMenu.res` | `resource\GameMenu.res` |
 | `resource\ClientScheme.res` | `resource\ClientScheme.res` |
+| `resource\SourceScheme.res` | `resource\SourceScheme.res` |
+| `resource\GESMenuScheme.res` | `resource\GESMenuScheme.res` (new) |
+| `resource\GESPropScheme.res` | `resource\GESPropScheme.res` (new) |
 | `gameinfo.txt` | `gameinfo.txt` |
 | `steam.inf` | `steam.inf` |
 
@@ -40,12 +43,19 @@ What the text files change:
 
 - `resource\GameMenu.res`: adds **SPLIT SCREEN** to the main menu (`engine ges_splitscreen`).
 - `resource\ClientScheme.res`: anchors the main menu to the bottom left, so the new entry fits
-  under the title (`Main.Menu.X` 14, `Main.Menu.Y` 480, `Main.BottomBorder` 4).
+  under the title (`Main.Menu.X` 21, `Main.Menu.Y` 480, `Main.BottomBorder` 6: the X and the
+  bottom gap are 1.5x, like the menu text).
 - `gameinfo.txt`: runs the mod on Source SDK Base 2013 Multiplayer (`SteamAppId 243750`) with its
   search paths (`game+mod+mod_write+default_write_path`, `gamebin |gameinfo_path|bin`, the hl2
   VPKs). If yours already says 243750 with these paths, keep yours.
 - `steam.inf`: version lines the current engine checks when the mod loads (`PatchVersion`,
   `ClientVersion`, `ServerVersion` 9546320, `ProductName gesource`).
+- `resource\SourceScheme.res`: bigger main menu text from 1080p up (1.5x at 1080p, 2.25x at
+  1440p, 3.75x at 4K); the Options and other GameUI dialogs get text up to 16 pixels, as big as
+  their fixed size layouts hold.
+- `resource\GESMenuScheme.res`, `resource\GESPropScheme.res` (new): the fonts of the mod's own
+  menus (Split Screen, Create Server, credits, intro video) at the same sizes. The menus grow with
+  them.
 
 ### Install
 

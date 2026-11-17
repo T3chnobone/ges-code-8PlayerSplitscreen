@@ -127,11 +127,11 @@ Scheme
 
 		// The menu on the main screen: anchored to the bottom left (a Y past the bottom makes the
 		// engine pin it above Main.BottomBorder), and far enough left to clear the title in the background
-		"Main.Menu.X"		"14"
+		"Main.Menu.X"		"21"	// 14 x 1.5 (GE_MENU_SCALE_1080); GameUI scales Main.* with the screen height (480 = full height)
 		"Main.Menu.Y"		"480"
 
 		// Blank space to leave beneath the menu on the main screen
-		"Main.BottomBorder"	"4"
+		"Main.BottomBorder"	"6"	// 4 x 1.5
 
 
 		// vgui_controls color specifications
@@ -317,11 +317,11 @@ Scheme
 
 		// The menu on the main screen: anchored to the bottom left (a Y past the bottom makes the
 		// engine pin it above Main.BottomBorder), and far enough left to clear the title in the background
-		"Main.Menu.X"		"14"
+		"Main.Menu.X"		"21"	// 14 x 1.5 (GE_MENU_SCALE_1080); GameUI scales Main.* with the screen height (480 = full height)
 		"Main.Menu.Y"		"480"
 
 		// Blank space to leave beneath the menu on the main screen
-		"Main.BottomBorder"	"4"
+		"Main.BottomBorder"	"6"	// 4 x 1.5
 	}
 	//////////////////////// FONTS /////////////////////////////
 	//

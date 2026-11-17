@@ -546,3 +546,25 @@ screens: the first "players per display" players go on the left half and the res
   shading, the red swapped for paint. `painteffect_mixed` (the 8 paint colours in large soft
   patches) is used; `painteffect_c1-8` (one colour each) stay in for
   `ges_paint_deathscreen_style 1`, one random paint colour per death (default 0, mixed).
+
+## Changes (17 November)
+- **Menus scale with the resolution.** One factor for 1080p, `GE_MENU_SCALE_1080` (1.5, in
+  `game/client/ges/vgui/ge_panelhelper.h`); 1440p is 1.5x that and 4K 2.5x (a bit more than the
+  screen height alone). Below 1024 lines nothing changes. Steps at yres 1024, 1200 and 1600.
+  - The Split Screen menu (every page, the on-screen keyboard, the character picker, the intro box,
+    the close button) and Create Server are laid out in 1080p pixels times `GEMenuScale()`, with
+    fonts from `resource/GESMenuScheme.res`.
+  - The credits, update checker and intro video are proportional panels (already h/480): they grow
+    by `GEMenuPropScale()` on top, with fonts from `resource/GESPropScheme.res`.
+  - GameUI (`resource/SourceScheme.res`): the main menu list's font (MenuLarge, also added as
+    MainMenuFont) grows like the menus; the main menu's position values in `ClientScheme.res` are
+    1.5x (`Main.Menu.X` 21, `Main.BottomBorder` 6). GameUI's own dialogs (Options, Find Servers,
+    Achievements, Player List) are closed source with fixed 16-24 pixel rows, so their fonts only
+    grow to 16 pixels and the dialogs stay the same size.
+  - The three schemes are made from GE:S's own `SourceScheme.res` by
+    `splitscreen_resources/tools/make_menu_schemes.pl`; its `$SCALE_1080` must match
+    `GE_MENU_SCALE_1080`. To change the size: change both, run the script, rebuild.
+- Split Screen menu: the text on the tabs and buttons has a margin before it; the Match page's
+  summary runs the full width (the screen diagram moved up beside the time, kills and players per
+  display fields) so it isn't cut off; in the character picker the portrait gets smaller as needed so
+  the whole bio fits.
