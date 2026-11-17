@@ -620,6 +620,16 @@ static const wchar_t *GESS_Localize( const char *token, const wchar_t *fallback 
 	return w ? w : fallback;
 }
 
+// The name to show for a player. Player 1 plays under their profile's name, but the
+// current engine keeps their Steam name on the server (it ignores "name"), so use the
+// profile name for them here.
+static const char *GESS_DisplayName( int entindex, const char *serverName )
+{
+	if ( entindex == engine->GetLocalPlayer() && GESplitScreenClient() )
+		return GESplitScreenClient()->GetSlotName( 0 );
+	return serverName ? serverName : "";
+}
+
 struct GESSBoardRow_t
 {
 	int index, score, deaths, team;
@@ -842,7 +852,7 @@ void CGESplitScreenHud::PaintGEScoreboard( const GESSViewport_t &area, int highl
 			}
 
 			char name[64];
-			Q_strncpy( name, pRes->GetPlayerName( i ), sizeof( name ) );
+			Q_strncpy( name, GESS_DisplayName( i, pRes->GetPlayerName( i ) ), sizeof( name ) );
 			GESS_DrawLabel( fRow, SBX( colX[1] ), ry, SBS( colW[1] - 2 ), rh, col, GEUTIL_RemoveColorHints( name ), -1 );
 			{
 				// The character's short name (a localisation token, as the list shows it)
@@ -1071,7 +1081,7 @@ void CGESplitScreenHud::PaintPlayerHud( int slot, C_BasePlayer *pPlayer, const G
 	const int pad = Max( 4, vp.h / 40 );
 
 	// Name in the top left
-	DrawText( m_hFontSmall, vp.x + pad, vp.y + pad, Color( 255, 255, 255, 220 ), pPlayer->GetPlayerName() );
+	DrawText( m_hFontSmall, vp.x + pad, vp.y + pad, Color( 255, 255, 255, 220 ), GESS_DisplayName( pPlayer->entindex(), pPlayer->GetPlayerName() ) );
 
 	// Time left, top centre (the full-screen round timer would sit across other views)
 	if ( GEMPRules() && !GEMPRules()->IsIntermission() )
