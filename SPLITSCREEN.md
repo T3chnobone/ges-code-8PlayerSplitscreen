@@ -119,8 +119,9 @@ On the Match page you pick:
     splats of mixed paint colours on walls, floors and props, and on players where they're hit;
     a hit player gives off a puff of the paint colours instead of blood, and the blood that
     would land on walls and floors around them is paint too. Every splat is turned at random
-    (8 spiky splats, 9 to 14 units across, in `materials/decals/paintball`). Not changed (yet):
-    the dust puffs on walls, the death screen's blood and ragdoll blood. GoldenEye's own Paintball mode
+    (8 spiky splats, 9 to 14 units across, in `materials/decals/paintball`). When you die, mixed
+    paint colours run down your screen instead of blood (`materials/VGUI/hud/paintscreen`). The
+    dust puffs on walls are unchanged. GoldenEye's own Paintball mode
     (`ge_paintball`, Create Server) is separate and unchanged.
 - **Win condition**:
   - *Timed, highest score*: the mode's normal scoring when the time limit runs out.
@@ -524,5 +525,15 @@ screens: the first "players per display" players go on the left half and the res
   to player models where they're hit; blood decals on walls and floors (`UTIL_BloodDecalTrace`) are
   paint splats; the blood spray of a hit (`BloodImpact` / `bloodspray` effects) is a short puff of
   the 8 paint colours; and every decal gets a random rotation (a random texture axis for world and
-  brush decals, a random up direction for model decals). The dust puffs on walls, the death screen's
-  blood and ragdoll blood pools are unchanged for now.
+  brush decals, a random up direction for model decals). The dust puffs on walls are unchanged. GE:S
+  has no separate blood pool effect: what lands on the floor around a body (hit sprays, shots into
+  the ragdoll) is already paint.
+- **Paintball death screen** (with `ge_cheat_paintball` on): paint runs down the screen instead of
+  blood, with the same flow, timing and coverage. The death screen is the player's second viewmodel
+  (`models/VGUI/bloodanimation.mdl`, a Refract material tinted by `VGUI/hud/bloodscreen/bloodeffect`);
+  `C_BaseViewModel::DrawModel` draws it with `ForcedMaterialOverride` set to a paint copy in
+  `materials/VGUI/hud/paintscreen/` (kept referenced with `CMaterialReference`). The textures are made
+  by `splitscreen_resources/tools/make_paint_deathscreen.cpp` from the blood texture: same shapes and
+  shading, the red swapped for paint. `painteffect_mixed` (the 8 paint colours in large soft
+  patches) is used; `painteffect_c1-8` (one colour each) stay in for
+  `ges_paint_deathscreen_style 1`, one random paint colour per death (default 0, mixed).

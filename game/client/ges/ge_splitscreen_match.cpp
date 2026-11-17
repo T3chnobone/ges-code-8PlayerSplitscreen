@@ -18,6 +18,10 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
+// Paintball cheat's death screen colouring (used by c_baseviewmodel.cpp)
+ConVar ges_paint_deathscreen_style( "ges_paint_deathscreen_style", "0", 0,
+	"Paintball cheat's death screen: 0 the paint colours mixed, 1 one random paint colour per death." );
+
 #define GESS_MATCH_FILE		"cfg/ges_splitscreen_match.txt"
 #define GESS_MATCH_PYDIR	"python/ges/GamePlay/*.py"
 

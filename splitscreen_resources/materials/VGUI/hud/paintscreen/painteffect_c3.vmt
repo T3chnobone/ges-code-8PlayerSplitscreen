@@ -1,0 +1,27 @@
+"Refract"
+{
+	"$model" "1"
+	"$bluramount" ".2"
+	"$refractamount" "-.15"
+	"$refracttint" "{255 255 255}"
+	"$scale" "[1 1]"
+	"$dudvmap" "VGUI/hud/bloodscreen/bloodeffect_dudv"
+	"$normalmap" "VGUI/hud/bloodscreen/bloodeffect_nrml"
+	"$REFRACTTINTTEXTURE" "VGUI/hud/paintscreen/painteffect_c3"
+	"$ignorez"	"1"
+
+	"$envmap" "models/cubemaps/spheremap2"
+	"$envmaptint" "[.25 .25 .25]"
+	"$envmapcontrast" "1"
+	"$envmapsaturation" "1"
+
+	"Proxies"
+	{
+		"TextureScroll"
+		{
+			"texturescrollvar" "$bumptransform"
+			"texturescrollrate" .25
+			"texturescrollangle" 90.00
+		}
+	}
+}

@@ -348,8 +348,76 @@ bool C_BaseViewModel::ShouldDraw()
 // Purpose: Render the weapon. Draw the Viewmodel if the weapon's being carried
 //			by this player, otherwise draw the worldmodel.
 //-----------------------------------------------------------------------------
+#ifdef GE_DLL
+//-----------------------------------------------------------------------------
+// Paintball cheat (ge_cheat_paintball): paint runs down the death screen instead of
+// blood. GoldenEye's death screen is the player's second viewmodel (bloodanimation.mdl,
+// a Refract material tinted by a blood texture); while the cheat is on it's drawn
+// with a paint version (materials/VGUI/hud/paintscreen, same shapes, flow and timing).
+//-----------------------------------------------------------------------------
+extern ConVar ges_paint_deathscreen_style;	// ge_splitscreen_match.cpp
+
+static IMaterial *GE_PaintDeathScreenMaterial( C_BaseViewModel *pVM )
+{
+	static ConVarRef ge_cheat_paintball( "ge_cheat_paintball" );
+	if ( !pVM || pVM->ViewModelIndex() != 1 || !ge_cheat_paintball.IsValid() || !ge_cheat_paintball.GetBool() )
+		return NULL;
+	const model_t *pModel = pVM->GetModel();
+	if ( !pModel || !V_stristr( modelinfo->GetModelName( pModel ), "bloodanimation" ) )
+		return NULL;
+
+	// One colour per death: picked when the blood animation starts
+	static int s_iLastSequence[NUM_ENT_ENTRIES];
+	static int s_iColour[NUM_ENT_ENTRIES];
+	const int e = pVM->entindex();
+	if ( e < 0 || e >= NUM_ENT_ENTRIES )
+		return NULL;
+	if ( pVM->GetSequence() != s_iLastSequence[e] || !s_iColour[e] )
+	{
+		s_iLastSequence[e] = pVM->GetSequence();
+		s_iColour[e] = random->RandomInt( 1, 8 );
+	}
+
+	// Loaded (and kept referenced) the first time they're needed
+	static CMaterialReference s_Mixed, s_Single[8];
+	if ( !s_Mixed.IsValid() )
+	{
+		s_Mixed.Init( "VGUI/hud/paintscreen/painteffect_mixed", TEXTURE_GROUP_CLIENT_EFFECTS );
+		for ( int i = 0; i < 8; i++ )
+		{
+			char szName[64];
+			Q_snprintf( szName, sizeof( szName ), "VGUI/hud/paintscreen/painteffect_c%d", i + 1 );
+			s_Single[i].Init( szName, TEXTURE_GROUP_CLIENT_EFFECTS );
+		}
+	}
+	IMaterial *pMaterial = ges_paint_deathscreen_style.GetInt() == 1 ? (IMaterial *) s_Single[clamp( s_iColour[e], 1, 8 ) - 1] : (IMaterial *) s_Mixed;
+	return ( pMaterial && !pMaterial->IsErrorMaterial() ) ? pMaterial : NULL;
+}
+
+// Draws with the paint material for as long as it's in scope
+struct GEPaintDeathScreenOverride_t
+{
+	bool m_bOn;
+	GEPaintDeathScreenOverride_t( C_BaseViewModel *pVM )
+	{
+		IMaterial *pMaterial = GE_PaintDeathScreenMaterial( pVM );
+		m_bOn = pMaterial != NULL;
+		if ( m_bOn )
+			modelrender->ForcedMaterialOverride( pMaterial );
+	}
+	~GEPaintDeathScreenOverride_t()
+	{
+		if ( m_bOn )
+			modelrender->ForcedMaterialOverride( NULL );
+	}
+};
+#endif
+
 int C_BaseViewModel::DrawModel( int flags )
 {
+#ifdef GE_DLL
+	GEPaintDeathScreenOverride_t paintOverride( this );
+#endif
 	if ( !m_bReadyToDraw )
 		return 0;
 
