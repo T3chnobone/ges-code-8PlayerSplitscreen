@@ -38,6 +38,7 @@ VIAddVersionKey "LegalCopyright" "GoldenEye: Source by Team GoldenEye: Source. U
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
+!include "WordFunc.nsh"
 
 !define MUI_ABORTWARNING
 !define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
@@ -91,8 +92,12 @@ Function DirLeave
 FunctionEnd
 
 ; Back up a file once (first install keeps the original), or note that it was new.
+; A file the mod added is marked under _added\, so installing again over the mod
+; doesn't back up the mod's own copy as if it were an original.
 !macro BackupFile REL
-  ${If} ${FileExists} "$INSTDIR\${REL}"
+  ${If} ${FileExists} "$INSTDIR\${BACKUP_DIR}\_added\${REL}"
+    ; added by an earlier install of the mod: nothing to back up
+  ${ElseIf} ${FileExists} "$INSTDIR\${REL}"
     ${IfNot} ${FileExists} "$INSTDIR\${BACKUP_DIR}\${REL}"
       ${GetParent} "$INSTDIR\${BACKUP_DIR}\${REL}" $1
       CreateDirectory "$1"
@@ -102,6 +107,10 @@ FunctionEnd
     FileOpen $9 "$INSTDIR\${BACKUP_DIR}\new_files.txt" a
     FileSeek $9 0 END
     FileWrite $9 "${REL}$\r$\n"
+    FileClose $9
+    ${GetParent} "$INSTDIR\${BACKUP_DIR}\_added\${REL}" $1
+    CreateDirectory "$1"
+    FileOpen $9 "$INSTDIR\${BACKUP_DIR}\_added\${REL}" w
     FileClose $9
   ${EndIf}
 !macroend
@@ -155,6 +164,7 @@ Section "Uninstall"
     FileClose $9
   ${EndIf}
   ; Put the originals back
+  RMDir /r "$INSTDIR\_added"
   CopyFiles /SILENT "$INSTDIR\*.*" "$R0"
   Delete "$R0\new_files.txt"
   Delete "$R0\SPLITSCREEN_README.md"

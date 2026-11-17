@@ -8,6 +8,9 @@ Section "Desktop and Start menu shortcuts" SecShortcut
     ReadRegStr $0 HKCU "Software\Valve\Steam" "SteamPath"
     StrCpy $0 "$0\steam.exe"
   ${EndIf}
+  ; Steam stores these with forward slashes (c:/program files (x86)/steam/steam.exe),
+  ; which a shortcut target doesn't accept.
+  ${WordReplace} "$0" "/" "\" "+" $0
   ; Original renderer by default; Vulkan only if the player asks for it.
   StrCpy $UseVulkan ""
   MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "The game uses its original DirectX renderer.$\r$\n$\r$\nWould you prefer Vulkan instead? It can run faster on some PCs, especially with 3 or more players. You can change this later in the shortcut's properties (the -vulkan option).$\r$\n$\r$\nNot sure? Choose No." /SD IDNO IDNO novulkan
