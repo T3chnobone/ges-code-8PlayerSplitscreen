@@ -49,9 +49,33 @@ enum
 {
 	GESS_GAMEPAGE_LEADERBOARD = 0,
 	GESS_GAMEPAGE_TEAM,			// Swap team (team games only)
-	GESS_GAMEPAGE_PROFILE,
-	GESS_GAMEPAGE_EXIT,
+	GESS_GAMEPAGE_EXIT,			// Exit game, and Commit Suicide under it
 	GESS_GAMEPAGE_COUNT
+};
+
+// The Exit page's buttons (top to bottom), and what a confirmation box is asking
+enum
+{
+	GESS_EXITBTN_EXIT = 0,
+	GESS_EXITBTN_SUICIDE,
+	GESS_EXITBTN_COUNT
+};
+enum
+{
+	GESS_CONFIRM_NONE = 0,
+	GESS_CONFIRM_EXIT,
+	GESS_CONFIRM_SUICIDE,
+};
+
+// What a mouse click on player 1's START menu hit (the HUD records where it drew them)
+enum
+{
+	GESS_MENUHIT_NONE = 0,
+	GESS_MENUHIT_PREV,		// < : the page to the left
+	GESS_MENUHIT_NEXT,		// > : the page to the right
+	GESS_MENUHIT_BUTTON,	// A button on the page (arg: which)
+	GESS_MENUHIT_CONFIRM,	// A confirmation box answer (arg: 0 cancel, 1 confirm)
+	GESS_MENUHIT_TEAM,		// Swap team
 };
 
 // Team menu entries
@@ -84,7 +108,17 @@ public:
 	GESSSlotState_t GetSlotState( int slot ) const	{ return m_Slots[slot].state; }
 	GESSSlotMenu_t GetSlotMenu( int slot ) const		{ return m_Slots[slot].menu; }
 	int  GetSlotMenuSelection( int slot ) const		{ return m_Slots[slot].menuSel; }
-	int  GetSlotMenuSub( int slot ) const				{ return m_Slots[slot].menuSub; }	// Exit page: 0 No, 1 Yes
+	int  GetSlotMenuSub( int slot ) const				{ return m_Slots[slot].menuSub; }	// Exit page: the highlighted button (GESS_EXITBTN_)
+	// A confirmation box over the page (GESS_CONFIRM_), and its highlighted answer (0 cancel, 1 confirm)
+	int  GetSlotMenuConfirm( int slot ) const			{ return m_Slots[slot].menuConfirm; }
+	int  GetSlotMenuConfirmSel( int slot ) const		{ return m_Slots[slot].menuConfirmSel; }
+	bool CanSlotSuicide( int slot ) const;	// Alive: the Commit Suicide button works
+	// Player 1's START menu takes the mouse (a cursor shows; clicks don't fire)
+	bool WantsMenuMouse() const;
+	// The mouse over (bClick false) or clicking (true) something in player 1's START menu
+	void OnMenuMouse( int hit, int arg, bool bClick );
+	// Right click: back (closes a confirmation box, else the menu)
+	void OnMenuMouseBack();
 	bool IsGameMenuPageAvailable( int page ) const;
 	// Testing: what a button does in the START menu
 	void DebugGameMenu( int slot, const char *what );
@@ -208,7 +242,9 @@ private:
 		GESSSlotState_t state;
 		GESSSlotMenu_t menu;
 		int		menuSel;
-		int		menuSub;			// START menu exit page: 0 No, 1 Yes
+		int		menuSub;			// START menu exit page: the highlighted button (GESS_EXITBTN_)
+		int		menuConfirm;		// Confirmation box open (GESS_CONFIRM_)
+		int		menuConfirmSel;		// Its highlighted answer: 0 cancel, 1 confirm
 		int		profile;			// Profile index, -1 = default guest profile
 		QAngle	angles;				// Locally integrated view angles for guests
 		int		angleResetSeen;		// Last server angle reset serial applied (-1 = none yet)
@@ -236,6 +272,7 @@ private:
 	void BlockPauseMenu();		// No game pause menu in a split screen match: player 1's START menu instead
 	void CycleGameMenuPage( int slot, int dir );
 	void ActivateGameMenuPage( int slot );
+	void AnswerGameMenuConfirm( int slot, bool bYes );
 	void UpdateGuestLook( int slot, const GESSPadState_t &pad, float frametime );
 	void UpdateHostLook( float frametime );
 	void UpdateLayout();
@@ -334,6 +371,9 @@ private:
 };
 
 CGESplitScreenClient *GESplitScreenClient();
+
+// The START menu's suicide button label (localization string #GES_SS_Suicide)
+const char *GESS_SuicideLabel();
 
 // Lightweight hooks used by engine-side client code
 bool GESS_IsSplitActive();

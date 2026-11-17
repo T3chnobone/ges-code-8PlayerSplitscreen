@@ -23,6 +23,7 @@
 ConVar sv_ges_splitscreen( "sv_ges_splitscreen", "1", FCVAR_NOTIFY, "Allow clients to bring local split screen guest players into the game." );
 ConVar sv_ges_splitscreen_maxguests( "sv_ges_splitscreen_maxguests", "7", FCVAR_NOTIFY, "Maximum number of split screen guests per client (0-7).", true, 0, true, GES_SS_MAX_GUESTS );
 ConVar sv_ges_splitscreen_ownertimeout( "sv_ges_splitscreen_ownertimeout", "30", 0, "Seconds a guest stays on the server after its owner disappears." );
+static ConVar ges_ss_suicide_instant_respawn( "ges_ss_suicide_instant_respawn", "0", FCVAR_ARCHIVE, "1: Commit Suicide in a split screen player's START menu respawns them straight away, skipping the death screen. 0: they respawn as after any death." );
 
 static CGESplitScreenServer g_GESplitScreenServer;
 CGESplitScreenServer *GESplitScreenServer() { return &g_GESplitScreenServer; }
@@ -258,12 +259,33 @@ bool CGESplitScreenServer::ClientCommand( CGEMPPlayer *pPlayer, const CCommand &
 		return true;
 	}
 
-	if ( !bJoin && !bLeave && !bSetChar && !bTeam && !bHost )
+	const bool bSuicide = !Q_stricmp( cmd, GES_SS_CMD_SUICIDE );
+	if ( !bJoin && !bLeave && !bSetChar && !bTeam && !bHost && !bSuicide )
 		return false;
 
 	// Guests can't own guests
 	if ( !pPlayer || pPlayer->IsSplitGuest() || pPlayer->IsBotPlayer() )
 		return true;
+
+	if ( bSuicide )
+	{
+		// ges_ss_suicide <slot>: Commit Suicide in that player's START menu. Only that
+		// player dies, the same way as the online game's "kill" (the game mode scores
+		// it like any suicide: 1 point off in DeathMatch), and respawns as after any death.
+		const int slot = args.ArgC() >= 2 ? atoi( args[1] ) : -1;
+		CGEMPPlayer *pVictim = NULL;
+		if ( slot == 0 )
+			pVictim = pPlayer;
+		else if ( slot >= 1 && slot <= GES_SS_MAX_GUESTS && FindRecord( pPlayer->GetUserID(), slot ) )
+			pVictim = GetGuest( pPlayer, slot );
+		if ( pVictim && pVictim->IsAlive() && !pVictim->IsObserver() )
+		{
+			pVictim->CommitSuicide();
+			if ( ges_ss_suicide_instant_respawn.GetBool() && !pVictim->IsAlive() )
+				pVictim->ForceRespawn();
+		}
+		return true;
+	}
 
 	if ( bHost )
 	{

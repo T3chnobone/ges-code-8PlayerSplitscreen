@@ -187,11 +187,23 @@ out again for the players who are playing. The spare cell lists who is in while 
 - **While playing**: START opens that player's menu in their own view (the game carries on). It
   opens on the **leaderboard** (GoldenEye's own scoreboard, with their row highlighted and their health and armour shown); left / right go to the
   other pages: **Swap team** (team games: A or the right trigger moves them to the other team and
-  respawns them at once), **Change profile** (LB / RB, or A for the list) and **Exit game** (No / Yes
-  with up / down, then A or the right trigger). A player who exits leaves the match and the screen
-  is split again for the others. When player 1 exits, the match ends for everyone, the results
-  (match report) are shown and then everyone goes back to the Split Screen menu. START or B closes
-  the menu. The Back button does nothing in split screen.
+  respawns them at once) and **Exit game**. The pages have a dark background and no border. The
+  Exit game page has two buttons, chosen with up / down and A or the right trigger: **Exit game**
+  and, under it, **Commit Suicide and Respawn**. Each asks first (Cancel / Confirm, starting on
+  Cancel; B also cancels). A player who exits leaves the match and the screen is split again for
+  the others. When player 1 exits, the match ends for everyone, the results (match report) are
+  shown and then everyone goes back to the Split Screen menu. Commit Suicide kills only the player
+  whose menu it is, the same way as the online game's `kill`, so the game mode scores it like any
+  suicide (DeathMatch: 1 point off), and they respawn as after any death. It's greyed out while
+  they're dead. Its label is the `GES_SS_Suicide` string in `resource\ges_splitscreen_english.txt`.
+  `ges_ss_suicide_instant_respawn 1` respawns them straight away instead, skipping the death
+  screen. START or B closes the menu. The Back button does nothing in split screen. There is no
+  Change profile page any more: players pick their profile in the lobby.
+- **The mouse in player 1's START menu**: there's one mouse and it's player 1's, so while their
+  START menu is open in a match a cursor shows. Click **<** / **>** to change page (on the
+  leaderboard they sit halfway down its sides), click a button to choose it, click Cancel / Confirm
+  to answer; the right button goes back (closes the question, else the menu). Clicks don't fire
+  while it's open, and the controller still works as before. `ges_ss_menu_mouse 0` turns it off.
 - Guests stay through map changes. They leave when player 1 leaves.
 
 Controllers belong to players in the order they press a button. When the game starts no

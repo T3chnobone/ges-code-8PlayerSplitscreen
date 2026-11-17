@@ -45,6 +45,7 @@
 #define GES_SS_CMD_SETCHAR		"ges_ss_update"	// <slot> <name> <character>
 #define GES_SS_CMD_HOST			"ges_ss_host"		// <1 = split screen host, 0 = normal player> <character>
 #define GES_SS_CMD_TEAM			"ges_ss_team"		// <slot> <team: TEAM_MI6, TEAM_JANUS or MAX_GE_TEAMS for auto>
+#define GES_SS_CMD_SUICIDE		"ges_ss_suicide"	// <slot: 0 = player 1>: that player commits suicide (the START menu)
 
 //-----------------------------------------------------------------------------
 // Input for one guest player, carried inside the host's CUserCmd.
