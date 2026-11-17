@@ -340,6 +340,14 @@ const char *ClientModeGENormal::GetRandomTipLine( const GameplayTip *tip )
 //-----------------------------------------------------------------------------
 int	ClientModeGENormal::KeyInput( int down, ButtonCode_t keynum, const char *pszCurrentBinding )
 {
+	// Split screen reads every controller itself and gives each one to exactly one
+	// player. The engine also reads Xbox (XInput) pads and runs their key bindings
+	// for player 1 (360controller.cfg, executed by the engine when an Xbox pad is
+	// plugged in, binds R_TRIGGER to +attack...), so a guest's Xbox pad also fired
+	// for player 1. Its button presses and releases never run bindings here.
+	if ( IsJoystickCode( keynum ) && GESplitScreenClient()->ShouldBlockEnginePadButtons() )
+		return 0;
+
 	if ( engine->Con_IsVisible() )
 		return 1;
 

@@ -36,6 +36,9 @@ GoldenEye: Source maps, models and sounds are unchanged.
 - Stick dead zones are measured automatically per controller and saved. They get 0.01 extra so a
   character standing still doesn't creep. **R3** in the Split
   Screen menu recalibrates just that controller, with the steps shown on its card.
+- Each controller drives only its own player after controllers are swapped or reconnected: a
+  guest's Xbox pad no longer also fires or jumps for player 1 (the engine's own Xbox pad bindings
+  are ignored while split screen reads the controllers, `ges_ss_block_engine_pad`).
 
 ### Match options
 - **Jumping allowed**, **Radar**, and **Aim assist** for controller players: Off, Classic

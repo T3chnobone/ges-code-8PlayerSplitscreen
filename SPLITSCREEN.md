@@ -210,7 +210,16 @@ Set `ges_ss_host_pad 0` if player 1 only uses keyboard and mouse; every controll
 
 During a match, a player whose controller is unplugged keeps their place: their view shows
 "Controller disconnected" until a spare controller presses a button and takes it over. Another
-player's controller never takes over player 1 mid-match; that only happens in the menus.
+player's controller never takes over player 1 mid-match; that only happens in the menus. If
+player 1 plays a match on keyboard and mouse (never had a controller), a controller pressing a
+button while a guest is waiting for one goes to that guest, not to player 1.
+
+The engine also reads Xbox pads (XInput) on its own and, when one is plugged in, runs
+`360controller.cfg`, which binds the pad's buttons (right trigger = fire...) for player 1. A
+guest's Xbox pad, for example one switched on to replace a PlayStation pad that lost its
+connection, then also fired for player 1. While split screen reads the controllers, the engine's
+controller buttons no longer run any key bindings (`ges_ss_block_engine_pad 1`); each controller
+drives only the player it belongs to.
 
 **Keyboard and mouse are off during split screen matches** (`ges_ss_kbm_off 1`): only controllers
 play, player 1 included. Esc, the console key and the menus still use the keyboard and mouse.

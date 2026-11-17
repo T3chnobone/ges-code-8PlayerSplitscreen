@@ -530,6 +530,17 @@ bool CGESplitScreenClient::IsControllerOnly() const
 	return ges_ss_kbm_off.GetBool() && ShouldSuppressGameMenus();
 }
 
+// Player 1's controller is read here too (UpdateHostLook, the menu navigation), so
+// whenever split screen has a controller backend, the engine's copy of an Xbox pad
+// (whichever player that pad belongs to, it runs player 1's bindings) is only a duplicate.
+// Without a backend (no SDL2 or XInput) the engine's controller support still works.
+static ConVar ges_ss_block_engine_pad( "ges_ss_block_engine_pad", "1", FCVAR_ARCHIVE, "1: while split screen reads the controllers, the engine's own controller buttons (Xbox pads) don't run key bindings, so a guest's Xbox pad never also fires or jumps for player 1." );
+
+bool CGESplitScreenClient::ShouldBlockEnginePadButtons() const
+{
+	return ges_ss_block_engine_pad.GetBool() && ges_ss_enable.GetBool() && GESSGamepads()->GetMaxPads() > 0;
+}
+
 // Controllers belong to players in the order they press a button. The first one
 // is player 1 and drives the menus; the rest join as players 2-8. A controller
 // only ever drives one player. Unplugged controllers free their player: player 1
@@ -585,8 +596,17 @@ void CGESplitScreenClient::UpdatePadAssignment()
 		if ( current == 0 )
 			continue;
 
+		// In a match, player 1 playing on keyboard and mouse (never had a controller)
+		// doesn't take a controller that's replacing a guest's lost one
+		bool bGuestWaiting = false;
+		if ( bInGame && !m_bSlotHadPad[0] )
+		{
+			for ( int i = 1; i < maxSlots && !bGuestWaiting; i++ )
+				bGuestWaiting = m_iSlotPad[i] < 0 && m_bSlotHadPad[i] && m_Slots[i].state != GESS_SLOT_EMPTY;
+		}
+
 		int slot = -1;
-		if ( bHostPad && m_iSlotPad[0] < 0 && ( !bInGame || current < 0 ) )
+		if ( bHostPad && m_iSlotPad[0] < 0 && ( !bInGame || current < 0 ) && !bGuestWaiting )
 		{
 			// Nobody is player 1. In the menus the next controller to press a button
 			// takes over (a spare one, or one whose player hasn't got ready yet). In a

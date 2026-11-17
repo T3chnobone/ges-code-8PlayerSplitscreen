@@ -104,6 +104,9 @@ public:
 	bool IsSlotPadDisconnected( int slot ) const;
 	// Split screen match: only controllers play (keyboard and mouse game input is off)
 	bool IsControllerOnly() const;
+	// Split screen reads the controllers: the engine's own controller buttons
+	// (Xbox pads through XInput) must not run key bindings for player 1
+	bool ShouldBlockEnginePadButtons() const;
 	C_BasePlayer *GetSlotPlayer( int slot ) const;
 	bool IsSlotProfileInUse( int profile, int ignoreSlot ) const;
 	int  NextFreeProfile( int slot, int current ) const;
