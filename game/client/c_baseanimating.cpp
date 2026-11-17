@@ -695,6 +695,14 @@ C_BaseAnimating::C_BaseAnimating() :
 	{
 		m_flEncodedController[ i ] = 0.0f;
 	}
+	// Players don't network their pose parameters (they animate on the client), so any
+	// the anim state never sets (neck_trans on the GE:S models) kept whatever was in this
+	// memory before, sometimes NaN. A NaN pose parameter gives NaN bones, and the death
+	// ragdoll built from them crashed in vphysics.
+	for ( i = 0; i < ARRAYSIZE( m_flPoseParameter ); i++ )
+	{
+		m_flPoseParameter[ i ] = 0.0f;
+	}
 
 	AddBaseAnimatingInterpolatedVars();
 
@@ -1398,6 +1406,18 @@ void C_BaseAnimating::GetPoseParameters( CStudioHdr *pStudioHdr, float poseParam
 	int i;
 	for( i=0; i < pStudioHdr->GetNumPoseParameters(); i++)
 	{
+		// A non-finite pose parameter (seen on split screen players, e.g. neck_trans) makes
+		// every bone NaN: the model vanishes and its death ragdoll used to crash vphysics.
+		if ( !IsFinite( m_flPoseParameter[i] ) )
+		{
+			static bool s_bWarned[MAXSTUDIOPOSEPARAM];
+			if ( !s_bWarned[i] )
+			{
+				s_bWarned[i] = true;
+				Warning( "%s: pose parameter %d (%s) was not finite, reset to 0\n", pStudioHdr->pszName(), i, pStudioHdr->pPoseParameter( i ).pszName() );
+			}
+			m_flPoseParameter[i] = 0.0f;
+		}
 		poseParameter[i] = m_flPoseParameter[i];
 	}
 
@@ -4683,10 +4703,43 @@ bool C_BaseAnimating::GetRagdollInitBoneArrays( matrix3x4_t *pDeltaBones0, matri
 	}
 	else
 	{
-		memcpy( pCurrentBones, m_CachedBoneData.Base(), sizeof( matrix3x4_t ) * m_CachedBoneData.Count() );
+		// The bone cache must cover every bone, or the rest of pCurrentBones is left as
+		// uninitialized stack memory and the ragdoll's physics objects start at garbage
+		// positions (which corrupts vphysics and crashes in RagdollCreateObjects).
+		CStudioHdr *pHdr = GetModelPtr();
+		const int numBones = pHdr ? pHdr->numbones() : 0;
+		if ( numBones > 0 && m_CachedBoneData.Count() >= numBones )
+		{
+			memcpy( pCurrentBones, m_CachedBoneData.Base(), sizeof( matrix3x4_t ) * numBones );
+		}
+		else
+		{
+			Warning( "GetRagdollInitBoneArrays: %s has %d cached bones of %d, setting them up again\n",
+				GetModelName() ? STRING( GetModelName() ) : "?", m_CachedBoneData.Count(), numBones );
+			if ( !ForceSetupBonesAtTime( pCurrentBones, gpGlobals->curtime ) )
+				bSuccess = false;
+		}
 	}
 
 	return bSuccess;
+}
+
+// Testing / safety: a ragdoll built from non-finite bone matrices puts NaN positions
+// into vphysics, which corrupts its lists and crashes later. Returns the first bad bone.
+static int RagdollFirstBadBone( const matrix3x4_t *pBones, int numBones )
+{
+	if ( !pBones )
+		return -1;
+	for ( int i = 0; i < numBones; i++ )
+	{
+		const float *f = pBones[i].Base();
+		for ( int k = 0; k < 12; k++ )
+		{
+			if ( !IsFinite( f[k] ) || fabsf( f[k] ) > 1.0e6f )
+				return i;
+		}
+	}
+	return -1;
 }
 
 C_BaseAnimating *C_BaseAnimating::CreateRagdollCopy()
@@ -4788,6 +4841,31 @@ bool C_BaseAnimating::InitAsClientRagdoll( const matrix3x4_t *pDeltaBones0, cons
 	CStudioHdr *hdr = GetModelPtr();
 	if ( !hdr || m_pRagdoll || m_builtRagdoll )
 		return false;
+
+	// Never hand vphysics bad bone matrices (see RagdollFirstBadBone). Bad velocity poses
+	// only lose the ragdoll's starting velocity; a bad current pose means no ragdoll.
+	const int numBones = hdr->numbones();
+	int badBone = RagdollFirstBadBone( pCurrentBonePosition, numBones );
+	if ( badBone >= 0 )
+	{
+		Warning( "InitAsClientRagdoll: %s bone %d (%s) is not finite, no ragdoll\n",
+			GetModelName() ? STRING( GetModelName() ) : "?", badBone, hdr->pBone( badBone )->pszName() );
+		return false;
+	}
+	const int badDelta0 = RagdollFirstBadBone( pDeltaBones0, numBones );
+	const int badDelta1 = RagdollFirstBadBone( pDeltaBones1, numBones );
+	if ( badDelta0 >= 0 || badDelta1 >= 0 )
+	{
+		Warning( "InitAsClientRagdoll: %s velocity pose bone %d/%d is not finite, starting at rest\n",
+			GetModelName() ? STRING( GetModelName() ) : "?", badDelta0, badDelta1 );
+		pDeltaBones0 = pCurrentBonePosition;
+		pDeltaBones1 = pCurrentBonePosition;
+	}
+	if ( !m_vecForce.IsValid() )
+	{
+		Warning( "InitAsClientRagdoll: %s death force is not finite, ignoring it\n", GetModelName() ? STRING( GetModelName() ) : "?" );
+		m_vecForce.Init();
+	}
 
 	m_builtRagdoll = true;
 
