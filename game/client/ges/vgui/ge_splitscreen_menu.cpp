@@ -2887,10 +2887,10 @@ static void GESS_ToggleMenu( int page )
 	if ( g_GESplitScreenMenu->IsVisible() && page < 0 )
 		g_GESplitScreenMenu->Close();
 	else
-		g_GESplitScreenMenu->OpenPage( page < 0 ? GESS_PAGE_PROFILES : page );
+		g_GESplitScreenMenu->OpenPage( page < 0 ? GESS_PAGE_MATCH : page );
 }
 
-CON_COMMAND( ges_splitscreen, "Open the Split Screen menu (profiles and match setup)" )
+CON_COMMAND( ges_splitscreen, "Open the Split Screen menu on the Match page (Profiles is the other tab)" )
 {
 	GESS_ToggleMenu( -1 );
 }

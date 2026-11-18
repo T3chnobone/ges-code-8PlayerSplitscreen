@@ -95,8 +95,7 @@ On the Match page you pick:
   weapons, so the list is greyed out for it.
 - **Team game**: MI6 vs Janus. It is greyed out for modes that are always or never team
   games (for example the Golden Gun is never a team game, Capture the Key always is).
-- **Jumping allowed**: `ge_allowjump` for everyone in the match (guests too). Jump is the right
-  stick click.
+- **Jumping allowed**: `ge_allowjump` for everyone in the match (guests too). Jump is A / Cross.
 - **Radar**: `ge_allowradar` for everyone in the match. Each player sees GoldenEye's own radar in
   their view (see Changes, 15 November). A game mode that forces the radar on still shows it.
 - **Aim assist** (`ge_ss_aimassist`, saved as `aimassist`): only for the players on controllers
@@ -277,11 +276,11 @@ the next round" in that player's own view.
 | Right trigger | Fire |
 | Left trigger | Aim mode |
 | RB | Alt fire / zoom |
-| A | Use (doors, buttons) |
-| B / left stick click | Crouch |
+| A | Jump (when the match allows jumping) |
 | X | Reload |
+| B / left stick click | Crouch |
 | Y / LB | Next / previous weapon |
-| Right stick click | Jump (when the match allows jumping) |
+| Right stick click | Use (doors, buttons) |
 | Back | Nothing (the leaderboard is on START) |
 | Start | Join / leaderboard and menu |
 
@@ -610,3 +609,13 @@ screens: the first "players per display" players go on the left half and the res
   menu opens for the player whose START it was (if our own START handling hadn't seen that press
   already). The client's `HandleUiToggle` also refuses the engine's toggle while a controller's
   START is down, so the pause menu doesn't even flash. Esc still opens it for a keyboard player 1.
+
+## Changes (18 November)
+
+- **Controller face buttons**: A / Cross is now jump (when the match allows jumping), X / Square
+  reload and B / Circle crouch (left stick click still crouches too). Use (doors, buttons) moved
+  from A to the right stick click, which used to be jump. In the Split Screen lobby R3 still
+  recalibrates that controller's sticks. Menus are unchanged: A / Cross chooses and B / Circle goes
+  back, and B still closes the START menu.
+- **SPLIT SCREEN on the main menu opens the Match page** instead of Profiles. The Profiles tab (or
+  Y on player 1's controller) is one press away; `ges_splitscreen_profiles` still opens Profiles.
