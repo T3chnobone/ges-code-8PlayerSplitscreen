@@ -34,6 +34,7 @@ void GESS_UpdateMenuMouse( bool bWant );
 #include "gemp_gamerules.h"
 #include "ge_shareddefs.h"
 #include "inetchannelinfo.h"
+#include "inputsystem/iinputsystem.h"
 
 #ifdef _WIN32
 	#define WIN32_LEAN_AND_MEAN
@@ -398,6 +399,11 @@ CGESplitScreenClient::CGESplitScreenClient() : CAutoGameSystemPerFrame( "CGESpli
 	m_bPadMouseDown = false;
 	m_bCursorWasVisible = false;
 	m_iMenuNavPad = -1;
+	for ( int i = 0; i < GES_SS_MAX_PADS; i++ )
+	{
+		m_flPadStartTime[i] = -1000.0;
+		m_bPadStartUnseen[i] = false;
+	}
 	m_iMenuNavDir = -1;
 	m_flMenuNavRepeat = 0;
 	m_bMenuNavADown = m_bMenuNavBDown = false;
@@ -1242,6 +1248,20 @@ void CGESplitScreenClient::Update( float frametime )
 
 	GESSGamepads()->Poll();
 
+	// Note every START press, and whether the game's pause menu was already up
+	// (then our own START handling skips it, see BlockPauseMenu)
+	{
+		const bool bGameUI = enginevgui->IsGameUIVisible();
+		for ( int pad = 0; pad < GES_SS_MAX_PADS; pad++ )
+		{
+			if ( GESSGamepads()->GetPad( pad ).WasPressed( GESS_PAD_START ) )
+			{
+				m_flPadStartTime[pad] = now;
+				m_bPadStartUnseen[pad] = bGameUI;
+			}
+		}
+	}
+
 	// In the Split Screen lobby, R3 recalibrates that controller's sticks (its card in
 	// the Players list shows how). R3 does nothing else there; in a match it's jump.
 	// (The menu panel can stay "open" behind a match, so check the menu is on screen and
@@ -1872,12 +1892,48 @@ bool CGESplitScreenClient::IsGameMenuPageAvailable( int page ) const
 //-----------------------------------------------------------------------------
 static ConVar ges_ss_block_pausemenu( "ges_ss_block_pausemenu", "1", FCVAR_ARCHIVE, "In a split screen match, close the game's pause menu when it opens and open player 1's START menu instead." );
 
+// A controller's START pressed this recently opened the pause menu
+#define GESS_PAUSEMENU_START_WINDOW 0.5
+
 void CGESplitScreenClient::BlockPauseMenu()
 {
 	if ( !ges_ss_block_pausemenu.GetBool() || !enginevgui->IsGameUIVisible() || !ShouldSuppressGameMenus() )
 		return;
 	if ( !engine->IsInGame() || engine->IsLevelMainMenuBackground() || engine->IsDrawingLoadingImage() || engine->Con_IsVisible() )
 		return;
+
+	// Was it a controller's START? (The engine reads Xbox pads itself, and its
+	// START opens the pause menu, even for a guest's pad or when player 1 plays
+	// with keyboard and mouse.) Then it's always closed, and the player whose
+	// START it was gets their own START menu.
+	const double now = Plat_FloatTime();
+	int startPad = -1;
+	for ( int pad = 0; pad < GES_SS_MAX_PADS; pad++ )
+	{
+		if ( now - m_flPadStartTime[pad] <= GESS_PAUSEMENU_START_WINDOW &&
+			( startPad < 0 || m_flPadStartTime[pad] > m_flPadStartTime[startPad] ) )
+			startPad = pad;
+	}
+
+	if ( startPad >= 0 )
+	{
+		engine->ClientCmd_Unrestricted( "gameui_hide\n" );
+		// Our own START handling already saw this press (opened or closed that
+		// player's START menu) unless the pause menu was up first
+		if ( m_bPadStartUnseen[startPad] && !m_bPregame )
+		{
+			m_bPadStartUnseen[startPad] = false;
+			const int slot = GetPadSlot( startPad );
+			if ( slot >= 0 && ( slot == 0 || m_Slots[slot].state == GESS_SLOT_JOINED ) && m_Slots[slot].menu == GESS_MENU_NONE )
+				OpenGameMenu( slot );
+			GESSGamepads()->ConsumeEdges( startPad );
+		}
+		DevMsg( "Split screen: closed the game's pause menu (opened by controller %d's START)\n", startPad + 1 );
+		return;
+	}
+
+	// Esc, or the window regaining focus: only when player 1 has a controller
+	// (the START menu needs one), so a keyboard player 1 always has a way out
 	const int hostPad = GetSlotPad( 0 );
 	if ( hostPad < 0 || !GESSGamepads()->GetPad( hostPad ).connected )
 		return;
@@ -1886,6 +1942,29 @@ void CGESplitScreenClient::BlockPauseMenu()
 	if ( m_Slots[0].menu == GESS_MENU_NONE && !m_bPregame )
 		OpenGameMenu( 0 );
 	DevMsg( "Split screen: closed the game's pause menu (player 1's START menu instead)\n" );
+}
+
+// The engine calls this (through the client's HandleUiToggle) when Esc, or an
+// Xbox pad's START, would open or close its pause menu. In a split screen game
+// a controller's START never does: each player's START opens their own menu.
+bool CGESplitScreenClient::ShouldSwallowUiToggle() const
+{
+	if ( !ges_ss_block_pausemenu.GetBool() || !ShouldBlockEnginePadButtons() || !ShouldSuppressGameMenus() )
+		return false;
+	if ( engine->IsLevelMainMenuBackground() || engine->Con_IsVisible() )
+		return false;
+	if ( inputsystem && inputsystem->IsButtonDown( KEY_ESCAPE ) )
+		return false;	// Esc always works
+
+	if ( inputsystem && inputsystem->IsButtonDown( KEY_XBUTTON_START ) )
+		return true;
+	const double now = Plat_FloatTime();
+	for ( int pad = 0; pad < GES_SS_MAX_PADS; pad++ )
+	{
+		if ( GESSGamepads()->GetPad( pad ).IsDown( GESS_PAD_START ) || now - m_flPadStartTime[pad] <= 0.25 )
+			return true;
+	}
+	return false;
 }
 
 void CGESplitScreenClient::OpenGameMenu( int slot )
