@@ -1110,6 +1110,8 @@ void CGEPlayer::SetSpeedMultiplier(float mult)
 	SetMaxSpeed(GE_NORM_SPEED * GEMPRules()->GetSpeedMultiplier(this)); 
 }
 
+ConVar ge_deathscreen_speed( "ge_deathscreen_speed", "0.5", FCVAR_GAMEDLL, "How fast the blood (or the paintball cheat's paint) runs down a dead player's screen (1: GoldenEye's original speed)." );
+
 void CGEPlayer::ShowBloodScreen( void )
 {
     if ( !IsBotPlayer() )
@@ -1121,6 +1123,8 @@ void CGEPlayer::ShowBloodScreen( void )
 			pViewModel->RemoveEffects( EF_NODRAW );
 			int seq = GERandom<int>(4) + 1;
 			pViewModel->SendViewModelMatchingSequence( seq );
+			// How fast the blood (or paintball paint) runs down the screen
+			pViewModel->SetPlaybackRate( clamp( ge_deathscreen_speed.GetFloat(), 0.1f, 4.0f ) );
 		}
 	}
 }
@@ -1132,6 +1136,7 @@ void CGEPlayer::HideBloodScreen( void )
 	    CBaseViewModel *pViewModel = GetViewModel( 1 );
 	    if ( pViewModel )
 	    {
+		    pViewModel->SetPlaybackRate( 1.0f );
 		    pViewModel->SendViewModelMatchingSequence( 0 );
 		    pViewModel->AddEffects( EF_NODRAW );
 	    }
