@@ -52,6 +52,7 @@ VIAddVersionKey "LegalCopyright" "GoldenEye: Source by Team GoldenEye: Source. U
 !define MUI_FINISHPAGE_SHOWREADME_NOTCHECKED
 !define MUI_FINISHPAGE_TEXT "${PRODUCT} is installed. Restart Steam so the library shows the new name, then start ${GAME_TITLE} from your Steam library."
 
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE CheckPrereqs
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "payload_docs\LICENSE_GES.txt"
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE DirLeave
@@ -76,6 +77,26 @@ Function .onInit
     ${If} ${FileExists} "$SteamPath\steamapps\sourcemods\gesource\gameinfo.txt"
       StrCpy $INSTDIR "$SteamPath\steamapps\sourcemods\gesource"
     ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+; Everything the mod needs: Steam, Source SDK Base 2013 Multiplayer, GoldenEye: Source 5.0.6.
+Function CheckPrereqs
+  ReadRegStr $SteamPath HKCU "Software\Valve\Steam" "SteamPath"
+  ${If} $SteamPath == ""
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "Steam isn't installed. GoldenEye: Source runs through Steam, so install Steam, sign in, then run this setup again.$\r$\n$\r$\nOpen the Steam download page now?" IDNO +2
+      ExecShell "open" "https://store.steampowered.com/about/"
+    Quit
+  ${EndIf}
+  ReadRegDWORD $0 HKCU "Software\Valve\Steam\Apps\243750" "Installed"
+  ${If} $0 != 1
+    MessageBox MB_YESNO|MB_ICONQUESTION "GoldenEye: Source needs Source SDK Base 2013 Multiplayer (free on Steam), and it isn't installed yet.$\r$\n$\r$\nInstall it through Steam now? Steam will download it while this setup carries on." IDNO +2
+      ExecShell "open" "steam://install/243750"
+  ${EndIf}
+  ${IfNot} ${FileExists} "$INSTDIR\gameinfo.txt"
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "Setup couldn't find GoldenEye: Source 5.0.6 in your Steam sourcemods folder.$\r$\n$\r$\nIt's a free download from the GoldenEye: Source website. Install it, restart Steam, then run this setup again. If it's installed somewhere else, choose No and pick its folder on the next pages.$\r$\n$\r$\nOpen the GoldenEye: Source download page now?" IDNO +3
+      ExecShell "open" "https://www.geshl2.com/"
+      Quit
   ${EndIf}
 FunctionEnd
 
