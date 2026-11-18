@@ -339,13 +339,19 @@ void CGESplitScreenHud::Paint()
 			PaintSlot( slot, vp );
 	}
 
-	// Cells nobody plays in: the scoreboard in the first, the logo in the rest
+	// Cells nobody plays in: blank before the match, then the scoreboard in the
+	// first and the logo in the rest
 	for ( int i = 0; i < pSS->GetSpareCellCount(); i++ )
 	{
 		GESSViewport_t vp;
 		if ( !pSS->GetSpareCell( i, vp ) )
 			continue;
-		if ( i == 0 )
+		if ( pSS->IsPregame() )
+		{
+			surface()->DrawSetColor( Color( 0, 0, 0, 255 ) );
+			surface()->DrawFilledRect( vp.x, vp.y, vp.x + vp.w, vp.y + vp.h );
+		}
+		else if ( i == 0 )
 		{
 			// Nobody's view behind it: black, like the screen around the normal one
 			surface()->DrawSetColor( Color( 0, 0, 0, 255 ) );
