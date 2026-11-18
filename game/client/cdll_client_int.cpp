@@ -144,6 +144,7 @@
 	#include "ge_musicmanager.h"
 	#include "ge_loadingscreen.h"
 	#include "ge_vieweffects.h"
+	#include "ge_splitscreen_client.h"
 #endif
 
 #if 0
@@ -2571,6 +2572,13 @@ void CHLClient::ReloadFilesInList( IFileList *pFilesToReload )
 
 bool CHLClient::HandleUiToggle()
 {
+#ifdef GE_DLL
+	// Split screen: a controller's START opens that player's own START menu,
+	// never the game's pause menu (Esc still does)
+	if ( GESplitScreenClient()->ShouldSwallowUiToggle() )
+		return true;
+#endif
+
 #if defined( REPLAY_ENABLED )
 	if ( !g_pEngineReplay || !g_pEngineReplay->IsSupportedModAndPlatform() )
 		return false;
