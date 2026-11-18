@@ -93,9 +93,9 @@ private:
 	enum 
 	{ 
 		GES_ICON_WIDTH = 16,
-		GES_NAME_WIDTH = 155,
+		GES_NAME_WIDTH = 125,
 		GES_TEAM_WIDTH = 45,
-		GES_CHAR_WIDTH = 45,
+		GES_CHAR_WIDTH = 75,
 		GES_SCORE_WIDTH = 42,
 		GES_DEATH_WIDTH = 42,
 		GES_FAVWEAPON_WIDTH = 100,
@@ -106,6 +106,7 @@ private:
 	vgui::ImagePanel	*m_pBackground;
 	vgui::SectionedListPanel	*m_pPlayerList;
 	vgui::ImageList		*m_pImageList;
+	vgui::HFont			m_hPlayerRowFont;	// Player rows, twice the default size
 
 	IViewPortPanel		*m_pScoreboard;
 	IViewPortPanel		*m_pTeamMenu;
