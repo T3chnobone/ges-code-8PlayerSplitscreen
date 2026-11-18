@@ -296,7 +296,7 @@ it). `ges_ss_menu_pad_nav 0` turns the controller menu keys off.
 **Stick dead zones**: each controller's sticks are measured automatically
 (`ges_ss_pad_deadzone_auto 1`). While a stick rests in the menus (nothing pressed), its resting point
 and how far it wanders are measured over a second and a half; the dead zone is that wander plus a
-margin (0.06 to 0.35), plus `ges_ss_pad_deadzone_extra` (0.01, so 0.07 to 0.36), around the resting
+margin (0.06 to 0.35), plus `ges_ss_pad_deadzone_add` (0.03, so 0.09 to 0.38), around the resting
 point. The first measurement after a controller is plugged
 in replaces the saved one; later ones only make it wider, so a stick that starts drifting doesn't
 creep. The furthest a stick has gone from its resting point counts as 100%, so worn sticks still
@@ -330,7 +330,7 @@ screens: the first "players per display" players go on the left half and the res
 | `ges_ss_look_aim_scale` | 0.5 | Look speed multiplier in aim mode |
 | `ges_ss_padmouse` / `ges_ss_padmouse_speed` | 1 / 1100 | Mouse cursor from player 1's controller |
 | `ges_ss_pad_deadzone_auto` | 1 | Measure each controller's stick dead zones (see Stick dead zones) |
-| `ges_ss_pad_deadzone_extra` | 0.01 | Added to each measured stick dead zone (so a character standing still doesn't creep) |
+| `ges_ss_pad_deadzone_add` | 0.03 | Added to each measured stick dead zone (so a character standing still doesn't creep) |
 | `ge_ss_aimassist` | 0 | Aim assist for controller players (set by the Match page): 0 off, 1 classic, 2 sticky, 3 slowdown |
 | `ges_ss_aim_sticky` / `ges_ss_aim_slowdown` / `ges_ss_aim_radius` | 0.85 / 0.4 / 1.5 | Sticky aim strength, slowdown speed, degrees around a target that count as on it |
 | `ges_ss_pad_deadzone` | 0.22 | Fixed stick dead zone (when not measured, or with auto off) |
@@ -539,9 +539,11 @@ screens: the first "players per display" players go on the left half and the res
   too). The server now takes a setting that isn't sent as its default (on). Testing:
   `sv_ges_debug_animevent` / `cl_ges_debug_animevent <player>` log the events,
   `ges_debug_clientsettings 1` prints what each player's game sent.
-- **Dead zones +0.01**: every measured stick dead zone (automatic or R3 calibration) gets 0.01
-  more (`ges_ss_pad_deadzone_extra`), so a character standing still doesn't creep: 0.07 at the
-  least. It's part of the saved value, so loading or measuring again doesn't add it twice.
+- **Dead zones +0.03**: every measured stick dead zone (automatic, R3 or Calibrate Sticks) gets
+  0.03 more (`ges_ss_pad_deadzone_add`; was 0.01 as `ges_ss_pad_deadzone_extra`, renamed so an old
+  saved value doesn't override it), so a character standing still doesn't creep: 0.09 at the
+  least. It's part of the saved value, so loading or measuring again doesn't add it twice; sticks
+  pick up the extra 0.02 the next time they're calibrated.
 - **Cheats page and Big Head**: a **Cheats...** button on the Match page opens a Cheats page of
   on / off toggles (built from a table in `ge_splitscreen_match.cpp`, so more are easy to add). The
   first is **Big Head** (`ge_cheat_bighead`, replicated): the head bone of every character is drawn
