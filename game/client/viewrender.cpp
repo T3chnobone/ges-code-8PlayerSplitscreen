@@ -1207,6 +1207,13 @@ void CViewRender::DrawViewModels( const CViewSetup &view, bool drawViewmodel )
 			}
 			render->PopView( GetFrustum() );
 			render->Push3DView( bloodSetup, 0, pRTColor, GetFrustum(), pRTDepth );
+			// The blood (and the paintball cheat's paint) is a Refract material: it
+			// shows the picture copied into the refract texture, bent by the drips.
+			// Copy this view's own rectangle into it now. Taking the blood out of the
+			// viewmodel lists above skipped the copy those lists do, so it showed
+			// whatever was copied last, which in split screen was the whole window:
+			// a dead player's view turned into a shrunken picture of every screen.
+			UpdateRefractTexture( view.x, view.y, view.width, view.height, true );
 			// In front of everything (pushing the view also reset the depth range)
 			pRenderContext->DepthRange( 0.0f, 0.0f );
 
