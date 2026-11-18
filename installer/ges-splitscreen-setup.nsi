@@ -95,7 +95,7 @@ Function CheckPrereqs
   ${EndIf}
   ${IfNot} ${FileExists} "$INSTDIR\gameinfo.txt"
     MessageBox MB_YESNO|MB_ICONEXCLAMATION "Setup couldn't find GoldenEye: Source 5.0.6 in your Steam sourcemods folder.$\r$\n$\r$\nIt's a free download from the GoldenEye: Source website. Install it, restart Steam, then run this setup again. If it's installed somewhere else, choose No and pick its folder on the next pages.$\r$\n$\r$\nOpen the GoldenEye: Source download page now?" IDNO +3
-      ExecShell "open" "https://www.geshl2.com/"
+      ExecShell "open" "https://www.geshl2.com/download/"
       Quit
   ${EndIf}
 FunctionEnd
