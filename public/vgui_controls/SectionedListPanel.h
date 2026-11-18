@@ -99,6 +99,9 @@ public:
 	virtual void SetItemBgColor( int itemID, Color color );
 	virtual int GetColumnIndexByName(int sectionID, char* name);
 	virtual int GetLineSpacing() { return m_iLineSpacing; }
+#ifdef GE_DLL
+	virtual void SetLineSpacing( int iSpacing ) { m_iLineSpacing = iSpacing; InvalidateLayout(); }
+#endif
 	//=============================================================================
 	// HPE_END
 	//=============================================================================

@@ -87,6 +87,7 @@ CGERoundReport::CGERoundReport(IViewPort *pViewPort) : EditablePanel(NULL, PANEL
 	m_RoundData.scenario_name[0] = '\0';
 
 	m_pImageList = NULL;
+	m_hPlayerRowFont = vgui::INVALID_FONT;
 
 	// Make sure we get ticked!
 	vgui::ivgui()->AddTickSignal( GetVPanel() );
@@ -443,6 +444,21 @@ void CGERoundReport::AddSection(int type )
 	m_pPlayerList->SetSectionFont( sectionID, m_pScheme->GetFont("TypeWriter_Small", true) );
 	m_pPlayerList->SetSectionDividerColor( sectionID, Color(0,0,0,0) );
 	m_pPlayerList->SetSectionAlwaysVisible(sectionID);
+
+	// Player rows: twice the size of the default row font so names can be read from the couch
+	if ( m_hPlayerRowFont == vgui::INVALID_FONT )
+	{
+		int baseTall = vgui::surface()->GetFontTall( m_pScheme->GetFont( "Default", false ) );
+		if ( baseTall <= 0 )
+			baseTall = 13;
+
+		m_hPlayerRowFont = vgui::surface()->CreateFont();
+		vgui::surface()->SetFontGlyphSet( m_hPlayerRowFont, "Tahoma", baseTall * 2, 500, 0, 0, vgui::ISurface::FONTFLAG_ANTIALIAS );
+	}
+	m_pPlayerList->SetRowFont( m_hPlayerRowFont );
+	int rowTall = vgui::surface()->GetFontTall( m_hPlayerRowFont ) + 4;
+	if ( m_pPlayerList->GetLineSpacing() < rowTall )
+		m_pPlayerList->SetLineSpacing( rowTall );
 	m_pPlayerList->SetVerticalScrollbar(true);
 
 	if ( type == TYPE_TEAM )
@@ -498,6 +514,8 @@ void CGERoundReport::PopulatePlayerList( void )
 				color = m_pScheme->GetColor( "RoundReport_MI6", Color(37,50,142,255) );
 
 			m_pPlayerList->SetItemFgColor( itemID, color );
+			if ( m_hPlayerRowFont != vgui::INVALID_FONT )
+				m_pPlayerList->SetItemFont( itemID, m_hPlayerRowFont );
 
 			playerData->deleteThis();
 		}
