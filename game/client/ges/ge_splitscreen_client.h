@@ -198,6 +198,10 @@ public:
 	// Split screen reads the controllers: the engine's own controller buttons
 	// (Xbox pads through XInput) must not run key bindings for player 1
 	bool ShouldBlockEnginePadButtons() const;
+	// The engine asks before Esc / an Xbox pad's START opens or closes its pause
+	// menu: true when it's a controller's START in a split screen game (that
+	// player's own START menu opens instead, the game's pause menu stays shut)
+	bool ShouldSwallowUiToggle() const;
 	C_BasePlayer *GetSlotPlayer( int slot ) const;
 	bool IsSlotProfileInUse( int profile, int ignoreSlot ) const;
 	int  NextFreeProfile( int slot, int current ) const;
@@ -419,6 +423,11 @@ private:
 	bool ShouldHideMenuMouse() const;
 	void SendMenuKey( int code, bool bDown );
 	int		m_iMenuNavPad;			// Controller that drove it last frame (-1 = none)
+	// Each controller's last START press (Plat_FloatTime), and whether it was
+	// pressed while the game's pause menu was already up (so our own START
+	// handling never saw it: the pause menu opened from that press)
+	double	m_flPadStartTime[GES_SS_MAX_PADS];
+	bool	m_bPadStartUnseen[GES_SS_MAX_PADS];
 	int		m_iMenuNavDir;			// Direction key held (-1 = none)
 	float	m_flMenuNavRepeat;		// When the held direction repeats
 	bool	m_bMenuNavADown, m_bMenuNavBDown;

@@ -601,3 +601,12 @@ screens: the first "players per display" players go on the left half and the res
   summary runs the full width (the screen diagram moved up beside the time, kills and players per
   display fields) so it isn't cut off; in the character picker the portrait gets smaller as needed so
   the whole bio fits.
+- **START never opens the game's pause menu in a split screen match.** The engine reads Xbox
+  (XInput) pads itself and its START opens the pause menu (Resume Game, Disconnect, Mute
+  Players...). It used to be closed only while player 1 had a controller, so with player 1 on
+  keyboard and mouse a guest's START left it on screen over every view, and when it was closed
+  player 1's START menu opened even if a guest pressed START. Now every controller's START press is
+  noted: a pause menu that appears within half a second of one is always closed, and the START
+  menu opens for the player whose START it was (if our own START handling hadn't seen that press
+  already). The client's `HandleUiToggle` also refuses the engine's toggle while a controller's
+  START is down, so the pause menu doesn't even flash. Esc still opens it for a keyboard player 1.
