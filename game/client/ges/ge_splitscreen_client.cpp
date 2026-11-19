@@ -724,7 +724,7 @@ const char *CGESplitScreenClient::GetSlotName( int slot ) const
 	return s_szName[slot];
 }
 
-// The next invited profile after "current" that no other player is using,
+// The next profile after "current" that no other player is using,
 // wrapping round to "Guest" (-1) after the last one
 int CGESplitScreenClient::NextFreeProfile( int slot, int current ) const
 {
@@ -750,7 +750,7 @@ int CGESplitScreenClient::NextFreeProfile( int slot, int current ) const
 
 int CGESplitScreenClient::CycleProfile( int slot, int current, int dir ) const
 {
-	const int count = GetMenuProfileCount();	// invited profiles, then Guest
+	const int count = GetMenuProfileCount();	// every profile, then Guest
 	if ( count <= 0 )
 		return current;
 
@@ -789,13 +789,13 @@ bool CGESplitScreenClient::IsSlotProfileInUse( int profile, int ignoreSlot ) con
 
 int CGESplitScreenClient::GetMenuProfileCount() const
 {
-	return GESSProfiles()->GetInvitedCount() + 1;
+	return GESSProfiles()->Count() + 1;	// Every profile, then Guest
 }
 
 int CGESplitScreenClient::GetMenuProfileIndex( int entry ) const
 {
-	if ( entry < GESSProfiles()->GetInvitedCount() )
-		return GESSProfiles()->GetInvited( entry );
+	if ( entry >= 0 && entry < GESSProfiles()->Count() )
+		return entry;
 	return -1;
 }
 
@@ -1714,7 +1714,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 	// ---- Not in a game: guests can get ready from the menus ("lobby") ----
 	if ( !bInGame )
 	{
-		// Profiles are chosen here, in the menus: LB / RB rotate through the invited
+		// Profiles are chosen here, in the menus: LB / RB rotate through the
 		// profiles (and Guest) nobody else is using. Player 1 is always in; the
 		// others press START to join (and again to leave).
 		const int dir = pad.connected ? ( pad.WasPressed( GESS_PAD_RB ) ? 1 : ( pad.WasPressed( GESS_PAD_LB ) ? -1 : 0 ) ) : 0;
@@ -1722,7 +1722,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 		if ( slot == 0 )
 		{
 			// Player 1 isn't assumed to be the Steam account: they get a profile
-			// like everyone else (the first free invited one)
+			// like everyone else (the first free one)
 			if ( s.profile < 0 && !s.profileChosen )
 				s.profile = NextFreeProfile( slot, -1 );
 			if ( dir )
@@ -1742,7 +1742,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 		{
 			if ( s.state == GESS_SLOT_EMPTY )
 			{
-				// Ready up with the first invited profile nobody else is using
+				// Ready up with the first profile nobody else is using
 				s.profile = NextFreeProfile( slot, -1 );
 				s.state = GESS_SLOT_JOINING;
 				s.joinSentTime = -1000.0f;
@@ -1779,7 +1779,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 	if ( slot == 0 && !m_bPregame && ShouldSuppressGameMenus() && !m_bHostAppliedThisLevel && s.menu == GESS_MENU_NONE && !enginevgui->IsGameUIVisible() )
 	{
 		// Never a spectator, and no picker: play straight away with the profile chosen
-		// in the Split Screen menu (or the first free invited one) and the team from
+		// in the Split Screen menu (or the first free one) and the team from
 		// the profile menu (auto assign if none).
 		if ( s.profile < 0 && !s.profileChosen && !m_bHostChosen )
 			s.profile = NextFreeProfile( slot, -1 );

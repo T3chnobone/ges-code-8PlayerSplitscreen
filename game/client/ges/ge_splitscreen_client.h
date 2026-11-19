@@ -205,7 +205,7 @@ public:
 	C_BasePlayer *GetSlotPlayer( int slot ) const;
 	bool IsSlotProfileInUse( int profile, int ignoreSlot ) const;
 	int  NextFreeProfile( int slot, int current ) const;
-	// The next (dir 1) or previous (dir -1) invited profile or Guest that no other
+	// The next (dir 1) or previous (dir -1) profile or Guest that no other
 	// player is using, wrapping round (LB / RB in the lobby)
 	int  CycleProfile( int slot, int current, int dir ) const;
 
@@ -213,7 +213,7 @@ public:
 	void DebugJoin( int slot );
 	void DebugCycleProfile( int slot, int dir );
 
-	// Profile list entries offered in the join menu: invited profiles followed by "Guest"
+	// Profile list entries offered in the join menu: every profile followed by "Guest"
 	int  GetMenuProfileCount() const;
 	int  GetMenuProfileIndex( int entry ) const;	// -1 = Guest/default
 	int  GetPauseMenuCount() const;

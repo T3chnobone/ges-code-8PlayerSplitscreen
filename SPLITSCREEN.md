@@ -50,8 +50,8 @@ The menu has two pages, **Profiles** and **Match**, picked with the tabs at the 
 ### Profiles page
 
 Each profile has a name, a character (or random), controller sensitivity (0.1 to 3.0),
-inverted look, and **Invited**. Only invited profiles are offered when a player joins, and a
-"Guest" entry is always available. Profiles are saved to `cfg/ges_splitscreen_profiles.txt`.
+inverted look. Every profile is offered when a player joins (there is no Invited setting any
+more), and a "Guest" entry is always available. Profiles are saved to `cfg/ges_splitscreen_profiles.txt`.
 The page also lists connected controllers and which players are ready (the lobby).
 
 ### Using the menu with a controller
@@ -179,7 +179,7 @@ out again for the players who are playing. The spare cell lists who is in while 
 
 - **In the menus (lobby)**: profiles are chosen here, not in the game. Player 1 is always in; the
   other players press START to join (START again leaves). Each player then rotates through the
-  invited profiles and Guest with LB / RB (profiles another player is using are skipped). The
+  profiles and Guest with LB / RB (profiles another player is using are skipped). The
   Split Screen menu's Profiles page lists who is in and with which profile. Everyone joins with
   their profile when the match starts; nobody gets a picker at the start of the game.
 - **In a game**: a player presses START and joins at once with the next free profile.

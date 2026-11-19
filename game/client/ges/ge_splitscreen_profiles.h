@@ -32,7 +32,6 @@ struct GESSProfile_t
 	char	character[GES_SS_PROFILE_CHAR_LEN];	// Character identifier or "_random"
 	float	sensitivity;	// Look speed multiplier for the controller
 	bool	invertY;		// Inverted look
-	bool	invited;		// Only invited profiles are offered when a player joins
 };
 
 class CGESSProfiles
@@ -49,11 +48,7 @@ public:
 	int  Add( const char *name = NULL );
 	void Remove( int i );
 
-	// Index of the n-th invited profile, or -1
-	int  GetInvitedCount() const;
-	int  GetInvited( int n ) const;
-
-	// A profile used when no invited profile exists or the player picks "Guest"
+	// A profile used when there are no profiles or the player picks "Guest"
 	static const GESSProfile_t &DefaultProfile();
 
 private:
