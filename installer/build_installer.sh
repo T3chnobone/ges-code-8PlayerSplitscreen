@@ -25,6 +25,7 @@ cp ../LICENSE_GES payload_docs/LICENSE_GES.txt
 [ -f extras_uninstall.nsh ] || : > extras_uninstall.nsh
 # The mod zip (Windows paths inside, as Expand-Archive expects)
 rm -f GES-SplitScreenMod.zip
+if command -v python3 >/dev/null 2>&1 && python3 -c 1 >/dev/null 2>&1; then
 python3 -I - <<'PY'
 import os, zipfile
 with zipfile.ZipFile('GES-SplitScreenMod.zip', 'w', zipfile.ZIP_DEFLATED) as z:
@@ -33,6 +34,19 @@ with zipfile.ZipFile('GES-SplitScreenMod.zip', 'w', zipfile.ZIP_DEFLATED) as z:
             p = os.path.join(root, f)
             z.write(p, os.path.relpath(p, 'payload'))
 PY
+else
+  # No Python (a plain Windows + Git Bash setup): build the same zip with .NET, '/' in the paths
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '
+    Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+    $root = (Resolve-Path "payload").Path.TrimEnd("\") + "\"
+    $zip = [IO.Compression.ZipFile]::Open((Join-Path (Get-Location) "GES-SplitScreenMod.zip"), "Create")
+    try {
+      Get-ChildItem -LiteralPath $root -Recurse -File | Sort-Object FullName | ForEach-Object {
+        $name = $_.FullName.Substring($root.Length).Replace("\", "/")
+        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $name, "Optimal")
+      }
+    } finally { $zip.Dispose() }'
+fi
 sha256sum GES-SplitScreenMod.zip | awk '{print $1 "  GES-SplitScreenMod.zip"}' > GES-SplitScreenMod.zip.sha256
 makensis -V2 -DVERSION="$VERSION" -DGAME_TITLE="$TITLE" ges-splitscreen-setup.nsi
 makensis -V2 -DWEB -DVERSION="$VERSION" -DGAME_TITLE="$TITLE" ges-splitscreen-setup.nsi

@@ -38,7 +38,12 @@ RequestExecutionLevel admin
 InstallDir "$PROGRAMFILES32\Steam\steamapps\sourcemods\gesource"
 BrandingText "${PRODUCT}"
 
-VIProductVersion "${VERSION}.0"
+; The Windows version resource only takes numbers: 0.2.0-test -> 0.2.0.0
+!searchparse /noerrors "${VERSION}" "" VERSION_NUM "-"
+!ifndef VERSION_NUM
+  !define VERSION_NUM "${VERSION}"
+!endif
+VIProductVersion "${VERSION_NUM}.0"
 VIAddVersionKey "ProductName" "${PRODUCT}"
 VIAddVersionKey "FileDescription" "${PRODUCT} setup"
 VIAddVersionKey "FileVersion" "${VERSION}"
@@ -249,6 +254,7 @@ Function WebInstall
   nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\ges_fetch.ps1" -Url "${MOD_ZIP_URL}" -Local "$EXEDIR\${MOD_ZIP_NAME}" -Out "$PLUGINSDIR\mod"'
   Pop $0
   ${If} $0 != 0
+    SetErrorLevel $0   ; a silent run exits with the reason: 2 download failed, 3 checksum mismatch, 4 not the mod zip
     MessageBox MB_ABORTRETRYIGNORE|MB_ICONEXCLAMATION "Setup couldn't get the Split Screen Mod files (error $0). Check your internet connection and click Retry.$\r$\n$\r$\nTo install without internet, download ${MOD_ZIP_NAME} from the Releases page and put it next to this setup. Click Ignore to open the Releases page." /SD IDABORT IDRETRY retry IDIGNORE openpage
     Abort "Couldn't get the mod files."
     openpage:
@@ -265,6 +271,28 @@ Function WebInstall
     Pop $ModVersion
   ${EndIf}
   DetailPrint "Installing Split Screen Mod $ModVersion"
+  ; Every listed file must be in the download, or backups would go to the wrong names
+  FileOpen $8 "$PLUGINSDIR\filelist.txt" r
+  FileRead $8 $R1
+  chk_loop:
+    StrCmp $R1 "" chk_done
+    Push $R1
+    Call TrimNewline
+    Pop $R1
+    StrCmp $R1 "" chk_next
+    ${IfNot} ${FileExists} "$PLUGINSDIR\mod\$R1"
+      FileClose $8
+      SetErrorLevel 5
+      MessageBox MB_OK|MB_ICONSTOP "Setup couldn't read the downloaded file list ($R1). Nothing was changed." /SD IDOK
+      Abort "Couldn't read the downloaded file list."
+    ${EndIf}
+    chk_next:
+    FileRead $8 $R1
+    Goto chk_loop
+  chk_done:
+  FileClose $8
+  ; Only now touch gesource: a failed download leaves it exactly as it was
+  CreateDirectory "$INSTDIR\${BACKUP_DIR}"
   ; Back up every file the download will replace
   FileOpen $8 "$PLUGINSDIR\filelist.txt" r
   FileRead $8 $R1
@@ -301,10 +329,10 @@ FunctionEnd
 
 Section "Split Screen Mod (required)" SecCore
   SectionIn RO
-  CreateDirectory "$INSTDIR\${BACKUP_DIR}"
 !ifdef WEB
-  Call WebInstall
+  Call WebInstall   ; creates the backup folder only once the download worked
 !else
+  CreateDirectory "$INSTDIR\${BACKUP_DIR}"
   !include "payload_backup.nsh"   ; generated: one BackupFile line per payload file
 
   SetOutPath "$INSTDIR"

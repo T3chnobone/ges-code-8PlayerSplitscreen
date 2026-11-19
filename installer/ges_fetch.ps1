@@ -28,8 +28,12 @@ try {
   if (Test-Path -LiteralPath $Out) { Remove-Item -LiteralPath $Out -Recurse -Force }
   Expand-Archive -LiteralPath $zip -DestinationPath $Out -Force
   if (-not (Test-Path -LiteralPath (Join-Path $Out 'bin\client.dll'))) { Write-Output "The download doesn't contain bin\client.dll"; exit 4 }
-  $root = (Resolve-Path -LiteralPath $Out).Path.TrimEnd('\') + '\'
-  Get-ChildItem -LiteralPath $Out -Recurse -File | ForEach-Object { $_.FullName.Substring($root.Length) } |
+  # Paths relative to $Out. .NET keeps the folder exactly as passed in; Get-ChildItem would
+  # expand a short (8.3) temp path like C:\Users\ABCDEF~1 to the long name, and cutting a
+  # fixed length off those paths gave wrong names (nothing got backed up).
+  $root = $Out.TrimEnd('\')
+  [IO.Directory]::EnumerateFiles($root, '*', [IO.SearchOption]::AllDirectories) |
+    ForEach-Object { $_.Substring($root.Length + 1) } |
     Set-Content -LiteralPath (Join-Path $parent 'filelist.txt') -Encoding ASCII
   exit 0
 } catch {
