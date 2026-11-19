@@ -9,10 +9,10 @@ players a download. You only need a GitHub account and Git for Windows.
 2. Open [goldeneye-source/ges-code](https://github.com/goldeneye-source/ges-code) and click
    **Fork** (top right).
 3. Owner: your account. Name: `ges-code` or another name (this build's fork is
-   `GoldenEye-Source-Split-Screen-Mod`). Click **Create fork**.
+   `ges-code-8PlayerSplitscreen`). Click **Create fork**.
 
 Your fork is now at `https://github.com/<your-name>/<fork name>`. This build lives at
-[T3chnobone/GoldenEye-Source-Split-Screen-Mod](https://github.com/T3chnobone/GoldenEye-Source-Split-Screen-Mod), branch
+[T3chnobone/ges-code-8PlayerSplitscreen](https://github.com/T3chnobone/ges-code-8PlayerSplitscreen), branch
 `ges-splitscreen`.
 
 ## 2. Push the split screen branch

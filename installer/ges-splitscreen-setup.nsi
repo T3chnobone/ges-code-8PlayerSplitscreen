@@ -17,7 +17,7 @@ SetCompressor /SOLID lzma
 !define PRODUCT "GoldenEye: Source - Split Screen Mod"
 !define GAME_TITLE_FILE "GoldenEye Source - Split Screen Mod"
 !ifndef REPO_URL_PATH
-  !define REPO_URL_PATH "T3chnobone/GoldenEye-Source-Split-Screen-Mod"
+  !define REPO_URL_PATH "T3chnobone/ges-code-8PlayerSplitscreen"
 !endif
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\GESSplitScreenMod"
 !define BACKUP_DIR "splitscreen_backup"

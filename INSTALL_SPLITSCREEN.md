@@ -186,8 +186,8 @@ for the old prebuilt `lib/common/curl.lib`, and the `<typeinfo.h>` old SDK files
 From a Developer Command Prompt (or any shell with CMake on the PATH):
 
 ```
-git clone --recursive https://github.com/T3chnobone/GoldenEye-Source-Split-Screen-Mod.git
-cd GoldenEye-Source-Split-Screen-Mod
+git clone --recursive https://github.com/T3chnobone/ges-code-8PlayerSplitscreen.git
+cd ges-code-8PlayerSplitscreen
 git checkout ges-splitscreen
 cmake -S . -B build -G "Visual Studio 17 2022" -A Win32 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" "-DGES_BOOST_ROOT=C:/deps/boost_1_83_0" "-DGES_PYTHON_ROOT=C:/deps/py34"
 cmake --build build --config Release --target client server
