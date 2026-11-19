@@ -1,6 +1,6 @@
 "GameInfo"
 {
-	game		"GoldenEye: Source (v5.0)"
+	game		"GoldenEye: Source - Split Screen Mod"
 	title		""
 	title2		""
 

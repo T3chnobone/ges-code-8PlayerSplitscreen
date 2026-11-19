@@ -86,7 +86,7 @@ Two monitors (players 5 to 8 on the second): run `ges_ss_span_monitors` in the c
    menus: D-pad or left stick to move, A / Cross to choose, B / Circle to go back. In a dialog
    (for example "Quit game? / Cancel") the D-pad moves between its buttons. The mouse
    works too (the right stick moves the cursor, the right trigger clicks).
-2. Open **SPLIT SCREEN**. On **Profiles**, set each player's name, character and look speed.
+2. Open **SPLIT SCREEN**: it opens on the **Match** page. On the **Profiles** tab, set each player's name, character and look speed.
    The stick dead zones of every controller are measured automatically while the sticks rest in
    the menus. To calibrate one controller, press **R3** (click the right stick) in the Split Screen
    menu: its card in the Players list (top right) says what to do (leave the sticks centred, then
@@ -107,9 +107,9 @@ In the game:
 | RB | Alt fire / zoom |
 | X | Reload |
 | Y / LB | Next / previous weapon |
-| A | Use (doors, buttons) |
+| A | Jump (when the match allows jumping) |
 | B or left stick click | Crouch |
-| Right stick click | Jump (when the match allows jumping) |
+| Right stick click | Use (doors, buttons) |
 | START | Your menu: scoreboard, swap team, controller settings (invert, sensitivity, calibrate sticks), exit, commit suicide (player 1: the mouse works there too) |
 
 Keyboard and mouse are off during split screen matches. The game's pause menu doesn't open during
@@ -186,8 +186,8 @@ for the old prebuilt `lib/common/curl.lib`, and the `<typeinfo.h>` old SDK files
 From a Developer Command Prompt (or any shell with CMake on the PATH):
 
 ```
-git clone --recursive https://github.com/T3chnobone/ges-code-Couch-Party.git
-cd ges-code-Couch-Party
+git clone --recursive https://github.com/T3chnobone/ges-code-8PlayerSplitscreen.git
+cd ges-code-8PlayerSplitscreen
 git checkout ges-splitscreen
 cmake -S . -B build -G "Visual Studio 17 2022" -A Win32 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" "-DGES_BOOST_ROOT=C:/deps/boost_1_83_0" "-DGES_PYTHON_ROOT=C:/deps/py34"
 cmake --build build --config Release --target client server

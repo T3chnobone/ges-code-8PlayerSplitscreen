@@ -1263,7 +1263,7 @@ void CGESplitScreenClient::Update( float frametime )
 	}
 
 	// In the Split Screen lobby, R3 recalibrates that controller's sticks (its card in
-	// the Players list shows how). R3 does nothing else there; in a match it's jump.
+	// the Players list shows how). R3 does nothing else there; in a match it's use (doors, buttons).
 	// (The menu panel can stay "open" behind a match, so check the menu is on screen and
 	// no match is being played.)
 	const bool bInMatch = engine->IsInGame() && !engine->IsLevelMainMenuBackground();
@@ -3205,11 +3205,12 @@ int CGESplitScreenClient::ComputeButtons( const GESSPadState_t &pad ) const
 	if ( pad.IsDown( GESS_PAD_RT ) )		buttons |= IN_ATTACK;
 	if ( pad.IsDown( GESS_PAD_LT ) )		buttons |= IN_AIMMODE;
 	if ( pad.IsDown( GESS_PAD_RB ) )		buttons |= IN_ATTACK2;
-	if ( pad.IsDown( GESS_PAD_A ) )			buttons |= IN_USE;		// action / open doors
+	// Face buttons: A / Cross jumps, X / Square reloads, B / Circle crouches
+	if ( pad.IsDown( GESS_PAD_A ) )			buttons |= IN_JUMP;
+	if ( pad.IsDown( GESS_PAD_X ) )			buttons |= IN_RELOAD;
 	if ( pad.IsDown( GESS_PAD_B ) )			buttons |= IN_DUCK;
 	if ( pad.IsDown( GESS_PAD_LSTICK ) )	buttons |= IN_DUCK;
-	if ( pad.IsDown( GESS_PAD_X ) )			buttons |= IN_RELOAD;
-	if ( pad.IsDown( GESS_PAD_RSTICK ) )	buttons |= IN_JUMP;
+	if ( pad.IsDown( GESS_PAD_RSTICK ) )	buttons |= IN_USE;		// action / open doors
 	// Back / Select does nothing: the leaderboard is on START
 	return buttons;
 }

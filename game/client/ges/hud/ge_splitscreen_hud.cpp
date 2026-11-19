@@ -87,7 +87,9 @@ private:
 	void PaintJoinHint( const GESSViewport_t &vp, const char *line1, const char *line2 );
 	// GoldenEye's own health and armour dials (the normal game's CGEHudLifebars),
 	// either side of the crosshair, sized and placed for one player's view
-	void PaintLifeDials( C_GEPlayer *pGE, const GESSViewport_t &vp, float alpha );
+	// With pAround (the START menu's leaderboard), they're drawn larger, wrapped around
+	// the outside of that box instead
+	void PaintLifeDials( C_GEPlayer *pGE, const GESSViewport_t &vp, float alpha, const GESSViewport_t *pAround = NULL );
 	// How visible a player's health / armour bars are (0-1): they show when the player is
 	// hit, healed or spawns, then fade, like the single player game
 	float UpdateBarVisibility( int slot, C_BasePlayer *pPlayer, int health, int armor );
@@ -254,7 +256,20 @@ static float GESS_CalcDialPoints( float curr, float max )
 	return ( prop < 0.625f ) ? ( prop * 8.0f / 11.0f ) : ( prop * 16.0f / 11.0f - 5.0f / 11.0f );
 }
 
-void CGESplitScreenHud::PaintLifeDials( C_GEPlayer *pGE, const GESSViewport_t &vp, float alpha )
+// The dial's sizes in the normal game (ge_hudlifebars.cpp, 480 tall units): one dial
+// is 115 x 350, its inner edge 130 out from the centre, curved on a radius of 97 + 115
+#define GESS_DIAL_W			115.0f
+#define GESS_DIAL_H			350.0f
+#define GESS_DIAL_RADIUS	( 97.0f + 115.0f )
+// Around the leaderboard: the dials are this much taller than the green screen they
+// wrap around, with this gap (in scoreboard units) between its edge and theirs
+#define GESS_BOARD_DIAL_TALL	1.08f
+#define GESS_BOARD_DIAL_GAP		6.0f
+// The scoreboard's visible green screen, in its own units (see PaintGEScoreboard)
+#define GESS_BOARD_VIS_W		422.0f
+#define GESS_BOARD_VIS_H		262.0f
+
+void CGESplitScreenHud::PaintLifeDials( C_GEPlayer *pGE, const GESSViewport_t &vp, float alpha, const GESSViewport_t *pAround )
 {
 	CHudTexture *pHealthFull = gHUD.GetIcon( "health_full" );
 	CHudTexture *pHealthEmpty = gHUD.GetIcon( "health_empty" );
@@ -274,9 +289,22 @@ void CGESplitScreenHud::PaintLifeDials( C_GEPlayer *pGE, const GESSViewport_t &v
 	const float aspect = vp.h > 0 ? (float) vp.w / (float) vp.h : wide;
 	const float s = ( aspect >= wide ? vp.h : vp.w / wide ) / 480.0f;
 	const float spread = Max( 1.0f, aspect / wide );
-	const int w = (int)( 115 * s ), h = (int)( 350 * s );
-	const int offset = (int)( 130 * s * spread ), radius = (int)( ( 97 + 115 ) * s );
-	const int cx = vp.x + vp.w / 2, cy = vp.y + vp.h / 2;
+	int w = (int)( GESS_DIAL_W * s ), h = (int)( GESS_DIAL_H * s );
+	int offset = (int)( 130 * s * spread ), radius = (int)( GESS_DIAL_RADIUS * s );
+	int cx = vp.x + vp.w / 2, cy = vp.y + vp.h / 2;
+	if ( pAround && pAround->h > 0 )
+	{
+		// Wrapped around the leaderboard: a little taller than it, just outside its
+		// sides, so neither covers the other
+		const float k = pAround->h * GESS_BOARD_DIAL_TALL / GESS_DIAL_H;
+		const float gap = pAround->h * GESS_BOARD_DIAL_GAP / GESS_BOARD_VIS_H;
+		w = (int)( GESS_DIAL_W * k );
+		h = (int)( GESS_DIAL_H * k );
+		radius = (int)( GESS_DIAL_RADIUS * k );
+		offset = (int)( pAround->w / 2 + gap );
+		cx = pAround->x + pAround->w / 2;
+		cy = pAround->y + pAround->h / 2;
+	}
 	const int a = (int)( 255 * clamp( alpha, 0.0f, 1.0f ) );
 
 	const int maxHealth = pGE->GetMaxHealth() > 0 ? pGE->GetMaxHealth() : 100;
@@ -592,6 +620,16 @@ static const wchar_t *GESS_Localize( const char *token, const wchar_t *fallback 
 	return w ? w : fallback;
 }
 
+// The name to show for a player. Player 1 plays under their profile's name, but the
+// current engine keeps their Steam name on the server (it ignores "name"), so use the
+// profile name for them here.
+static const char *GESS_DisplayName( int entindex, const char *serverName )
+{
+	if ( entindex == engine->GetLocalPlayer() && GESplitScreenClient() )
+		return GESplitScreenClient()->GetSlotName( 0 );
+	return serverName ? serverName : "";
+}
+
 struct GESSBoardRow_t
 {
 	int index, score, deaths, team;
@@ -814,7 +852,7 @@ void CGESplitScreenHud::PaintGEScoreboard( const GESSViewport_t &area, int highl
 			}
 
 			char name[64];
-			Q_strncpy( name, pRes->GetPlayerName( i ), sizeof( name ) );
+			Q_strncpy( name, GESS_DisplayName( i, pRes->GetPlayerName( i ) ), sizeof( name ) );
 			GESS_DrawLabel( fRow, SBX( colX[1] ), ry, SBS( colW[1] - 2 ), rh, col, GEUTIL_RemoveColorHints( name ), -1 );
 			{
 				// The character's short name (a localisation token, as the list shows it)
@@ -1043,7 +1081,7 @@ void CGESplitScreenHud::PaintPlayerHud( int slot, C_BasePlayer *pPlayer, const G
 	const int pad = Max( 4, vp.h / 40 );
 
 	// Name in the top left
-	DrawText( m_hFontSmall, vp.x + pad, vp.y + pad, Color( 255, 255, 255, 220 ), pPlayer->GetPlayerName() );
+	DrawText( m_hFontSmall, vp.x + pad, vp.y + pad, Color( 255, 255, 255, 220 ), GESS_DisplayName( pPlayer->entindex(), pPlayer->GetPlayerName() ) );
 
 	// Time left, top centre (the full-screen round timer would sit across other views)
 	if ( GEMPRules() && !GEMPRules()->IsIntermission() )
@@ -1097,7 +1135,8 @@ void CGESplitScreenHud::PaintPlayerHud( int slot, C_BasePlayer *pPlayer, const G
 		m_Bars[slot].showUntil = Max( m_Bars[slot].showUntil, gpGlobals->realtime + 1.0f );
 		barAlpha = 1.0f;
 	}
-	if ( barAlpha > 0.0f && pGE )
+	// (the leaderboard draws them itself, larger and wrapped around it)
+	if ( barAlpha > 0.0f && pGE && !( pSS->GetSlotMenu( slot ) == GESS_MENU_PAUSE && pSS->GetSlotMenuSelection( slot ) == GESS_GAMEPAGE_LEADERBOARD ) )
 		PaintLifeDials( pGE, vp, barAlpha );
 
 	// GoldenEye's radar, centred on this player (ge_hudradar.cpp), when the match allows it
@@ -1348,14 +1387,24 @@ void CGESplitScreenHud::PaintGameMenu( int slot, const GESSViewport_t &vp )
 		// The player's own row is highlighted, as in the normal game
 		C_BasePlayer *pViewer = pSS->GetSlotPlayer( slot );
 		// Centred in the view and as big as it allows under the round timer and above
-		// the help line, drawn over the health and armour dials (the radar is hidden
-		// meanwhile), so it can be read from the sofa even in a quarter of the screen
+		// the help line (the radar is hidden meanwhile), so it can be read from the sofa
+		// even in a quarter of the screen. The health and armour dials wrap around its
+		// sides, so it leaves room for them: its half width, the gap and a dial must fit
+		// in half the view.
 		const int top = vp.y + Max( 4, vp.h / 40 ) + tallL + 4;
 		const int bottom = helpY - 4;
-		const int halfW = vp.w / 2 - Max( 4, vp.w / 60 );
+		const int margin = Max( 4, vp.w / 60 );
 		const int vcx = vp.x + vp.w / 2, vcy = vp.y + vp.h / 2;
 		const int halfH = Max( 10, Min( vcy - top, bottom - vcy ) );
-		GESSViewport_t board = { vcx - halfW, vcy - halfH, halfW * 2, halfH * 2 };
+		const float dialW = GESS_DIAL_W * GESS_BOARD_VIS_H * GESS_BOARD_DIAL_TALL / GESS_DIAL_H;
+		const float halfUnits = GESS_BOARD_VIS_W / 2 + GESS_BOARD_DIAL_GAP + dialW;
+		const float bs = Min( ( vp.w / 2 - margin ) / halfUnits, ( halfH * 2 ) / GESS_BOARD_VIS_H );
+		const int bw = (int)( GESS_BOARD_VIS_W * bs ), bh = (int)( GESS_BOARD_VIS_H * bs );
+		GESSViewport_t board = { vcx - bw / 2, vcy - bh / 2, bw, bh };
+
+		C_GEPlayer *pGEViewer = ToGEPlayer( pViewer );
+		if ( pGEViewer && pGEViewer->IsAlive() && !pGEViewer->IsObserver() && pGEViewer->GetTeamNumber() != TEAM_SPECTATOR )
+			PaintLifeDials( pGEViewer, vp, 1.0f, &board );
 		PaintScoreboard( board, pViewer ? pViewer->entindex() : -1 );
 		break;
 	}

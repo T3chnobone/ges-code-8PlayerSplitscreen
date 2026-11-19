@@ -26,6 +26,9 @@
 class CGEMusicManager : public CThread, public CAutoGameSystem
 {
 public:
+	// Playlists by soundscape name
+	typedef CUtlDict<CUtlVector<char*>*, int> PlaylistDict_t;
+
 	CGEMusicManager();
 	~CGEMusicManager();
 
@@ -64,8 +67,11 @@ protected:
 
 	// Playlist functions
 	void InternalLoadPlaylist();
+	void ReadPlaylistFile( const char *playlist, PlaylistDict_t &playlists );
 	void EnforcePlaylist( bool force = false );
-	void AddSong( const char* relative, const char* soundscape );
+	static void AddSong( PlaylistDict_t &playlists, const char* relative, const char* soundscape );
+	static void ClearPlaylists( PlaylistDict_t &playlists );
+	static void MovePlaylists( PlaylistDict_t &from, PlaylistDict_t &to );
 
 	// Soundscape functions
 	void InternalLoadSoundscape();
@@ -96,7 +102,9 @@ private:
 	bool	m_bNewPlaylist;
 
 	// Playlist seperated by soundscape name
-	CUtlDict<CUtlVector<char*>*, int>	m_Playlists;
+	PlaylistDict_t	m_Playlists;
+	// Read by LoadPlayList (main thread), swapped in by the music thread (under m_Lock)
+	PlaylistDict_t	m_PendingPlaylists;
 	CUtlVector<char*>* m_CurrPlaylist;
 
 	// Global sound controls

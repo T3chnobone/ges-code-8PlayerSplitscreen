@@ -1,4 +1,4 @@
-# GoldenEye: Source - Couch Party (local split screen)
+# GoldenEye: Source - Split Screen Mod
 
 An unofficial build of [GoldenEye: Source](http://www.geshl2.com) 5.0.6 that adds **local split
 screen for up to 8 players on one PC**, each with their own controller, on one or two monitors.
@@ -7,9 +7,40 @@ It runs on the current Source SDK Base 2013 Multiplayer (the 2025 engine update)
 This is the `ges-splitscreen` branch. It replaces the game's `client.dll` and `server.dll`; the
 GoldenEye: Source maps, models and sounds are unchanged.
 
-- Install it, controls and troubleshooting: [INSTALL_SPLITSCREEN.md](INSTALL_SPLITSCREEN.md)
+- **Easiest install**: download `GES-SplitScreenMod-Setup-<version>.exe` from [Releases](../../releases) and run it. It finds GoldenEye: Source through Steam, backs up the files it replaces and adds an uninstaller.
+- Install it by hand, controls and troubleshooting: [INSTALL_SPLITSCREEN.md](INSTALL_SPLITSCREEN.md)
 - How it works, every option and the full change list: [SPLITSCREEN.md](SPLITSCREEN.md)
 - Building, forking and publishing a release: [INSTALL_SPLITSCREEN.md](INSTALL_SPLITSCREEN.md#for-builders) and [GITHUB_SETUP.md](GITHUB_SETUP.md)
+
+## Screenshots
+
+All captured in game on the Vulkan renderer.
+
+**8 players over 2 displays** (players 1-4 on the left monitor, 5-8 on the right)
+
+![8 players over 2 displays](docs/screenshots/02-8-players-2-displays.png)
+
+**8 players joined on the Split Screen menu**
+
+![Split Screen menu with 8 players joined](docs/screenshots/01-main-menu-8-players.png)
+
+**Big Head cheat**
+
+![Big Head cheat](docs/screenshots/03-big-head.png)
+
+**Paintball cheat**
+
+![Paintball cheat](docs/screenshots/04-paintball.png)
+
+**Paint running down a dead player's screen**
+
+![Paint death screen](docs/screenshots/04c-paintball-death-screen.png)
+
+**A player's START menu** (Controller page, and the leaderboard with the health and armour dials)
+
+![START menu Controller page](docs/screenshots/05-start-menu-controller-page.png)
+
+![START menu leaderboard](docs/screenshots/05b-start-menu-leaderboard-dials.png)
 
 ## What's new
 
