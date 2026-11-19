@@ -31,6 +31,7 @@ backups described below.
 | `bin\game_shader_generic_procshader.dll` | `bin\game_shader_generic_procshader.dll` |
 | `materials\decals\paintball\` (8 splats) | `materials\decals\paintball\` (the Paintball cheat) |
 | `materials\VGUI\hud\paintscreen\` | `materials\VGUI\hud\paintscreen\` (the Paintball cheat's death screen) |
+| `materials\VGUI\splitscreen\` | `materials\VGUI\splitscreen\` (the creator credit on the main menu) |
 | `resource\GameMenu.res` | `resource\GameMenu.res` |
 | `resource\ClientScheme.res` | `resource\ClientScheme.res` |
 | `resource\SourceScheme.res` | `resource\SourceScheme.res` |
