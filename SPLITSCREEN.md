@@ -326,8 +326,8 @@ Steam how to reach the server you're on. Friends who have the mod installed can 
 **Join Game** on you in their Steam friends list.
 
 **INVITE FRIENDS** in the in-game menu (`ges_invite_friends`) opens the Steam overlay's friends
-list, where **Invite to Game** on a friend sends them an invite. It needs the Steam overlay to be on.
-Without it, `status` in the console shows the relay address (`udp/ip`, starting 169.254), which a
+list, where **Invite to Game** on a friend sends them an invite. With the overlay off, it opens Steam's own
+friends window instead, where the same right-click works. Without Steam, `status` in the console shows the relay address (`udp/ip`, starting 169.254), which a
 friend can join with `connect <address>`; it changes every time a map loads.
 
 ## Console variables

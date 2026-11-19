@@ -21,6 +21,7 @@
 #include "gamerules.h"
 #include "view.h"
 #include "vgui/ISurface.h"
+#include "vgui/ISystem.h"
 #include "vgui/IInput.h"
 #include "vgui/IInputInternal.h"
 #include "vgui/ILocalize.h"
@@ -35,6 +36,8 @@ void GESS_UpdateMenuMouse( bool bWant );
 #include "ge_shareddefs.h"
 #include "inetchannelinfo.h"
 #include "inputsystem/iinputsystem.h"
+#include "clientsteamcontext.h"
+#include "steam/steam_api.h"
 
 #ifdef _WIN32
 	#define WIN32_LEAN_AND_MEAN
@@ -3402,6 +3405,36 @@ void CGESplitScreenClient::SpanMonitors()
 #endif
 }
 
+// Opens the Steam overlay's friends list. While you are on a server the engine tells Steam
+// how to reach it (rich presence "connect"), so friends running the mod get "Join Game" in
+// their Steam friends list, and you get "Invite to Game" on a friend here.
+CON_COMMAND( ges_invite_friends, "Open the Steam overlay friends list to invite friends to this game" )
+{
+	ISteamFriends *pFriends = steamapicontext ? steamapicontext->SteamFriends() : NULL;
+	ISteamUtils *pUtils = steamapicontext ? steamapicontext->SteamUtils() : NULL;
+	if ( !pFriends || !pUtils )
+	{
+		Msg( "Steam isn't available, so friends can't be invited.\n" );
+		return;
+	}
+
+	if ( !engine->IsInGame() )
+	{
+		Msg( "Start or join a game first, then invite friends.\n" );
+		return;
+	}
+
+	if ( !pUtils->IsOverlayEnabled() )
+	{
+		// No overlay (it is off in Steam's settings, or the game wasn't started from Steam):
+		// open Steam's own friends window, where Invite to Game works the same way
+		Msg( "The Steam overlay is off, so Steam's friends window opens instead. Right-click a friend and choose Invite to Game.\n" );
+		vgui::system()->ShellExecute( "open", "steam://open/friends" );
+		return;
+	}
+
+	pFriends->ActivateGameOverlay( "Friends" );
+}
 CON_COMMAND( ges_ss_status, "Show split screen players and controllers" )
 {
 	GESplitScreenClient()->PrintStatus();

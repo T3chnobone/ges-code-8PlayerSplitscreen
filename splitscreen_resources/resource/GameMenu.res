@@ -24,12 +24,6 @@
 		"command" "engine ges_invite_friends"
 		"OnlyInGame" "1"
 	}
-	"4"
-	{
-		"label" ""
-		"command" ""
-		"OnlyInGame" "1"
-	}
 	"5"
 	{
 		"label" "#GameUI_GameMenu_FindServers"
