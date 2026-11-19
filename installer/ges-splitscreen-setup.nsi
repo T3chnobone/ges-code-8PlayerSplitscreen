@@ -66,37 +66,119 @@ VIAddVersionKey "LegalCopyright" "GoldenEye: Source by Team GoldenEye: Source. U
 
 Var SteamPath
 
+; Where setup looks for Steam and Source SDK Base 2013 Multiplayer. A test build can point
+; these at keys that don't exist to try the "missing" paths:
+;   makensis -DPREREQ_TEST -DSTEAM_REGKEY=Software\GESTest\NoSteam ...
+!ifndef STEAM_REGKEY
+  !define STEAM_REGKEY "Software\Valve\Steam"
+!endif
+!ifndef SDK_REGKEY
+  !define SDK_REGKEY "Software\Valve\Steam\Apps\243750"
+!endif
+!define GES_DOWNLOAD_URL "https://www.geshl2.com/download/"
+; Answers a silent run gives (a test build can change them)
+!ifndef SD_OPEN
+  !define SD_OPEN IDNO
+!endif
+!ifndef SD_SDK_INSTALL
+  !define SD_SDK_INSTALL IDNO
+!endif
+!ifndef SD_SDK_WAIT
+  !define SD_SDK_WAIT IDCANCEL
+!endif
+
+; Open a link (a test build logs it instead).
+!macro OpenLink URL
+  !ifdef PREREQ_TEST
+    !insertmacro PrereqLog "open ${URL}"
+  !else
+    ExecShell "open" "${URL}"
+  !endif
+!macroend
+!macro PrereqLog TEXT
+  !ifdef PREREQ_TEST
+    FileOpen $8 "$EXEDIR\prereq_test.log" a
+    FileSeek $8 0 END
+    FileWrite $8 "${TEXT}$\r$\n"
+    FileClose $8
+  !endif
+!macroend
+
 Function .onInit
   ; Steam keeps the source mods folder in the user's registry.
-  ReadRegStr $0 HKCU "Software\Valve\Steam" "SourceModInstallPath"
+  ReadRegStr $0 HKCU "${STEAM_REGKEY}" "SourceModInstallPath"
   ${If} $0 != ""
   ${AndIf} ${FileExists} "$0\gesource\gameinfo.txt"
     StrCpy $INSTDIR "$0\gesource"
   ${Else}
-    ReadRegStr $SteamPath HKCU "Software\Valve\Steam" "SteamPath"
+    ReadRegStr $SteamPath HKCU "${STEAM_REGKEY}" "SteamPath"
     ${If} ${FileExists} "$SteamPath\steamapps\sourcemods\gesource\gameinfo.txt"
       StrCpy $INSTDIR "$SteamPath\steamapps\sourcemods\gesource"
     ${EndIf}
   ${EndIf}
+  !ifdef PREREQ_TEST_NO_GES
+    StrCpy $INSTDIR "$TEMP\GESTest\no_gesource_here"
+  !endif
+  !ifdef PREREQ_TEST
+    ; Test build: run the checks straight away (answers come from /SD when run with /S)
+    Call CheckPrereqs
+    !insertmacro PrereqLog "checks passed, setup carries on"
+    Quit
+  !endif
+  ; A silent install can't ask for the folder, so it needs GoldenEye: Source where Steam keeps it
+  ${If} ${Silent}
+  ${AndIfNot} ${FileExists} "$INSTDIR\gameinfo.txt"
+    SetErrorLevel 2
+    Quit
+  ${EndIf}
 FunctionEnd
 
 ; Everything the mod needs: Steam, Source SDK Base 2013 Multiplayer, GoldenEye: Source 5.0.6.
+; (The mod's DLLs use the static C runtime, so no Visual C++ redistributable is needed.)
 Function CheckPrereqs
-  ReadRegStr $SteamPath HKCU "Software\Valve\Steam" "SteamPath"
+  ReadRegStr $SteamPath HKCU "${STEAM_REGKEY}" "SteamPath"
   ${If} $SteamPath == ""
-    MessageBox MB_YESNO|MB_ICONEXCLAMATION "Steam isn't installed. GoldenEye: Source runs through Steam, so install Steam, sign in, then run this setup again.$\r$\n$\r$\nOpen the Steam download page now?" IDNO +2
-      ExecShell "open" "https://store.steampowered.com/about/"
+    !insertmacro PrereqLog "steam: missing"
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "Steam isn't installed. GoldenEye: Source runs through Steam, so install Steam, sign in, then run this setup again.$\r$\n$\r$\nOpen the Steam download page now?" /SD ${SD_OPEN} IDNO steam_quit
+      !insertmacro OpenLink "https://store.steampowered.com/about/"
+    steam_quit:
+    !insertmacro PrereqLog "steam: setup quits"
     Quit
   ${EndIf}
-  ReadRegDWORD $0 HKCU "Software\Valve\Steam\Apps\243750" "Installed"
+  !insertmacro PrereqLog "steam: found"
+
+  ReadRegDWORD $0 HKCU "${SDK_REGKEY}" "Installed"
   ${If} $0 != 1
-    MessageBox MB_YESNO|MB_ICONQUESTION "GoldenEye: Source needs Source SDK Base 2013 Multiplayer (free on Steam), and it isn't installed yet.$\r$\n$\r$\nInstall it through Steam now? Steam will download it while this setup carries on." IDNO +2
-      ExecShell "open" "steam://install/243750"
+    !insertmacro PrereqLog "sdk: missing"
+    MessageBox MB_YESNO|MB_ICONQUESTION "GoldenEye: Source needs Source SDK Base 2013 Multiplayer (free on Steam), and it isn't installed yet.$\r$\n$\r$\nInstall it through Steam now?" /SD ${SD_SDK_INSTALL} IDNO sdk_done
+      !insertmacro OpenLink "steam://install/243750"
+      ; Wait for Steam: it marks the app installed when the download finishes
+      sdk_wait:
+        MessageBox MB_RETRYCANCEL|MB_ICONINFORMATION "Steam is downloading Source SDK Base 2013 Multiplayer.$\r$\n$\r$\nClick Retry when Steam shows it as installed, or Cancel to carry on anyway (the game won't start until it's installed)." /SD ${SD_SDK_WAIT} IDCANCEL sdk_done
+        !ifdef PREREQ_TEST
+          Sleep 1000
+        !endif
+        ReadRegDWORD $0 HKCU "${SDK_REGKEY}" "Installed"
+        !insertmacro PrereqLog "sdk: retry, installed=$0"
+        StrCmp $0 "1" sdk_done sdk_wait
+    sdk_done:
+    !insertmacro PrereqLog "sdk: carrying on (installed=$0)"
+  ${Else}
+    !insertmacro PrereqLog "sdk: found"
   ${EndIf}
+
+  ; GoldenEye: Source itself is only offered on ModDB (and by BitTorrent), neither of
+  ; which can be downloaded without a browser, so open the official download page.
   ${IfNot} ${FileExists} "$INSTDIR\gameinfo.txt"
-    MessageBox MB_YESNO|MB_ICONEXCLAMATION "Setup couldn't find GoldenEye: Source 5.0.6 in your Steam sourcemods folder.$\r$\n$\r$\nIt's a free download from the GoldenEye: Source website. Install it, restart Steam, then run this setup again. If it's installed somewhere else, choose No and pick its folder on the next pages.$\r$\n$\r$\nOpen the GoldenEye: Source download page now?" IDNO +3
-      ExecShell "open" "https://www.geshl2.com/download/"
+    !insertmacro PrereqLog "ges: missing"
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "Setup couldn't find GoldenEye: Source 5.0.6 in your Steam sourcemods folder.$\r$\n$\r$\nIt's a free download from the GoldenEye: Source website. Install it, restart Steam, then run this setup again. If it's installed somewhere else, choose No and pick its folder on the next pages.$\r$\n$\r$\nOpen the GoldenEye: Source download page now?" /SD ${SD_OPEN} IDNO ges_done
+      !insertmacro OpenLink "${GES_DOWNLOAD_URL}"
+      !insertmacro PrereqLog "ges: setup quits"
       Quit
+    ges_done:
+    !insertmacro PrereqLog "ges: carrying on to pick the folder"
+  ${Else}
+    !insertmacro PrereqLog "ges: found at $INSTDIR"
   ${EndIf}
 FunctionEnd
 
