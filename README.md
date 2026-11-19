@@ -7,7 +7,7 @@ It runs on the current Source SDK Base 2013 Multiplayer (the 2025 engine update)
 This is the `ges-splitscreen` branch. It replaces the game's `client.dll` and `server.dll`; the
 GoldenEye: Source maps, models and sounds are unchanged.
 
-- **Easiest install**: download `GES-SplitScreenMod-Setup-<version>.exe` from [Releases](../../releases) and run it. It finds GoldenEye: Source through Steam, backs up the files it replaces and adds an uninstaller.
+- **Easiest install**: download [GES-SplitScreenMod-Setup.exe](../../releases/latest/download/GES-SplitScreenMod-Setup.exe) and run it. It checks for Steam, Source SDK Base 2013 Multiplayer and GoldenEye: Source, downloads the newest version of the mod from [Releases](../../releases), backs up the files it replaces and adds an uninstaller. Running it again updates the mod. (No internet on the gaming PC? Use the `GES-SplitScreenMod-Setup-<version>.exe` from the release instead, which has the files inside.)
 - Install it by hand, controls and troubleshooting: [INSTALL_SPLITSCREEN.md](INSTALL_SPLITSCREEN.md)
 - How it works, every option and the full change list: [SPLITSCREEN.md](SPLITSCREEN.md)
 - Building, forking and publishing a release: [INSTALL_SPLITSCREEN.md](INSTALL_SPLITSCREEN.md#for-builders) and [GITHUB_SETUP.md](GITHUB_SETUP.md)
