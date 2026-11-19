@@ -121,6 +121,7 @@ CGEMusicManager::CGEMusicManager() : CAutoGameSystem( "GEMusicManager" )
 CGEMusicManager::~CGEMusicManager()
 {
 	ClearPlayList();
+	ClearPlaylists( m_PendingPlaylists );
 	g_pGEMusicManager = NULL;
 }
 
@@ -143,24 +144,50 @@ void CGEMusicManager::LevelInitPreEntity()
 void CGEMusicManager::LoadPlayList( const char *levelname )
 {
 	// Only load a new playlist if it is different than the current
-	if ( Q_stricmp(levelname, m_szPlayList) )
-	{
-		Q_strncpy( m_szPlayList, levelname, sizeof(m_szPlayList) );
-		m_bLoadPlaylist = true;
-	}
+	if ( !Q_stricmp(levelname, m_szPlayList) )
+		return;
+
+	Q_strncpy( m_szPlayList, levelname, sizeof(m_szPlayList) );
+
+	// Read the playlist file here, on the main thread. KeyValues parsing in this dll
+	// shares one static token buffer, so parsing it on the music thread at the same
+	// time as the main thread parses other files (e.g. the Split Screen menu opening
+	// as a match exits to the menu) corrupted both parses and crashed the game.
+	PlaylistDict_t playlists;
+	ReadPlaylistFile( m_szPlayList, playlists );
+
+	// Hand it to the music thread, which swaps it in on its next update
+	m_Lock.Lock();
+	ClearPlaylists( m_PendingPlaylists );
+	MovePlaylists( playlists, m_PendingPlaylists );
+	m_bLoadPlaylist = true;
+	m_Lock.Unlock();
 }
 
 void CGEMusicManager::ClearPlayList( void )
 {
-	// Clear out each vector
-	for ( int i=m_Playlists.First(); i != m_Playlists.InvalidIndex(); i=m_Playlists.Next(i) )
-		m_Playlists.Element( i )->PurgeAndDeleteElements();
-
-	// Clear out the dictionary
-	m_Playlists.PurgeAndDeleteElements();
+	ClearPlaylists( m_Playlists );
 
 	m_CurrPlaylist = NULL;
 	m_nCurrSongIdx = -1;
+}
+
+void CGEMusicManager::ClearPlaylists( PlaylistDict_t &playlists )
+{
+	// Clear out each vector
+	for ( int i=playlists.First(); i != playlists.InvalidIndex(); i=playlists.Next(i) )
+		playlists.Element( i )->PurgeAndDeleteElements();
+
+	// Clear out the dictionary
+	playlists.PurgeAndDeleteElements();
+}
+
+void CGEMusicManager::MovePlaylists( PlaylistDict_t &from, PlaylistDict_t &to )
+{
+	// The lists themselves change owner, so they're not deleted here
+	for ( int i=from.First(); i != from.InvalidIndex(); i=from.Next(i) )
+		to.Insert( from.GetElementName( i ), from.Element( i ) );
+	from.RemoveAll();
 }
 
 void CGEMusicManager::SetSoundscape( const char *soundscape )
@@ -298,61 +325,73 @@ void CGEMusicManager::InternalLoadPlaylist( void )
 	if ( !m_bLoadPlaylist )
 		return;
 
+	// Swap in the playlist LoadPlayList read on the main thread (no file parsing here)
+	m_Lock.Lock();
+
 	// Clear our playlist and stop playing music now
 	ClearPlayList();
+	MovePlaylists( m_PendingPlaylists, m_Playlists );
+	m_bLoadPlaylist = false;
 
-	// Only load a new list if we are given one
-	if ( m_szPlayList[0] )
-	{
-		// Try to load the level's music definition
-		char sz[128];
-		Q_snprintf( sz, sizeof(sz), "scripts/music/level_music_%s", m_szPlayList );
-
-		KeyValues *pKV = ReadEncryptedKVFile( filesystem, sz, NULL );
-		if ( !pKV )
-		{
-			// If we fail to load the level music, try the default mix
-			Q_snprintf( sz, sizeof(sz), "scripts/music/level_music_%s", GE_MUSIC_DEFAULT );
-			pKV = ReadEncryptedKVFile( filesystem, sz, NULL );
-		}
-
-		if ( pKV )
-		{
-			// If we fail the default, don't play anything...
-			m_Playlists.Insert( GE_MUSIC_DEFAULTSCAPE, new CUtlVector<char*>() );
-
-			// Start the file parse
-			KeyValues *pKey = pKV->GetFirstSubKey();
-			while( pKey )
-			{
-				if ( !Q_stricmp( pKey->GetName(), "file" ) && !pKey->GetFirstSubKey() )
-				{
-					// A bare "file" key means add it to the default list
-					AddSong( pKey->GetString(), GE_MUSIC_DEFAULTSCAPE );
-				}
-				else if ( pKey->GetFirstSubKey() )
-				{
-					// We encountered a soundscape entry
-					const char *soundscape = pKey->GetName();
-
-					KeyValues *pFile = pKey->GetFirstSubKey();
-					while ( pFile )
-					{
-						if ( !Q_stricmp( pFile->GetName(), "file" ) )
-							AddSong( pFile->GetString(), soundscape );
-						pFile = pFile->GetNextKey();
-					}
-				}
-
-				pKey = pKey->GetNextKey();
-			}
-
-			DevMsg( 2, "[FMOD] Loaded playlist %s\n", sz );
-		}
-	}
+	m_Lock.Unlock();
 
 	m_fNextSongTime = 0;
-	m_bLoadPlaylist = false;
+}
+
+// Main thread only (see LoadPlayList)
+void CGEMusicManager::ReadPlaylistFile( const char *playlist, PlaylistDict_t &playlists )
+{
+	// Only load a new list if we are given one
+	if ( !playlist || !playlist[0] )
+		return;
+
+	// Try to load the level's music definition
+	char sz[128];
+	Q_snprintf( sz, sizeof(sz), "scripts/music/level_music_%s", playlist );
+
+	KeyValues *pKV = ReadEncryptedKVFile( filesystem, sz, NULL );
+	if ( !pKV )
+	{
+		// If we fail to load the level music, try the default mix
+		Q_snprintf( sz, sizeof(sz), "scripts/music/level_music_%s", GE_MUSIC_DEFAULT );
+		pKV = ReadEncryptedKVFile( filesystem, sz, NULL );
+	}
+
+	if ( !pKV )
+		return;
+
+	// If we fail the default, don't play anything...
+	playlists.Insert( GE_MUSIC_DEFAULTSCAPE, new CUtlVector<char*>() );
+
+	// Start the file parse
+	KeyValues *pKey = pKV->GetFirstSubKey();
+	while( pKey )
+	{
+		if ( !Q_stricmp( pKey->GetName(), "file" ) && !pKey->GetFirstSubKey() )
+		{
+			// A bare "file" key means add it to the default list
+			AddSong( playlists, pKey->GetString(), GE_MUSIC_DEFAULTSCAPE );
+		}
+		else if ( pKey->GetFirstSubKey() )
+		{
+			// We encountered a soundscape entry
+			const char *soundscape = pKey->GetName();
+
+			KeyValues *pFile = pKey->GetFirstSubKey();
+			while ( pFile )
+			{
+				if ( !Q_stricmp( pFile->GetName(), "file" ) )
+					AddSong( playlists, pFile->GetString(), soundscape );
+				pFile = pFile->GetNextKey();
+			}
+		}
+
+		pKey = pKey->GetNextKey();
+	}
+
+	pKV->deleteThis();
+
+	DevMsg( 2, "[FMOD] Loaded playlist %s\n", sz );
 }
 
 void CGEMusicManager::EnforcePlaylist( bool force /*= false*/ )
@@ -614,15 +653,15 @@ void CGEMusicManager::EndSong( FMOD::Channel *pChannel )
 }
 #endif
 
-void CGEMusicManager::AddSong( const char *relative, const char *soundscape )
+void CGEMusicManager::AddSong( PlaylistDict_t &playlists, const char *relative, const char *soundscape )
 {
 	// See if we need to add the soundscape
-	int idx = m_Playlists.Find( soundscape );
-	if ( idx == m_Playlists.InvalidIndex() )
-		idx = m_Playlists.Insert( soundscape, new CUtlVector<char*>() );
+	int idx = playlists.Find( soundscape );
+	if ( idx == playlists.InvalidIndex() )
+		idx = playlists.Insert( soundscape, new CUtlVector<char*>() );
 
 	// Get the soundscape list
-	CUtlVector<char*> *list = m_Playlists.Element( idx );
+	CUtlVector<char*> *list = playlists.Element( idx );
 
 	// Check if we currently have this song in our list
 	for ( int i = 0 ; i < list->Count() ; ++i )
