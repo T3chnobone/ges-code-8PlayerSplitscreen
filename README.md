@@ -51,7 +51,8 @@ All captured in game on the Vulkan renderer.
 - A **SPLIT SCREEN** entry on the main menu. **Profiles** page: names, character (with a picker),
   look speed and invert per profile. **Match** page: map, game mode, weapons, teams and the
   options below, with a diagram of how the screens will be split.
-- A lobby list in the top right: players press START to join and LB / RB to pick a profile.
+- A lobby list in the top right: players press START to join and LB / RB to pick a profile. Every
+  profile can be picked (the Profiles page no longer has an Invited setting).
 - When the map loads, each screen asks for its player (right trigger) and, in team games, a team.
 - **START** in a match opens that player's own menu in their view: leaderboard, swap team, and
   exit with a confirmation (player 1 exiting ends the match and shows the results), with

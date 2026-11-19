@@ -27,7 +27,6 @@ GESSProfile_t::GESSProfile_t()
 	Q_strncpy( character, CHAR_RANDOM_IDENT, sizeof( character ) );
 	sensitivity = 1.0f;
 	invertY = false;
-	invited = true;
 }
 
 const GESSProfile_t &CGESSProfiles::DefaultProfile()
@@ -53,7 +52,6 @@ void CGESSProfiles::Load()
 			Q_strncpy( p.character, pProfile->GetString( "character", CHAR_RANDOM_IDENT ), sizeof( p.character ) );
 			p.sensitivity = clamp( pProfile->GetFloat( "sensitivity", 1.0f ), GES_SS_SENS_MIN, GES_SS_SENS_MAX );
 			p.invertY = pProfile->GetInt( "invert_y", 0 ) != 0;
-			p.invited = pProfile->GetInt( "invited", 1 ) != 0;
 			m_Profiles.AddToTail( p );
 		}
 	}
@@ -72,7 +70,6 @@ void CGESSProfiles::Save()
 		pProfile->SetString( "character", p.character );
 		pProfile->SetFloat( "sensitivity", p.sensitivity );
 		pProfile->SetInt( "invert_y", p.invertY ? 1 : 0 );
-		pProfile->SetInt( "invited", p.invited ? 1 : 0 );
 	}
 
 	pKV->SaveToFile( filesystem, GES_SS_PROFILE_FILE, "MOD" );
@@ -99,23 +96,3 @@ void CGESSProfiles::Remove( int i )
 		m_Profiles.Remove( i );
 }
 
-int CGESSProfiles::GetInvitedCount() const
-{
-	int count = 0;
-	for ( int i = 0; i < m_Profiles.Count(); i++ )
-	{
-		if ( m_Profiles[i].invited )
-			count++;
-	}
-	return count;
-}
-
-int CGESSProfiles::GetInvited( int n ) const
-{
-	for ( int i = 0; i < m_Profiles.Count(); i++ )
-	{
-		if ( m_Profiles[i].invited && n-- == 0 )
-			return i;
-	}
-	return -1;
-}

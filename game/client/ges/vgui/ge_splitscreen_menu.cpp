@@ -4,8 +4,8 @@
 //   File        : ge_splitscreen_menu.cpp
 //   Description :
 //      The Split Screen menu, opened from the main menu. Two pages:
-//        * Profiles: name, character, controller sensitivity, inverted look
-//          and whether the profile is invited. Also shows the controllers
+//        * Profiles: name, character, controller sensitivity and inverted look.
+//          Every profile can be picked when a player joins. Also shows the controllers
 //          and who is ready to join ("lobby").
 //        * Match: map, game mode, teams and how the match is won (timed
 //          score, first to N kills or best kill/death ratio), then Start.
@@ -1708,7 +1708,6 @@ private:
 	Slider		*m_pSensitivity;
 	Label		*m_pSensValue;
 	CheckButton	*m_pInvert;
-	CheckButton	*m_pInvited;
 	Label		*m_pHelp;
 	Button		*m_pSaveButton;
 	// The controllers' measured stick dead zones, and a button to measure again
@@ -1804,7 +1803,6 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pSensValue = new Label( this, "SensValue", "1.00" );
 
 	m_pInvert = new CheckButton( this, "Invert", "Invert look up/down" );
-	m_pInvited = new CheckButton( this, "Invited", "Invited (offered when a player presses START to join)" );
 
 	m_pHelp = new Label( this, "Help", "Players press START on their controller to get ready (they appear in the top right), or to join during a game. LB / RB change each player's profile." );
 	m_pHelp->SetWrap( true );
@@ -1816,7 +1814,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pPlayerList->SetMenu( this );
 
 	Panel *profPanels[] = { m_pProfileList, m_pNewButton, m_pDeleteButton, m_pNameLabel, m_pName, m_pCharLabel, m_pCharButton, m_pCharPortrait,
-		m_pSensLabel, m_pSensitivity, m_pSensValue, m_pInvert, m_pInvited, m_pHelp, m_pSaveButton };
+		m_pSensLabel, m_pSensitivity, m_pSensValue, m_pInvert, m_pHelp, m_pSaveButton };
 	for ( int i = 0; i < ARRAYSIZE( profPanels ); i++ )
 		prof.AddToTail( profPanels[i] );
 
@@ -1909,7 +1907,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pKeyboard->AddActionSignalTarget( this );
 
 	// Every control reports changes to us
-	Panel *signalPanels[] = { m_pProfileList, m_pName, m_pCharacter, m_pSensitivity, m_pInvert, m_pInvited,
+	Panel *signalPanels[] = { m_pProfileList, m_pName, m_pCharacter, m_pSensitivity, m_pInvert,
 		m_pMap, m_pMode, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pAim, m_pWin, m_pTime, m_pKills, m_pPerDisplay };
 	for ( int i = 0; i < ARRAYSIZE( signalPanels ); i++ )
 		signalPanels[i]->AddActionSignalTarget( this );
@@ -1924,7 +1922,6 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pCharButton, GESS_NAV_BUTTON, GESS_PAGE_PROFILES );
 	AddNav( m_pSensitivity, GESS_NAV_SLIDER, GESS_PAGE_PROFILES );
 	AddNav( m_pInvert, GESS_NAV_CHECK, GESS_PAGE_PROFILES );
-	AddNav( m_pInvited, GESS_NAV_CHECK, GESS_PAGE_PROFILES );
 	AddNav( m_pSaveButton, GESS_NAV_BUTTON, GESS_PAGE_PROFILES );
 	AddNav( m_pMap, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pMode, GESS_NAV_COMBO, GESS_PAGE_MATCH );
@@ -2103,8 +2100,6 @@ void CGESplitScreenMenu::PerformLayout()
 	m_pSensValue->SetBounds( fieldX + fieldW - P( 44 ), y, P( 44 ), rowH );
 	y += P( 36 );
 	m_pInvert->SetBounds( fieldX - P( 4 ), y, fieldW, rowH );
-	y += P( 28 );
-	m_pInvited->SetBounds( fieldX - P( 4 ), y, fieldW, rowH );
 	y += P( 40 );
 	m_pHelp->SetBounds( x, y, W - P( 40 ), P( 44 ) );
 
@@ -2464,7 +2459,7 @@ void CGESplitScreenMenu::RefreshProfileList( int select )
 	for ( int i = 0; i < GESSProfiles()->Count(); i++ )
 	{
 		const GESSProfile_t *p = GESSProfiles()->Get( i );
-		m_pProfileList->AddItem( VarArgs( "%d. %s%s", i + 1, p->name, p->invited ? "" : " (not invited)" ), new KeyValues( "profile", "index", i ) );
+		m_pProfileList->AddItem( VarArgs( "%d. %s", i + 1, p->name ), new KeyValues( "profile", "index", i ) );
 	}
 
 	m_iEditing = clamp( select, 0, GESSProfiles()->Count() - 1 );
@@ -2488,7 +2483,6 @@ void CGESplitScreenMenu::LoadProfileIntoControls()
 	m_pCharButton->SetEnabled( bHave );
 	m_pSensitivity->SetEnabled( bHave );
 	m_pInvert->SetEnabled( bHave );
-	m_pInvited->SetEnabled( bHave );
 	if ( !p )
 		return;
 
@@ -2511,7 +2505,6 @@ void CGESplitScreenMenu::LoadProfileIntoControls()
 
 	m_pSensitivity->SetValue( (int)( p->sensitivity * GES_SS_SENS_SLIDER_SCALE + 0.5f ) );
 	m_pInvert->SetSelected( p->invertY );
-	m_pInvited->SetSelected( p->invited );
 	UpdateSensitivityLabel();
 
 	m_bLoading = false;
@@ -2534,7 +2527,6 @@ void CGESplitScreenMenu::StoreControlsIntoProfile()
 
 	p->sensitivity = clamp( m_pSensitivity->GetValue() / GES_SS_SENS_SLIDER_SCALE, GES_SS_SENS_MIN, GES_SS_SENS_MAX );
 	p->invertY = m_pInvert->IsSelected();
-	p->invited = m_pInvited->IsSelected();
 }
 
 void CGESplitScreenMenu::UpdateSensitivityLabel()
