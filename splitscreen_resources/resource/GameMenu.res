@@ -18,6 +18,12 @@
 		"command" "OpenPlayerListDialog"
 		"OnlyInGame" "1"
 	}
+	"InviteFriends"
+	{
+		"label"	"INVITE FRIENDS"
+		"command" "engine ges_invite_friends"
+		"OnlyInGame" "1"
+	}
 	"4"
 	{
 		"label" ""

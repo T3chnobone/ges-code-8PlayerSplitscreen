@@ -129,3 +129,33 @@ void CClientSteamContext::InvokeCallbacks( const SteamLoggedOnChange_t &loggedOn
 		m_LoggedOnCallbacks[i]( loggedOnStatus );
 	}
 }
+
+#if !defined(NO_STEAM)
+// Opens the Steam overlay's friends list. While you are on a server the engine tells Steam
+// how to reach it (rich presence "connect"), so friends running the mod get "Join Game" in
+// their Steam friends list, and you get "Invite to Game" on a friend here.
+CON_COMMAND( ges_invite_friends, "Open the Steam overlay friends list to invite friends to this game" )
+{
+	ISteamFriends *pFriends = steamapicontext->SteamFriends();
+	ISteamUtils *pUtils = steamapicontext->SteamUtils();
+	if ( !pFriends || !pUtils )
+	{
+		Msg( "Steam isn't available, so friends can't be invited.\n" );
+		return;
+	}
+
+	if ( !engine->IsInGame() )
+	{
+		Msg( "Start or join a game first, then invite friends.\n" );
+		return;
+	}
+
+	if ( !pUtils->IsOverlayEnabled() )
+	{
+		Msg( "The Steam overlay is off. Turn it on in Steam's settings (In Game), or right-click a friend in Steam's friends list and choose Invite to Game.\n" );
+		return;
+	}
+
+	pFriends->ActivateGameOverlay( "Friends" );
+}
+#endif // !defined(NO_STEAM)
