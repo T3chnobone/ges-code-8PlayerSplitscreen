@@ -3008,3 +3008,75 @@ private:
 };
 
 static GameUI<CGESSPadHint> g_GESSPadHint;
+
+//-----------------------------------------------------------------------------
+// Main menu creator credit: "Split Screen mod by" and the T3chnobone logo,
+// under the GoldenEye: Source title in the main menu background.
+// The text, the logo and their shadow are one texture (materials/VGUI/splitscreen/
+// creator_credit, 1024x256 RGBA) so it looks the same at every resolution.
+//-----------------------------------------------------------------------------
+class CGESSCreatorCredit : public vgui::Panel
+{
+	DECLARE_CLASS_SIMPLE( CGESSCreatorCredit, vgui::Panel );
+public:
+	CGESSCreatorCredit( vgui::VPANEL parent ) : BaseClass( NULL, "GESSCreatorCredit" )
+	{
+		SetParent( parent );
+		SetMouseInputEnabled( false );
+		SetKeyBoardInputEnabled( false );
+		SetPaintBackgroundEnabled( false );
+		SetVisible( false );
+		m_iTexture = -1;
+		vgui::ivgui()->AddTickSignal( GetVPanel(), 100 );
+	}
+
+	virtual void OnTick()
+	{
+		// Only on the main menu, not in a game or while a map loads
+		const bool bShow = enginevgui->IsGameUIVisible() && !engine->IsDrawingLoadingImage() &&
+			( !engine->IsInGame() || engine->IsLevelMainMenuBackground() );
+
+		if ( bShow != IsVisible() )
+		{
+			SetVisible( bShow );
+			if ( bShow && !vgui::input()->GetAppModalSurface() )
+				MoveToFront();
+		}
+
+		if ( bShow )
+		{
+			// The background is scaled to the screen height and centred, so place the credit
+			// from the screen centre in units of the height. In the texture the logo is 210 of
+			// the 256 rows tall, starts at row 23 and ends 8 texels from the right edge.
+			// On screen the logo is 15% of the screen tall, its right edge lines up with the
+			// end of "SOURCE" and its top sits just under the title.
+			int sw, sh;
+			vgui::surface()->GetScreenSize( sw, sh );
+			const int tall = (int)( sh * 0.183f );
+			const int wide = tall * 4;
+			const int x = sw / 2 + (int)( sh * 0.602f ) - wide + tall * 8 / 256;
+			const int y = (int)( sh * 0.37f ) - tall * 23 / 256;
+			SetBounds( x, y, wide, tall );
+		}
+	}
+
+	virtual void Paint()
+	{
+		if ( m_iTexture == -1 )
+		{
+			m_iTexture = vgui::surface()->CreateNewTextureID();
+			vgui::surface()->DrawSetTextureFile( m_iTexture, "VGUI/splitscreen/creator_credit", true, false );
+		}
+
+		int w, h;
+		GetSize( w, h );
+		vgui::surface()->DrawSetColor( 255, 255, 255, 255 );
+		vgui::surface()->DrawSetTexture( m_iTexture );
+		vgui::surface()->DrawTexturedRect( 0, 0, w, h );
+	}
+
+private:
+	int m_iTexture;
+};
+
+static GameUI<CGESSCreatorCredit> g_GESSCreatorCredit;

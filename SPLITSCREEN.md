@@ -581,6 +581,15 @@ screens: the first "players per display" players go on the left half and the res
   patches) is used; `painteffect_c1-8` (one colour each) stay in for
   `ges_paint_deathscreen_style 1`, one random paint colour per death (default 0, mixed).
 
+## Changes (19 November)
+- **Creator credit on the main menu.** "Split Screen mod by" and the T3chnobone 007 logo sit under
+  the GoldenEye: Source title, right-aligned with the end of "SOURCE". It is one 1024x256 RGBA
+  texture (`materials/VGUI/splitscreen/creator_credit`, text, logo and a soft dark shadow so it reads
+  on the white iris), drawn by `CGESSCreatorCredit` in `ge_splitscreen_menu.cpp` only on the main
+  menu, placed from the screen centre in units of the screen height so it follows the background
+  at any resolution. Made by `splitscreen_resources/tools/make_creator_credit.py` (Pillow, SciPy)
+  from the logo artwork: it cuts the logo out of its black background and writes the VTF.
+
 ## Changes (17 November)
 - **Menus scale with the resolution.** One factor for 1080p, `GE_MENU_SCALE_1080` (1.5, in
   `game/client/ges/vgui/ge_panelhelper.h`); 1440p is 1.5x that and 4K 2.5x (a bit more than the
