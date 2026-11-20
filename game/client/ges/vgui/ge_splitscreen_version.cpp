@@ -270,9 +270,11 @@ private:
 			++pszNum;
 		Q_snprintf( m_szLatest, sizeof( m_szLatest ), "v%s", pszNum );
 
-		// Only GitHub links are opened
+		// Only GitHub links are opened; a faked version gets the latest release page
 		if ( pszURL && !Q_strncmp( pszURL, "https://github.com/", 19 ) )
 			Q_strncpy( m_szReleaseURL, pszURL, sizeof( m_szReleaseURL ) );
+		else
+			Q_strncpy( m_szReleaseURL, GES_SS_RELEASES_URL, sizeof( m_szReleaseURL ) );
 
 		m_bUpdate = GESS_CompareVersions( m_szLatest, GES_SS_VERSION ) > 0;
 		PrintStatus();
