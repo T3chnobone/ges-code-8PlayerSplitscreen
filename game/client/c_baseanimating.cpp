@@ -755,6 +755,11 @@ C_BaseAnimating::C_BaseAnimating() :
 	Q_memset(&m_mouth, 0, sizeof(m_mouth));
 	m_flCycle = 0;
 	m_flOldCycle = 0;
+#ifdef GE_DLL
+	m_bGEHideHead = false;
+	m_pGEHeadBonesHdr = NULL;
+	m_nGEHeadBones = 0;
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -1626,8 +1631,63 @@ void C_BaseAnimating::BuildTransformations( CStudioHdr *hdr, Vector *pos, Quater
 		if ( iHead >= 0 && ( hdr->boneFlags( iHead ) & boneMask ) )
 			MatrixScaleBy( 2.0f, GetBoneForWrite( iHead ) );
 	}
+
+	// Custom characters: another head is drawn on this body
+	if ( m_bGEHideHead && !boneMerge )
+		GEHideHeadBones( hdr, boneMask );
 #endif
 }
+
+#ifdef GE_DLL
+void C_BaseAnimating::GEHideHeadBones( CStudioHdr *hdr, int boneMask )
+{
+	// The head bone and everything under it (hair, ponytails...), worked out once per model
+	if ( m_pGEHeadBonesHdr != hdr->GetRenderHdr() )
+	{
+		m_pGEHeadBonesHdr = hdr->GetRenderHdr();
+		m_nGEHeadBones = 0;
+		const int iHead = Studio_BoneIndexByName( hdr, "ValveBiped.Bip01_Head1" );
+		for ( int i = 0; iHead >= 0 && i < hdr->numbones() && m_nGEHeadBones < GE_MAX_HIDDEN_HEAD_BONES; i++ )
+		{
+			int b = i;
+			while ( b >= 0 && b != iHead )
+				b = hdr->boneParent( b );
+			if ( b == iHead )
+				m_iGEHeadBones[m_nGEHeadBones++] = i;
+		}
+	}
+
+	// Shrink them to nothing where they are (bones come parents first, so the
+	// ones under the head were already placed from the full size head)
+	for ( int n = 0; n < m_nGEHeadBones; n++ )
+	{
+		const int b = m_iGEHeadBones[n];
+		if ( !( hdr->boneFlags( b ) & boneMask ) )
+			continue;
+		matrix3x4_t &bone = GetBoneForWrite( b );
+		MatrixCopy( bone, m_GEHeadBoneMats[n] );
+		for ( int r = 0; r < 3; r++ )
+			bone[r][0] = bone[r][1] = bone[r][2] = 0.0f;
+	}
+}
+
+const matrix3x4_t &C_BaseAnimating::GEGetUnhiddenBone( int iBone )
+{
+	if ( m_bGEHideHead )
+	{
+		CStudioHdr *hdr = GetModelPtr();
+		if ( hdr && m_pGEHeadBonesHdr == hdr->GetRenderHdr() )
+		{
+			for ( int n = 0; n < m_nGEHeadBones; n++ )
+			{
+				if ( m_iGEHeadBones[n] == iBone )
+					return m_GEHeadBoneMats[n];
+			}
+		}
+	}
+	return GetBone( iBone );
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: Special effects
@@ -2086,15 +2146,21 @@ bool C_BaseAnimating::SetupBones_AttachmentHelper( CStudioHdr *hdr )
 	{
 		const mstudioattachment_t &pattachment = hdr->pAttachment( i );
 		int iBone = hdr->GetAttachmentBone( i );
+#ifdef GE_DLL
+		// A custom character's hidden head still has its eyes, hat point etc.
+		const matrix3x4_t &attachBone = GEGetUnhiddenBone( iBone );
+#else
+		const matrix3x4_t &attachBone = GetBone( iBone );
+#endif
 		if ( (pattachment.flags & ATTACHMENT_FLAG_WORLD_ALIGN) == 0 )
 		{
-			ConcatTransforms( GetBone( iBone ), pattachment.local, world ); 
+			ConcatTransforms( attachBone, pattachment.local, world ); 
 		}
 		else
 		{
 			Vector vecLocalBonePos, vecWorldBonePos;
 			MatrixGetColumn( pattachment.local, 3, vecLocalBonePos );
-			VectorTransform( vecLocalBonePos, GetBone( iBone ), vecWorldBonePos );
+			VectorTransform( vecLocalBonePos, attachBone, vecWorldBonePos );
 
 			SetIdentityMatrix( world );
 			MatrixSetColumn( vecWorldBonePos, 3, world );

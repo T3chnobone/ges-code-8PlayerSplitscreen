@@ -22,6 +22,7 @@
 #include "ge_player_shared.h"
 #include "ge_playerresource.h"
 #include "ge_character_data.h"
+#include "ge_customchar.h"
 #include "ge_stats_recorder.h"
 #include "ge_weapon.h"
 #include "grenade_gebase.h"
@@ -47,6 +48,10 @@ IMPLEMENT_SERVERCLASS_ST(CGEPlayer, DT_GE_Player)
 
 	SendPropEHandle( SENDINFO( m_hHat ) ),
 	SendPropInt( SENDINFO( m_takedamage ) ),
+
+	SendPropInt( SENDINFO( m_iCustomHeadChar ) ),
+	SendPropInt( SENDINFO( m_iCustomHeadSkin ) ),
+	SendPropString( SENDINFO( m_szCustomHeadFile ) ),
 END_SEND_TABLE()
 
 BEGIN_DATADESC( CGEPlayer )
@@ -80,6 +85,9 @@ CGEPlayer::CGEPlayer()
 
 	m_iCharIndex = m_iSkinIndex = -1;
 	m_bRemovableHat = true;
+
+	m_iCustomHeadChar = -1;
+	m_iCustomHeadSkin = 0;
 
 	m_iFavoriteWeapon = WEAPON_NONE;
 	m_iScoreBoardColor = 0;
@@ -1001,7 +1009,15 @@ void CGEPlayer::GiveHat()
 	if ( m_hHat.Get() )
 		return;
 
-	const char* hatModel = GECharacters()->Get(m_iCharIndex)->m_pSkins[m_iSkinIndex]->szHatModel;
+	// A custom character wears its head's hat (an imported head has none)
+	if ( m_szCustomHeadFile.Get()[0] )
+		return;
+	const CGECharData *pHatChar = GECharacters()->Get( m_iCustomHeadChar >= 0 ? m_iCustomHeadChar.Get() : m_iCharIndex );
+	const int hatSkin = m_iCustomHeadChar >= 0 ? m_iCustomHeadSkin.Get() : m_iSkinIndex;
+	if ( !pHatChar || !pHatChar->m_pSkins.IsValidIndex( hatSkin ) )
+		return;
+
+	const char* hatModel = pHatChar->m_pSkins[hatSkin]->szHatModel;
 	if ( !hatModel || hatModel[0] == '\0' )
 		return;
 
@@ -1332,13 +1348,47 @@ void CGEPlayer::SetPlayerModel( void )
 
 	m_iCharIndex = GECharacters()->GetIndex( pChar );
 	m_iSkinIndex = 0;
+	SetCustomHead( NULL );
 
 	KnockOffHat( true );
 	GiveHat();
 }
 
+void CGEPlayer::SetCustomHead( const GECustomChar_t *pCustom )
+{
+	int headChar = -1, headSkin = 0;
+	const char *headFile = "";
+	if ( pCustom )
+	{
+		if ( pCustom->IsImportedHead() )
+			headFile = pCustom->headFile;
+		else if ( Q_stricmp( pCustom->head, pCustom->body ) || pCustom->headSkin != pCustom->bodySkin )
+		{
+			// Only when it isn't just the body's own head
+			headChar = GECharacters()->GetIndex( pCustom->head );
+			headSkin = pCustom->headSkin;
+		}
+	}
+
+	if ( headChar != m_iCustomHeadChar )
+		m_iCustomHeadChar = headChar;
+	if ( headSkin != m_iCustomHeadSkin )
+		m_iCustomHeadSkin = headSkin;
+	if ( Q_strcmp( headFile, m_szCustomHeadFile.Get() ) )
+		Q_strncpy( m_szCustomHeadFile.GetForModify(), headFile, GE_CUSTOMHEAD_NAME_LEN );
+}
+
 void CGEPlayer::SetPlayerModel( const char* szCharIdent, int iCharSkin /*=0*/, bool bNoSelOverride /*=false*/ )
 {
+	// Custom character: play the body, network the head
+	GECustomChar_t custom;
+	const bool bCustom = GECustomChar_Parse( szCharIdent, custom );
+	if ( bCustom )
+	{
+		szCharIdent = custom.body;
+		iCharSkin = custom.bodySkin;
+	}
+
 	const CGECharData *pChar = GECharacters()->Get( szCharIdent );
 	if( !pChar )
 	{
@@ -1355,6 +1405,7 @@ void CGEPlayer::SetPlayerModel( const char* szCharIdent, int iCharSkin /*=0*/, b
 
 	m_iCharIndex = GECharacters()->GetIndex( pChar );
 	m_iSkinIndex = iCharSkin;
+	SetCustomHead( bCustom ? &custom : NULL );
 
 	// Tell everyone what character we changed too
 	IGameEvent *event = gameeventmanager->CreateEvent( "player_changeident" );

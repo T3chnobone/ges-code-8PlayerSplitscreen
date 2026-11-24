@@ -42,6 +42,9 @@
 #include "ge_splitscreen_client.h"
 #include "ge_splitscreen_gamepad.h"
 #include "ge_splitscreen_match.h"
+#include "ge_splitscreen_padreader.h"
+#include "ge_customchar.h"
+#include "ge_customchar_picker.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -68,109 +71,6 @@ static const char *s_AimAssistNames[] =
 	"Classic GoldenEye (shots home in)",
 	"Sticky aim (view follows target)",
 	"Slowdown near target",
-};
-
-// Controller buttons the menu listens to
-static const unsigned int GESS_MENU_DIR_BITS[4] =
-{
-	GESS_PADBIT( GESS_PAD_DPAD_UP ), GESS_PADBIT( GESS_PAD_DPAD_DOWN ),
-	GESS_PADBIT( GESS_PAD_DPAD_LEFT ), GESS_PADBIT( GESS_PAD_DPAD_RIGHT ),
-};
-enum { GESS_DIR_UP = 0, GESS_DIR_DOWN, GESS_DIR_LEFT, GESS_DIR_RIGHT };
-
-// Reads every controller and turns it into menu presses, with key repeat
-// for held d-pad directions. Edges are tracked here so a menu never misses
-// or doubles a press, whatever order the game systems poll in.
-class CGESSMenuPadReader
-{
-public:
-	CGESSMenuPadReader() { Reset(); }
-
-	void Reset()
-	{
-		memset( m_Prev, 0, sizeof( m_Prev ) );
-		memset( m_bOwned, 0, sizeof( m_bOwned ) );
-		memset( m_flRepeat, 0, sizeof( m_flRepeat ) );
-		memset( m_flHeldSince, 0, sizeof( m_flHeldSince ) );
-		m_Pressed = 0;
-		m_bFirst = true;
-	}
-
-	void Update()
-	{
-		unsigned int held = 0, pressed = 0;
-		const int hostPad = GESplitScreenClient()->GetSlotPad( 0 );
-		for ( int i = 0; i < GESSGamepads()->GetMaxPads(); i++ )
-		{
-			const GESSPadState_t &pad = GESSGamepads()->GetPad( i );
-			unsigned int b = pad.connected ? pad.buttons : 0;
-
-			// Only player 1's controller drives the menus (the others only join /
-			// leave and change their profile, in ge_splitscreen_client.cpp), and only
-			// from the frame after it was claimed (the press that claims player 1
-			// doesn't also select something)
-			const bool bOwned = i == hostPad && GESplitScreenClient()->GetPadSlot( i ) == 0;
-			const bool bWasOwned = m_bOwned[i];
-			m_bOwned[i] = bOwned;
-			if ( !bOwned || !bWasOwned )
-			{
-				m_Prev[i] = b;
-				continue;
-			}
-
-			// Controllers other than player 1's can use the left stick as a d-pad
-			// (player 1's sticks move the mouse cursor)
-			if ( i != hostPad && pad.connected )
-			{
-				if ( pad.ly > 0.6f )	b |= GESS_PADBIT( GESS_PAD_DPAD_UP );
-				if ( pad.ly < -0.6f )	b |= GESS_PADBIT( GESS_PAD_DPAD_DOWN );
-				if ( pad.lx < -0.6f )	b |= GESS_PADBIT( GESS_PAD_DPAD_LEFT );
-				if ( pad.lx > 0.6f )	b |= GESS_PADBIT( GESS_PAD_DPAD_RIGHT );
-			}
-
-			pressed |= b & ~m_Prev[i];
-			held |= b;
-			m_Prev[i] = b;
-		}
-
-		// Ignore buttons that were already held when the menu opened
-		if ( m_bFirst )
-		{
-			m_bFirst = false;
-			pressed = 0;
-		}
-
-		// Held directions repeat, getting faster the longer they're held
-		const float now = gpGlobals->realtime;
-		for ( int d = 0; d < 4; d++ )
-		{
-			const unsigned int bit = GESS_MENU_DIR_BITS[d];
-			if ( pressed & bit )
-			{
-				m_flHeldSince[d] = now;
-				m_flRepeat[d] = now + 0.4f;
-			}
-			else if ( ( held & bit ) && now >= m_flRepeat[d] )
-			{
-				pressed |= bit;
-				m_flRepeat[d] = now + ( now - m_flHeldSince[d] > 1.5f ? 0.04f : 0.1f );
-			}
-		}
-
-		m_Pressed = pressed;
-	}
-
-	bool Pressed( GESSPadButton_t b ) const	{ return ( m_Pressed & GESS_PADBIT( b ) ) != 0; }
-	bool Dir( int d ) const					{ return ( m_Pressed & GESS_MENU_DIR_BITS[d] ) != 0; }
-	bool Any() const						{ return m_Pressed != 0; }
-
-private:
-	unsigned int m_Prev[GES_SS_MAX_PADS];
-	bool m_bOwned[GES_SS_MAX_PADS];
-	unsigned int m_Pressed;
-	float m_flRepeat[4];
-	float m_flHeldSince[4];
-	bool m_bFirst;
 };
 
 //-----------------------------------------------------------------------------
@@ -534,11 +434,14 @@ public:
 			if ( pChar && pChar != pRandom && Q_stricmp( pChar->szIdentifier, CHAR_RANDOM_IDENT ) )
 				m_Chars.AddToTail( pChar );
 		}
+		// Custom (any body with any head) last, opens its own window
+		m_Chars.AddToTail( GECustomChar_RosterEntry() );
 
 		m_iSel = 0;
 		for ( int i = 0; i < m_Chars.Count(); i++ )
 		{
-			if ( currentIdent && !Q_stricmp( m_Chars[i]->szIdentifier, currentIdent ) )
+			if ( currentIdent && ( !Q_stricmp( m_Chars[i]->szIdentifier, currentIdent )
+				|| ( GECustomChar_IsCustom( currentIdent ) && m_Chars[i] == GECustomChar_RosterEntry() ) ) )
 				m_iSel = i;
 		}
 
@@ -765,14 +668,25 @@ private:
 	// The same portraits as GoldenEye's character select
 	void DrawPortrait( const CGECharData *pChar, bool bSelected, int x, int y, int w, int h )
 	{
+		// Custom has no portrait of its own: the random one, labelled
+		const bool bCustom = pChar == GECustomChar_RosterEntry();
 		char image[128];
-		Q_snprintf( image, sizeof( image ), "charselect/%s_portrait_%s", pChar->szIdentifier, bSelected ? "S" : "N" );
+		Q_snprintf( image, sizeof( image ), "charselect/%s_portrait_%s", bCustom ? CHAR_RANDOM_IDENT : pChar->szIdentifier, bSelected ? "S" : "N" );
 		IImage *pImage = scheme()->GetImage( image, false );
-		if ( !pImage )
-			return;
-		pImage->SetPos( x, y );
-		pImage->SetSize( w, h );
-		pImage->Paint();
+		if ( pImage )
+		{
+			pImage->SetPos( x, y );
+			pImage->SetSize( w, h );
+			pImage->Paint();
+		}
+		if ( bCustom )
+		{
+			const char *label = "CUSTOM";
+			const int tw = TextWide( m_hSmallFont, label ), th = surface()->GetFontTall( m_hSmallFont );
+			surface()->DrawSetColor( Color( 0, 0, 0, 190 ) );
+			surface()->DrawFilledRect( x, y + h - th - GESS_PX( 8 ), x + w, y + h );
+			DrawString( m_hSmallFont, x + ( w - tw ) / 2, y + h - th - GESS_PX( 4 ), Color( 230, 200, 80, 255 ), label );
+		}
 	}
 
 	static void Localized( const char *text, char *out, int len )
@@ -1446,6 +1360,11 @@ private:
 
 	static void CharacterName( const char *ident, char *out, int outLen )
 	{
+		if ( GECustomChar_IsCustom( ident ) )
+		{
+			Q_strncpy( out, "Custom", outLen );
+			return;
+		}
 		const CGECharData *pChar = ident && ident[0] ? GECharacters()->Get( ident ) : NULL;
 		if ( !pChar || !Q_stricmp( ident, CHAR_RANDOM_IDENT ) || pChar == GECharacters()->GetRandomChar() )
 		{
@@ -1652,6 +1571,7 @@ public:
 	MESSAGE_FUNC_INT( OnKeyboardDone, "KeyboardDone", accepted );
 	MESSAGE_FUNC( OnOpenKeyboard, "OpenKeyboard" );
 	MESSAGE_FUNC_PARAMS( OnCharacterPicked, "CharacterPicked", data );
+	MESSAGE_FUNC_PARAMS( OnCustomCharPicked, "CustomCharPicked", data );
 
 private:
 	void SetPage( int page );
@@ -1691,6 +1611,7 @@ private:
 	Button		*m_pCloseButton;
 	CGESSOnScreenKeyboard *m_pKeyboard;
 	CGESSCharacterPicker *m_pCharPicker;
+	CGECustomCharPicker *m_pCustomPicker;		// Opened by the "Custom" character
 	CGESSIntroPanel *m_pIntro;
 
 	// Profiles
@@ -1903,6 +1824,8 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pKeyboard = new CGESSOnScreenKeyboard( this );
 	m_pCharPicker = new CGESSCharacterPicker( this );
 	m_pCharPicker->AddActionSignalTarget( this );
+	m_pCustomPicker = new CGECustomCharPicker( this );
+	m_pCustomPicker->AddActionSignalTarget( this );
 	m_pIntro = new CGESSIntroPanel( this );
 	m_pKeyboard->AddActionSignalTarget( this );
 
@@ -1984,6 +1907,8 @@ void CGESplitScreenMenu::Activate()
 			continue;
 		m_pCharacter->AddItem( pChar->szPrintName[0] ? pChar->szPrintName : pChar->szIdentifier, new KeyValues( "char", "ident", pChar->szIdentifier ) );
 	}
+	// Custom: its "ident" holds the whole spec (body, head) of the profile being edited
+	m_pCharacter->AddItem( "Custom", new KeyValues( "char", "ident", CHAR_CUSTOM_IDENT ) );
 
 	// Maps and game modes
 	GESSMatch()->Load();
@@ -2030,6 +1955,8 @@ void CGESplitScreenMenu::OnClose()
 		m_pKeyboard->SetVisible( false );
 	if ( m_pCharPicker->IsOpen() )
 		m_pCharPicker->SetVisible( false );
+	if ( m_pCustomPicker->IsOpen() )
+		m_pCustomPicker->SetVisible( false );
 
 	StoreControlsIntoProfile();
 	GESSProfiles()->Save();
@@ -2167,6 +2094,7 @@ void CGESplitScreenMenu::PerformLayout()
 	// The keyboard covers the page area
 	m_pKeyboard->SetBounds( P( 14 ), P( 70 ), W - P( 28 ), H - P( 146 ) );	// stops above the controller hint
 	m_pCharPicker->SetBounds( P( 14 ), P( 70 ), W - P( 28 ), H - P( 146 ) );
+	m_pCustomPicker->SetBounds( P( 14 ), P( 70 ), W - P( 28 ), H - P( 146 ) );
 
 	// A margin before the text of the tabs and buttons (vgui's is 0: the text
 	// touched the left edge), growing with the menu
@@ -2322,6 +2250,10 @@ void CGESplitScreenMenu::HandlePads()
 		return;
 	}
 
+	// The custom character window reads the controllers itself
+	if ( m_pCustomPicker->IsOpen() )
+		return;
+
 	if ( m_pCharPicker->IsOpen() )
 	{
 		m_pCharPicker->HandlePads( m_Pads );
@@ -2353,7 +2285,7 @@ void CGESplitScreenMenu::PostChildPaint()
 {
 	BaseClass::PostChildPaint();
 
-	if ( !m_bPadFocusShown || m_pIntro->IsOpen() || m_pKeyboard->IsOpen() || m_pCharPicker->IsOpen() || !m_Nav.IsValidIndex( m_iFocus ) || !IsNavUsable( m_iFocus ) )
+	if ( !m_bPadFocusShown || m_pIntro->IsOpen() || m_pKeyboard->IsOpen() || m_pCharPicker->IsOpen() || m_pCustomPicker->IsOpen() || !m_Nav.IsValidIndex( m_iFocus ) || !IsNavUsable( m_iFocus ) )
 		return;
 
 	// Gold outline around the setting the controller is on
@@ -2397,6 +2329,21 @@ void CGESplitScreenMenu::OnCharacterPicked( KeyValues *data )
 		return;
 
 	const char *ident = data->GetString( "ident" );
+
+	// Custom: pick the body and head in its own window first
+	if ( GECustomChar_IsCustom( ident ) )
+	{
+		// Starts from the profile's custom character, or its character's body
+		const char *current = GetSelectedCharacter();
+		char spec[GE_CUSTOMCHAR_SPEC_LEN];
+		if ( GECustomChar_IsCustom( current ) )
+			Q_strncpy( spec, current, sizeof( spec ) );
+		else
+			Q_snprintf( spec, sizeof( spec ), "%s/%s/0", CHAR_CUSTOM_IDENT, current );
+		m_pCustomPicker->Open( spec );
+		return;
+	}
+
 	for ( int i = 0; i < m_pCharacter->GetItemCount(); i++ )
 	{
 		KeyValues *pData = m_pCharacter->GetItemUserData( m_pCharacter->GetItemIDFromRow( i ) );
@@ -2411,10 +2358,58 @@ void CGESplitScreenMenu::OnCharacterPicked( KeyValues *data )
 	UpdateCharacterButton();
 }
 
+void CGESplitScreenMenu::OnCustomCharPicked( KeyValues *data )
+{
+	m_Pads.Reset();
+	if ( !data->GetInt( "accepted" ) )
+		return;
+
+	const char *spec = data->GetString( "spec" );
+	for ( int i = 0; i < m_pCharacter->GetItemCount(); i++ )
+	{
+		KeyValues *pData = m_pCharacter->GetItemUserData( m_pCharacter->GetItemIDFromRow( i ) );
+		if ( pData && GECustomChar_IsCustom( pData->GetString( "ident" ) ) )
+		{
+			pData->SetString( "ident", spec );
+			m_pCharacter->ActivateItemByRow( i );
+			break;
+		}
+	}
+
+	StoreControlsIntoProfile();
+	UpdateCharacterButton();
+}
+
 // Show the chosen character's portrait and name on the profile page
 void CGESplitScreenMenu::UpdateCharacterButton()
 {
 	const char *ident = GetSelectedCharacter();
+
+	// Custom: "Custom: <body> + <head>", with the body's portrait
+	GECustomChar_t custom;
+	if ( GECustomChar_Parse( ident, custom ) )
+	{
+		const CGECharData *pBody = GECharacters()->Get( custom.body );
+		const CGECharData *pHead = custom.IsImportedHead() ? NULL : GECharacters()->Get( custom.head );
+		char bodyName[64], headName[64];
+		Q_strncpy( bodyName, pBody ? pBody->szPrintName : custom.body, sizeof( bodyName ) );
+		Q_strncpy( headName, pHead ? pHead->szPrintName : custom.headFile, sizeof( headName ) );
+		const char *names[2] = { bodyName, headName };
+		char *outs[2] = { bodyName, headName };
+		for ( int n = 0; n < 2; n++ )
+		{
+			const wchar_t *pw = names[n][0] == '#' ? g_pVGuiLocalize->Find( names[n] ) : NULL;
+			if ( pw )
+				g_pVGuiLocalize->ConvertUnicodeToANSI( pw, outs[n], 64 );
+		}
+		m_pCharButton->SetText( VarArgs( "Custom: %s + %s's head  (choose...)", bodyName, headName ) );
+
+		char image[128];
+		Q_snprintf( image, sizeof( image ), "charselect/%s_portrait_N", custom.body );
+		m_pCharPortrait->SetImage( image );
+		return;
+	}
+
 	const CGECharData *pChar = GECharacters()->Get( ident );
 	const bool bRandom = !pChar || !Q_stricmp( ident, CHAR_RANDOM_IDENT ) || pChar == GECharacters()->GetRandomChar();
 
@@ -2494,6 +2489,12 @@ void CGESplitScreenMenu::LoadProfileIntoControls()
 	for ( int i = 0; i < m_pCharacter->GetItemCount(); i++ )
 	{
 		KeyValues *pData = m_pCharacter->GetItemUserData( m_pCharacter->GetItemIDFromRow( i ) );
+		if ( pData && GECustomChar_IsCustom( p->character ) && GECustomChar_IsCustom( pData->GetString( "ident" ) ) )
+		{
+			pData->SetString( "ident", p->character );
+			charRow = i;
+			break;
+		}
 		if ( pData && !Q_stricmp( pData->GetString( "ident" ), p->character ) )
 		{
 			charRow = i;

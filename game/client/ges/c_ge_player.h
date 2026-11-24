@@ -20,6 +20,9 @@ class CGEWeapon;
 #include "ge_shareddefs.h"
 #include "GameEventListener.h"
 #include "ge_weapon.h"
+#include "ge_customchar.h"
+
+class C_GECustomHead;
 
 class C_GEPlayer : public C_HL2MP_Player
 {
@@ -83,6 +86,10 @@ public:
 
 	C_BaseEntity *GetHat()		{ return m_hHat.Get(); };
 
+	// Custom character (ge_customchar.h): the head drawn on this body
+	void UpdateCustomHead();
+	C_GECustomHead *GetCustomHead() { return m_hCustomHead.Get(); }
+
 	virtual void		FireBullets( const FireBulletsInfo_t &info );
 	virtual bool		Weapon_Switch( CBaseCombatWeapon *pWeapon, int viewmodelindex = GE_RIGHT_HAND );
 
@@ -97,6 +104,16 @@ private:
 	CHandle< C_BaseCombatWeapon > m_hActiveLeftWeapon;
 
 	EHANDLE m_hHat;
+
+	// Networked custom head, and what was last put on the body for it
+	int  m_iCustomHeadChar;
+	int  m_iCustomHeadSkin;
+	char m_szCustomHeadFile[GE_CUSTOMHEAD_NAME_LEN];
+	int  m_iAppliedHeadChar;
+	int  m_iAppliedHeadSkin;
+	char m_szAppliedHeadFile[GE_CUSTOMHEAD_NAME_LEN];
+	bool m_bAppliedHead;
+	CHandle<C_GECustomHead> m_hCustomHead;
 	EHANDLE m_hActiveWeaponCache;
 
 	// Local state tracking

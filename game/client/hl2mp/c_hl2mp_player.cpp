@@ -7,6 +7,9 @@
 #include "cbase.h"
 #include "vcollide_parse.h"
 #include "c_hl2mp_player.h"
+#ifdef GE_DLL
+#include "ge_customhead.h"
+#endif
 #include "view.h"
 #include "takedamageinfo.h"
 #include "hl2mp_gamerules.h"
@@ -931,6 +934,11 @@ void C_HL2MPRagdoll::CreateHL2MPRagdoll( void )
 	matrix3x4_t currentBones[MAXSTUDIOBONES];
 	const float boneDt = 0.05f;
 
+#ifdef GE_DLL
+	// A custom character's head (ge_customhead.h) is shown on the player while
+	// its bones are read, then a copy goes on this ragdoll
+	const bool bGEHeadHidden = GECustomHead_PreRagdoll( pPlayer );
+#endif
 	if ( pPlayer && !pPlayer->IsDormant() )
 	{
 		pPlayer->GetRagdollInitBoneArrays( boneDelta0, boneDelta1, currentBones, boneDt );
@@ -945,6 +953,10 @@ void C_HL2MPRagdoll::CreateHL2MPRagdoll( void )
 #endif
 
 	InitAsClientRagdoll( boneDelta0, boneDelta1, currentBones, boneDt );
+
+#ifdef GE_DLL
+	GECustomHead_RagdollCreated( pPlayer, this, bGEHeadHidden );
+#endif
 }
 
 

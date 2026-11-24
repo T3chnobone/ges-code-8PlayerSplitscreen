@@ -12,6 +12,7 @@
 #include "gemp_player.h"
 #include "gemp_gamerules.h"
 #include "ge_character_data.h"
+#include "ge_customchar.h"
 #include "usercmd.h"
 #include "checksum_md5.h"
 #include "viewport_panel_names.h"
@@ -222,7 +223,7 @@ void CGESplitScreenServer::JoinGuestToGame( CGEMPPlayer *pGuest, GuestRecord_t *
 void CGESplitScreenServer::ApplyGuestCharacter( CGEMPPlayer *pGuest, GuestRecord_t *pRec )
 {
 	const char *character = pRec->character;
-	const CGECharData *pChar = GECharacters()->Get( character );
+	const CGECharData *pChar = GECustomChar_GetBodyChar( character );
 
 	// In teamplay the profile's character might belong to the other team
 	if ( !pChar || ( GEMPRules()->IsTeamplay() && pChar->iTeam != pGuest->GetTeamNumber() ) )

@@ -23,6 +23,7 @@ class CGEWeapon;
 #include "ge_gamerules.h"
 #include "utldict.h"
 #include "shareddefs.h"
+#include "ge_customchar.h"
 
 //=============================================================================
 // >> CGEPlayer
@@ -143,6 +144,9 @@ public:
 	virtual void SetPlayerModel( void );
 	virtual void SetPlayerModel( const char* szCharName, int iCharSkin = 0, bool bNoSelOverride = false );
 
+	// Custom character: the head drawn on the body (NULL clears it, see ge_customchar.h)
+	void SetCustomHead( const GECustomChar_t *pCustom );
+
 	virtual bool StartObserverMode( int mode );
 
 	// Functions for achievements
@@ -223,6 +227,12 @@ protected:
 
 	CNetworkHandle( CBaseCombatWeapon,	m_hActiveLeftWeapon );
 	CNetworkHandle( CBaseEntity,		m_hHat );
+
+	// Custom character head: a character's head (index into GECharacters(), -1 = none)
+	// or an imported head file (models/ges_custom_heads/<name>.mdl)
+	CNetworkVar( int,	m_iCustomHeadChar );
+	CNetworkVar( int,	m_iCustomHeadSkin );
+	CNetworkString( m_szCustomHeadFile, GE_CUSTOMHEAD_NAME_LEN );
 
 private:
 
