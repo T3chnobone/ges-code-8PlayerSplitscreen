@@ -139,6 +139,16 @@ public:
 	float		  ClampCycle( float cycle, bool isLooping );
 	virtual void GetPoseParameters( CStudioHdr *pStudioHdr, float poseParameter[MAXSTUDIOPOSEPARAM] );
 	virtual void BuildTransformations( CStudioHdr *pStudioHdr, Vector *pos, Quaternion q[], const matrix3x4_t& cameraTransform, int boneMask, CBoneBitList &boneComputed );
+
+#ifdef GE_DLL
+	// Custom characters (ge_customhead.cpp): hide this model's own head by
+	// collapsing ValveBiped.Bip01_Head1 and the bones under it, so another head
+	// can be drawn in its place. Attachments, hats (bone merge) and the new head
+	// still use the head bones as animated (GEGetUnhiddenBone).
+	void					GESetHideHead( bool bHide )	{ m_bGEHideHead = bHide; }
+	bool					GEIsHidingHead() const		{ return m_bGEHideHead; }
+	const matrix3x4_t		&GEGetUnhiddenBone( int iBone );
+#endif
 	virtual void ApplyBoneMatrixTransform( matrix3x4_t& transform );
  	virtual int	VPhysicsGetObjectList( IPhysicsObject **pList, int listMax );
 
@@ -608,6 +618,17 @@ private:
 	CUtlVector<CAttachmentData>		m_Attachments;
 
 	bool							SetupBones_AttachmentHelper( CStudioHdr *pStudioHdr );
+
+#ifdef GE_DLL
+	void							GEHideHeadBones( CStudioHdr *pStudioHdr, int boneMask );
+
+	enum { GE_MAX_HIDDEN_HEAD_BONES = 16 };
+	bool							m_bGEHideHead;
+	const studiohdr_t				*m_pGEHeadBonesHdr;		// Model the list below was made for
+	int								m_nGEHeadBones;			// Head bone and the bones under it
+	short							m_iGEHeadBones[GE_MAX_HIDDEN_HEAD_BONES];
+	matrix3x4_t						m_GEHeadBoneMats[GE_MAX_HIDDEN_HEAD_BONES];	// As animated, before hiding
+#endif
 
 	EHANDLE							m_hLightingOrigin;
 	EHANDLE							m_hLightingOriginRelative;

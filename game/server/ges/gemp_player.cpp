@@ -26,6 +26,7 @@
 #include "ge_loadoutmanager.h"
 #include "ge_weapon.h"
 #include "ge_character_data.h"
+#include "ge_customchar.h"
 #include "ge_achievement_defs.h"
 #include "ge_player_shared.h"
 #include "gebot_player.h"
@@ -648,6 +649,22 @@ void CGEMPPlayer::ForceRespawn()
 
 void CGEMPPlayer::SetPlayerModel( const char* szCharName, int iCharSkin /*=0*/, bool bNoSelOverride /*=false*/ )
 {
+	// Custom character (ge_customchar.h): the checks below are about its body,
+	// the whole spec goes to the base class, which also sets the head
+	char customSpec[GE_CUSTOMCHAR_SPEC_LEN];
+	customSpec[0] = '\0';
+	GECustomChar_t custom;
+	if ( GECustomChar_Parse( szCharName, custom ) )
+	{
+		GECustomChar_Format( custom, customSpec, sizeof( customSpec ) );
+		szCharName = custom.body;
+		iCharSkin = custom.bodySkin;
+	}
+	else if ( GECustomChar_IsCustom( szCharName ) )
+	{
+		szCharName = CHAR_RANDOM_IDENT;
+	}
+
 	// Copy the pointer over so we can deal with randomness
 	char selCharName[MAX_CHAR_IDENT];
 	Q_strncpy( selCharName, szCharName, MAX_CHAR_IDENT );
@@ -708,7 +725,7 @@ void CGEMPPlayer::SetPlayerModel( const char* szCharName, int iCharSkin /*=0*/, 
 	if ( GERules()->IsTeamplay() && pChar->iTeam != GetTeamNumber() ) 
 		return;
 
-	BaseClass::SetPlayerModel( selCharName, iCharSkin );
+	BaseClass::SetPlayerModel( ( customSpec[0] && !Q_stricmp( selCharName, custom.body ) ) ? customSpec : selCharName, iCharSkin );
 
 	UTIL_ClientPrintAll( HUD_PRINTTALK, "#PLAYER_CHANGECHAR", GetPlayerName(), pChar->szShortName );
 
@@ -1811,7 +1828,7 @@ void CGEMPPlayer::ApplySplitHostCharacter()
 {
 	// The profile's character, or a random one when it doesn't fit the team
 	const char *character = m_szSplitHostChar[0] ? m_szSplitHostChar : CHAR_RANDOM_IDENT;
-	const CGECharData *pChar = GECharacters()->Get( character );
+	const CGECharData *pChar = GECustomChar_GetBodyChar( character );
 	if ( !pChar || ( GERules()->IsTeamplay() && pChar->iTeam != GetTeamNumber() ) )
 		character = CHAR_RANDOM_IDENT;
 

@@ -177,7 +177,12 @@ void CBoneMergeCache::MergeMatchingBones( int boneMask )
 			if ( !( m_pOwnerHdr->boneFlags( iOwnerBone ) & boneMask ) )
 				continue;
 
+#ifdef GE_DLL
+			// A hat on a custom character stays on the head that's hidden under the new one
+			MatrixCopy( m_pFollow->GEGetUnhiddenBone( iParentBone ), m_pOwner->GetBoneForWrite( iOwnerBone ) );
+#else
 			MatrixCopy( m_pFollow->GetBone( iParentBone ), m_pOwner->GetBoneForWrite( iOwnerBone ) );
+#endif
 		}
 	}
 }
@@ -256,7 +261,11 @@ bool CBoneMergeCache::GetAimEntOrigin( Vector *pAbsOrigin, QAngle *pAbsAngles )
 	
 	// Get mFollowBone.
 	m_pFollow->SetupBones( NULL, -1, m_nFollowBoneSetupMask, gpGlobals->curtime );
+#ifdef GE_DLL
+	const matrix3x4_t &mFollowBone = m_pFollow->GEGetUnhiddenBone( m_MergedBones[0].m_iParentBone );
+#else
 	const matrix3x4_t &mFollowBone = m_pFollow->GetBone( m_MergedBones[0].m_iParentBone );
+#endif
 
 	// Get Inverse( mBoneLocal )
 	matrix3x4_t mBoneLocal, mBoneLocalInv;
@@ -281,7 +290,11 @@ bool CBoneMergeCache::GetRootBone( matrix3x4_t &rootBone )
 
 	// Get mFollowBone.
 	m_pFollow->SetupBones( NULL, -1, m_nFollowBoneSetupMask, gpGlobals->curtime );
+#ifdef GE_DLL
+	rootBone = m_pFollow->GEGetUnhiddenBone( m_MergedBones[0].m_iParentBone );
+#else
 	rootBone = m_pFollow->GetBone( m_MergedBones[0].m_iParentBone );
+#endif
 	return true;
 }
 
