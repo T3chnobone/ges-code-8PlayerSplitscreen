@@ -61,6 +61,7 @@ private:
 	CHandle<C_BasePlayer>		m_hOwnerPlayer;		// Player heads only
 	EHANDLE						m_hLastRagdoll;		// Last ragdoll a copy was made for
 	char						m_szModel[MAX_PATH];
+	bool						m_bLastShouldDraw;
 
 	// Bone map, rebuilt when either model changes
 	const studiohdr_t			*m_pMapHdr;

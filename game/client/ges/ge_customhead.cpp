@@ -53,6 +53,7 @@ bool GECustomHead_GetModel( int headChar, int headSkin, const char *headFile, ch
 C_GECustomHead::C_GECustomHead()
 {
 	m_szModel[0] = '\0';
+	m_bLastShouldDraw = true;
 	m_pMapHdr = m_pMapSrcHdr = NULL;
 	m_iHeadBone = m_iSrcHeadBone = -1;
 }
@@ -135,6 +136,15 @@ void C_GECustomHead::ClientThink()
 		SetParent( NULL );
 		Release();
 		return;
+	}
+
+	// The engine only asks ShouldDraw again when visibility is updated, which a
+	// client-side entity doesn't get by itself when its body dies or respawns
+	const bool bDraw = ShouldDraw();
+	if ( bDraw != m_bLastShouldDraw )
+	{
+		m_bLastShouldDraw = bDraw;
+		UpdateVisibility();
 	}
 
 	// The player died: their ragdoll gets a copy of this head (normally done
