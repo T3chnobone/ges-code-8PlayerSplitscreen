@@ -813,5 +813,20 @@ void CGECustomCharPicker::Paint()
 		}
 	}
 
-	DrawString( m_hSmallFont, w * 55 / 100, h - GECP_PX( 30 ), Color( 160, 160, 160, 255 ), "D-pad: move / change   A: select   START: done   B: cancel" );
+	// Controller hint under the preview, on two lines when one doesn't fit
+	{
+		const int hx = w * 55 / 100;
+		const int hw = w - hx - GECP_PX( 14 );
+		const Color hintCol( 160, 160, 160, 255 );
+		static const char *s_szHint = "D-pad: move / change   A: select   START: done   B: cancel";
+		if ( TextWide( m_hSmallFont, s_szHint ) <= hw )
+		{
+			DrawString( m_hSmallFont, hx, h - GECP_PX( 30 ), hintCol, s_szHint );
+		}
+		else
+		{
+			DrawString( m_hSmallFont, hx, h - GECP_PX( 14 ) - 2 * fontTall - 2, hintCol, "D-pad: move / change   A: select" );
+			DrawString( m_hSmallFont, hx, h - GECP_PX( 14 ) - fontTall, hintCol, "START: done   B: cancel" );
+		}
+	}
 }

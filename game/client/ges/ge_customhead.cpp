@@ -192,6 +192,12 @@ bool C_GECustomHead::ShouldDraw()
 	if ( !pSource || pSource->IsDormant() || pSource->IsEffectActive( EF_NODRAW ) )
 		return false;
 
+	// A dead player's head is on their ragdoll now (its own copy); the player's
+	// one would otherwise hang in the air where they died until they respawn
+	C_BasePlayer *pPlayer = ToBasePlayer( pSource );
+	if ( pPlayer && ( !pPlayer->IsAlive() || pPlayer->IsObserver() ) )
+		return false;
+
 	// Drawn when the body is (not in first person, not dead...)
 	return pSource->ShouldDraw();
 }
