@@ -20,6 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "cbase.h"
+#include "filesystem.h"
 #include <vgui/IVGui.h>
 #include <vgui/ISurface.h>
 #include <vgui/IInput.h>
@@ -767,6 +768,383 @@ private:
 	int m_iCols;
 	int m_iFirstRow;
 	HFont m_hFont, m_hSmallFont;
+};
+
+//-----------------------------------------------------------------------------
+// The Match page's map picker: GoldenEye's own map thumbnails in a grid (the
+// Create Server list's materials/vgui/maps/menu_thumb_<map>), and the selected
+// map's loading screen (materials/vgui/loadingscreens/<map>_widescreen) large on
+// the right. D-pad / stick to move, A to choose, B to cancel; mouse and keys too.
+//-----------------------------------------------------------------------------
+class CGESSMapPicker : public vgui::Panel
+{
+	DECLARE_CLASS_SIMPLE( CGESSMapPicker, vgui::Panel );
+
+public:
+	CGESSMapPicker( Panel *pParent ) : BaseClass( pParent, "GESSMapPicker" )
+	{
+		m_iSel = 0;
+		m_iCols = 4;
+		m_iFirstRow = 0;
+		m_hFont = m_hSmallFont = INVALID_FONT;
+		SetVisible( false );
+		SetMouseInputEnabled( true );
+		SetKeyBoardInputEnabled( true );
+		SetPaintBackgroundEnabled( false );
+	}
+
+	virtual void ApplySchemeSettings( IScheme *pScheme )
+	{
+		BaseClass::ApplySchemeSettings( pScheme );
+		m_hFont = pScheme->GetFont( "DefaultLarge", false );
+		if ( m_hFont == INVALID_FONT )
+			m_hFont = pScheme->GetFont( "Default", false );
+		m_hSmallFont = pScheme->GetFont( "Default", false );
+	}
+
+	void Open( const CUtlVector<CUtlString> &maps, const char *current )
+	{
+		m_Maps.RemoveAll();
+		m_iSel = 0;
+		for ( int i = 0; i < maps.Count(); i++ )
+		{
+			m_Maps.AddToTail( maps[i] );
+			if ( current && !Q_stricmp( maps[i].Get(), current ) )
+				m_iSel = i;
+		}
+		m_iFirstRow = 0;
+		SetVisible( true );
+		MoveToFront();
+		RequestFocus();
+	}
+
+	// vgui::Panel::IsVisible() is not const in the SDK
+	bool IsOpen() const { return const_cast<CGESSMapPicker *>( this )->IsVisible(); }
+
+	void HandlePads( const CGESSMenuPadReader &pads )
+	{
+		if ( pads.Dir( GESS_DIR_UP ) )		Move( 0, -1 );
+		if ( pads.Dir( GESS_DIR_DOWN ) )	Move( 0, 1 );
+		if ( pads.Dir( GESS_DIR_LEFT ) )	Move( -1, 0 );
+		if ( pads.Dir( GESS_DIR_RIGHT ) )	Move( 1, 0 );
+
+		if ( pads.Pressed( GESS_PAD_A ) || pads.Pressed( GESS_PAD_START ) )
+			Finish( true );
+		else if ( pads.Pressed( GESS_PAD_B ) )
+			Finish( false );
+	}
+
+	virtual void OnKeyCodePressed( KeyCode code )
+	{
+		if ( code == KEY_ENTER || code == KEY_PAD_ENTER )		Finish( true );
+		else if ( code == KEY_ESCAPE )							Finish( false );
+		else if ( code == KEY_UP )								Move( 0, -1 );
+		else if ( code == KEY_DOWN )							Move( 0, 1 );
+		else if ( code == KEY_LEFT )							Move( -1, 0 );
+		else if ( code == KEY_RIGHT )							Move( 1, 0 );
+		else BaseClass::OnKeyCodePressed( code );
+	}
+
+	virtual void OnMousePressed( MouseCode code )
+	{
+		if ( code != MOUSE_LEFT )
+			return;
+		const int i = HitCell();
+		if ( i >= 0 )
+			m_iSel = i;
+		else if ( HitButton( true ) )
+			Finish( true );
+		else if ( HitButton( false ) )
+			Finish( false );
+	}
+
+	virtual void OnMouseDoublePressed( MouseCode code )
+	{
+		const int i = HitCell();
+		if ( code == MOUSE_LEFT && i >= 0 )
+		{
+			m_iSel = i;
+			Finish( true );
+		}
+	}
+
+	virtual void OnMouseWheeled( int delta )
+	{
+		Move( 0, delta > 0 ? -1 : 1 );
+	}
+
+	// "ge_facility_backzone" -> "Facility Backzone", "ge_archives_classic" -> "Archives (Classic)"
+	static void NiceName( const char *map, char *out, int len )
+	{
+		char buf[128];
+		Q_strncpy( buf, !Q_strnicmp( map, "ge_", 3 ) ? map + 3 : map, sizeof( buf ) );
+		bool bClassic = false;
+		const int n = Q_strlen( buf );
+		if ( n > 8 && !Q_stricmp( buf + n - 8, "_classic" ) )
+		{
+			buf[n - 8] = '\0';
+			bClassic = true;
+		}
+		bool bStart = true;
+		for ( char *p = buf; *p; p++ )
+		{
+			if ( *p == '_' )
+			{
+				*p = ' ';
+				bStart = true;
+			}
+			else
+			{
+				if ( bStart && *p >= 'a' && *p <= 'z' )
+					*p = *p - 'a' + 'A';
+				bStart = false;
+			}
+		}
+		Q_snprintf( out, len, bClassic ? "%s (Classic)" : "%s", buf );
+	}
+
+	virtual void Paint()
+	{
+		const int w = GetWide(), h = GetTall();
+
+		surface()->DrawSetColor( Color( 20, 20, 20, 255 ) );
+		surface()->DrawFilledRect( 0, 0, w, h );
+		surface()->DrawSetColor( Color( 185, 168, 90, 255 ) );
+		surface()->DrawOutlinedRect( 0, 0, w, h );
+		DrawString( m_hSmallFont, GESS_PX( 12 ), GESS_PX( 8 ), Color( 230, 200, 80, 255 ), "Choose a map" );
+
+		// Thumbnail grid, each with its name under it
+		int cellW, cellH, gx, gy, rows;
+		GridLayout( cellW, cellH, gx, gy, rows );
+		EnsureVisible( rows );
+		const int nameTall = surface()->GetFontTall( m_hSmallFont );
+		for ( int r = 0; r < rows; r++ )
+		{
+			for ( int c = 0; c < m_iCols; c++ )
+			{
+				const int i = ( m_iFirstRow + r ) * m_iCols + c;
+				if ( i >= m_Maps.Count() )
+					break;
+				const int x = gx + c * cellW, y = gy + r * cellH;
+				const bool bSel = i == m_iSel;
+				const int thumb = Max( 8, Min( cellW - GESS_PX( 6 ), cellH - nameTall - GESS_PX( 10 ) ) );
+				const int tx = x + ( cellW - thumb ) / 2, ty = y + GESS_PX( 3 );
+				DrawImage( ThumbImage( m_Maps[i].Get() ), tx, ty, thumb, thumb );
+				surface()->DrawSetColor( bSel ? Color( 230, 200, 80, 255 ) : Color( 70, 70, 70, 255 ) );
+				surface()->DrawOutlinedRect( tx - 1, ty - 1, tx + thumb + 1, ty + thumb + 1 );
+				if ( bSel )
+					surface()->DrawOutlinedRect( tx - 2, ty - 2, tx + thumb + 2, ty + thumb + 2 );
+
+				// The name under the picture, shortened to fit
+				char name[128];
+				NiceName( m_Maps[i].Get(), name, sizeof( name ) );
+				while ( Q_strlen( name ) > 4 && TextWide( m_hSmallFont, name ) > cellW - 4 )
+				{
+					const int len = Q_strlen( name );
+					name[len - 4] = '.';
+					name[len - 3] = '.';
+					name[len - 2] = '\0';
+				}
+				DrawString( m_hSmallFont, x + ( cellW - TextWide( m_hSmallFont, name ) ) / 2, ty + thumb + GESS_PX( 3 ),
+					bSel ? Color( 255, 230, 120, 255 ) : Color( 200, 200, 200, 255 ), name );
+			}
+		}
+
+		// More rows above / below
+		const int totalRows = ( m_Maps.Count() + m_iCols - 1 ) / m_iCols;
+		if ( m_iFirstRow > 0 )
+			DrawString( m_hSmallFont, gx + m_iCols * cellW / 2 - GESS_PX( 4 ), gy - GESS_PX( 14 ), Color( 230, 200, 80, 255 ), "^" );
+		if ( m_iFirstRow + rows < totalRows )
+			DrawString( m_hSmallFont, gx + m_iCols * cellW / 2 - GESS_PX( 4 ), gy + rows * cellH, Color( 230, 200, 80, 255 ), "v" );
+
+		// The selected map's loading screen, large, with its name
+		if ( m_Maps.IsValidIndex( m_iSel ) )
+		{
+			const int px = gx + m_iCols * cellW + GESS_PX( 16 );
+			const int pw = w - px - GESS_PX( 14 );
+			const int pTop = GESS_PX( 34 );
+			const int ph = pw / 2;	// the loading screens are 2:1
+			DrawImage( LoadingImage( m_Maps[m_iSel].Get() ), px, pTop, pw, ph );
+			surface()->DrawSetColor( Color( 185, 168, 90, 255 ) );
+			surface()->DrawOutlinedRect( px - 1, pTop - 1, px + pw + 1, pTop + ph + 1 );
+
+			char name[128];
+			NiceName( m_Maps[m_iSel].Get(), name, sizeof( name ) );
+			int y = pTop + ph + GESS_PX( 10 );
+			DrawString( m_hFont, px + ( pw - TextWide( m_hFont, name ) ) / 2, y, Color( 255, 255, 255, 255 ), name );
+			y += surface()->GetFontTall( m_hFont ) + GESS_PX( 4 );
+			DrawString( m_hSmallFont, px + ( pw - TextWide( m_hSmallFont, m_Maps[m_iSel].Get() ) ) / 2, y, Color( 150, 150, 150, 255 ), m_Maps[m_iSel].Get() );
+			y += nameTall + GESS_PX( 6 );
+			char count[32];
+			Q_snprintf( count, sizeof( count ), "Map %d of %d", m_iSel + 1, m_Maps.Count() );
+			DrawString( m_hSmallFont, px + ( pw - TextWide( m_hSmallFont, count ) ) / 2, y, Color( 150, 150, 150, 255 ), count );
+		}
+
+		// Choose / Cancel
+		for ( int b = 0; b < 2; b++ )
+		{
+			int x0, y0, x1, y1;
+			ButtonRect( b == 0, x0, y0, x1, y1 );
+			surface()->DrawSetColor( Color( 52, 52, 52, 255 ) );
+			surface()->DrawFilledRect( x0, y0, x1, y1 );
+			surface()->DrawSetColor( Color( 120, 110, 70, 255 ) );
+			surface()->DrawOutlinedRect( x0, y0, x1, y1 );
+			const char *label = b == 0 ? "Choose" : "Cancel";
+			DrawString( m_hSmallFont, ( x0 + x1 - TextWide( m_hSmallFont, label ) ) / 2, ( y0 + y1 - surface()->GetFontTall( m_hSmallFont ) ) / 2, Color( 255, 255, 255, 255 ), label );
+		}
+
+		DrawString( m_hSmallFont, GESS_PX( 12 ), h - GESS_PX( 22 ), Color( 190, 190, 190, 255 ), "D-pad / stick: move   A: choose   B: cancel" );
+	}
+
+private:
+	void Move( int dx, int dy )
+	{
+		const int count = m_Maps.Count();
+		if ( count <= 0 )
+			return;
+		int i = m_iSel + dx + dy * m_iCols;
+		if ( dx && ( i < 0 || i >= count ) )
+			i = ( i + count ) % count;
+		if ( dy && ( i < 0 || i >= count ) )
+		{
+			// Down onto a short last row: its last map
+			if ( dy > 0 && m_iSel / m_iCols < ( count - 1 ) / m_iCols )
+				i = count - 1;
+			else
+				return;
+		}
+		m_iSel = i;
+	}
+
+	void Finish( bool bAccepted )
+	{
+		SetVisible( false );
+		KeyValues *kv = new KeyValues( "MapPicked" );
+		kv->SetInt( "accepted", bAccepted ? 1 : 0 );
+		kv->SetString( "map", ( bAccepted && m_Maps.IsValidIndex( m_iSel ) ) ? m_Maps[m_iSel].Get() : "" );
+		PostActionSignal( kv );
+	}
+
+	// Grid on the left ~55% of the panel
+	void GridLayout( int &cellW, int &cellH, int &gx, int &gy, int &rows )
+	{
+		const int w = GetWide(), h = GetTall();
+		gx = GESS_PX( 14 );
+		gy = GESS_PX( 34 );
+		const int gridW = w * 55 / 100 - gx;
+		const int gridH = h - gy - GESS_PX( 60 );
+		cellW = Max( GESS_PX( 40 ), gridW / m_iCols );
+		cellH = cellW + surface()->GetFontTall( m_hSmallFont ) + GESS_PX( 4 );
+		rows = Max( 1, gridH / cellH );
+	}
+
+	void EnsureVisible( int rows )
+	{
+		const int row = m_iSel / m_iCols;
+		if ( row < m_iFirstRow )
+			m_iFirstRow = row;
+		else if ( row >= m_iFirstRow + rows )
+			m_iFirstRow = row - rows + 1;
+	}
+
+	int HitCell()
+	{
+		int mx, my;
+		input()->GetCursorPos( mx, my );
+		ScreenToLocal( mx, my );
+		int cellW, cellH, gx, gy, rows;
+		GridLayout( cellW, cellH, gx, gy, rows );
+		if ( mx < gx || my < gy || mx >= gx + m_iCols * cellW || my >= gy + rows * cellH )
+			return -1;
+		const int i = ( m_iFirstRow + ( my - gy ) / cellH ) * m_iCols + ( mx - gx ) / cellW;
+		return i < m_Maps.Count() ? i : -1;
+	}
+
+	void ButtonRect( bool bChoose, int &x0, int &y0, int &x1, int &y1 )
+	{
+		const int w = GetWide(), h = GetTall();
+		x1 = bChoose ? w - GESS_PX( 14 + 110 ) : w - GESS_PX( 14 );
+		x0 = x1 - GESS_PX( 100 );
+		y0 = h - GESS_PX( 44 );
+		y1 = h - GESS_PX( 14 );
+	}
+
+	bool HitButton( bool bChoose )
+	{
+		int mx, my;
+		input()->GetCursorPos( mx, my );
+		ScreenToLocal( mx, my );
+		int x0, y0, x1, y1;
+		ButtonRect( bChoose, x0, y0, x1, y1 );
+		return mx >= x0 && mx < x1 && my >= y0 && my < y1;
+	}
+
+	// The image's name under materials/vgui/, or the default when the map has none
+	static void ThumbImage( const char *map, char *out, int len )
+	{
+		Q_snprintf( out, len, "materials/vgui/maps/menu_thumb_%s.vmt", map );
+		if ( filesystem->FileExists( out, "GAME" ) )
+			Q_snprintf( out, len, "maps/menu_thumb_%s", map );
+		else
+			Q_strncpy( out, "maps/menu_thumb_default", len );
+	}
+
+	static void LoadingImage( const char *map, char *out, int len )
+	{
+		Q_snprintf( out, len, "materials/vgui/loadingscreens/%s_widescreen.vmt", map );
+		if ( filesystem->FileExists( out, "GAME" ) )
+			Q_snprintf( out, len, "loadingscreens/%s_widescreen", map );
+		else
+			Q_strncpy( out, "loadingscreens/_default_widescreen", len );
+	}
+
+	const char *ThumbImage( const char *map )
+	{
+		ThumbImage( map, m_szImage, sizeof( m_szImage ) );
+		return m_szImage;
+	}
+
+	const char *LoadingImage( const char *map )
+	{
+		LoadingImage( map, m_szImage, sizeof( m_szImage ) );
+		return m_szImage;
+	}
+
+	void DrawImage( const char *image, int x, int y, int w, int h )
+	{
+		IImage *pImage = scheme()->GetImage( image, false );
+		if ( !pImage )
+			return;
+		pImage->SetPos( x, y );
+		pImage->SetSize( w, h );
+		pImage->Paint();
+	}
+
+	int TextWide( HFont font, const char *text )
+	{
+		wchar_t wbuf[512];
+		g_pVGuiLocalize->ConvertANSIToUnicode( text, wbuf, sizeof( wbuf ) );
+		int tw, th;
+		surface()->GetTextSize( font, wbuf, tw, th );
+		return tw;
+	}
+
+	void DrawString( HFont font, int x, int y, Color col, const char *text )
+	{
+		wchar_t wbuf[512];
+		g_pVGuiLocalize->ConvertANSIToUnicode( text, wbuf, sizeof( wbuf ) );
+		surface()->DrawSetTextFont( font );
+		surface()->DrawSetTextColor( col );
+		surface()->DrawSetTextPos( x, y );
+		surface()->DrawPrintText( wbuf, wcslen( wbuf ) );
+	}
+
+	CUtlVector<CUtlString> m_Maps;
+	char	m_szImage[160];
+	int		m_iSel;
+	int		m_iCols;
+	int		m_iFirstRow;
+	HFont	m_hFont, m_hSmallFont;
 };
 
 //-----------------------------------------------------------------------------
@@ -1571,6 +1949,7 @@ public:
 	MESSAGE_FUNC_INT( OnKeyboardDone, "KeyboardDone", accepted );
 	MESSAGE_FUNC( OnOpenKeyboard, "OpenKeyboard" );
 	MESSAGE_FUNC_PARAMS( OnCharacterPicked, "CharacterPicked", data );
+	MESSAGE_FUNC_PARAMS( OnMapPicked, "MapPicked", data );
 	MESSAGE_FUNC_PARAMS( OnCustomCharPicked, "CustomCharPicked", data );
 
 private:
@@ -1642,7 +2021,10 @@ private:
 
 	// Match
 	Label		*m_pMapLabel;
-	ComboBox	*m_pMap;
+	ComboBox	*m_pMap;			// Holds the map list and choice (hidden: the button below shows it)
+	Button		*m_pMapButton;		// Opens the map picker
+	CGESSMapPicker *m_pMapPicker;
+	void UpdateMapButton();
 	Label		*m_pModeLabel;
 	ComboBox	*m_pMode;
 	Label		*m_pWeaponsLabel;
@@ -1750,6 +2132,8 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 
 	m_pMapLabel = new Label( this, "MapLabel", "Map" );
 	m_pMap = new ComboBox( this, "Map", 12, false );
+	m_pMap->SetVisible( false );
+	m_pMapButton = new Button( this, "MapButton", "", this, "pickmap" );
 	m_pModeLabel = new Label( this, "ModeLabel", "Game mode" );
 	m_pMode = new ComboBox( this, "Mode", 12, false );
 	m_pWeaponsLabel = new Label( this, "WeaponsLabel", "Weapons" );
@@ -1822,7 +2206,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pTurboHelp = new Label( this, "TurboHelp", "How fast everyone runs, like the online game's Turbo mode." );
 	m_pCheatsBack = new Button( this, "CheatsBack", "Back", this, "cheatsback" );
 
-	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pAimLabel, m_pAim, m_pWinLabel, m_pWin,
+	Panel *matchPanels[] = { m_pMapLabel, m_pMapButton, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pAimLabel, m_pAim, m_pWinLabel, m_pWin,
 		m_pTimeLabel, m_pTime, m_pKillsLabel, m_pKills, m_pPerDisplayLabel, m_pPerDisplay, m_pPadCount, m_pDiagram, m_pSummary, m_pStartButton, m_pCheatsButton };
 	for ( int i = 0; i < ARRAYSIZE( matchPanels ); i++ )
 		match.AddToTail( matchPanels[i] );
@@ -1847,6 +2231,8 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pKeyboard = new CGESSOnScreenKeyboard( this );
 	m_pCharPicker = new CGESSCharacterPicker( this );
 	m_pCharPicker->AddActionSignalTarget( this );
+	m_pMapPicker = new CGESSMapPicker( this );
+	m_pMapPicker->AddActionSignalTarget( this );
 	m_pCustomPicker = new CGECustomCharPicker( this );
 	m_pCustomPicker->AddActionSignalTarget( this );
 	m_pIntro = new CGESSIntroPanel( this );
@@ -1869,7 +2255,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pSensitivity, GESS_NAV_SLIDER, GESS_PAGE_PROFILES );
 	AddNav( m_pInvert, GESS_NAV_CHECK, GESS_PAGE_PROFILES );
 	AddNav( m_pSaveButton, GESS_NAV_BUTTON, GESS_PAGE_PROFILES );
-	AddNav( m_pMap, GESS_NAV_COMBO, GESS_PAGE_MATCH );
+	AddNav( m_pMapButton, GESS_NAV_BUTTON, GESS_PAGE_MATCH );
 	AddNav( m_pMode, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pWeapons, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pAim, GESS_NAV_COMBO, GESS_PAGE_MATCH );
@@ -1979,6 +2365,8 @@ void CGESplitScreenMenu::OnClose()
 		m_pKeyboard->SetVisible( false );
 	if ( m_pCharPicker->IsOpen() )
 		m_pCharPicker->SetVisible( false );
+	if ( m_pMapPicker->IsOpen() )
+		m_pMapPicker->SetVisible( false );
 	if ( m_pCustomPicker->IsOpen() )
 		m_pCustomPicker->SetVisible( false );
 
@@ -2058,6 +2446,7 @@ void CGESplitScreenMenu::PerformLayout()
 	y = P( 76 );
 	m_pMapLabel->SetBounds( x, y, labelW, rowH );
 	m_pMap->SetBounds( fieldX, y, fieldW, rowH );
+	m_pMapButton->SetBounds( fieldX, y, fieldW, rowH );
 	y += P( 32 );
 	m_pModeLabel->SetBounds( x, y, labelW, rowH );
 	m_pMode->SetBounds( fieldX, y, fieldW, rowH );
@@ -2125,11 +2514,12 @@ void CGESplitScreenMenu::PerformLayout()
 	// The keyboard covers the page area
 	m_pKeyboard->SetBounds( P( 14 ), P( 70 ), W - P( 28 ), H - P( 146 ) );	// stops above the controller hint
 	m_pCharPicker->SetBounds( P( 14 ), P( 70 ), W - P( 28 ), H - P( 146 ) );
+	m_pMapPicker->SetBounds( P( 14 ), P( 70 ), W - P( 28 ), H - P( 146 ) );
 	m_pCustomPicker->SetBounds( P( 14 ), P( 70 ), W - P( 28 ), H - P( 146 ) );
 
 	// A margin before the text of the tabs and buttons (vgui's is 0: the text
 	// touched the left edge), growing with the menu
-	Button *pButtons[] = { m_pTabs[GESS_PAGE_PROFILES], m_pTabs[GESS_PAGE_MATCH], m_pNewButton, m_pDeleteButton, m_pCharButton,
+	Button *pButtons[] = { m_pTabs[GESS_PAGE_PROFILES], m_pTabs[GESS_PAGE_MATCH], m_pNewButton, m_pDeleteButton, m_pCharButton, m_pMapButton,
 		m_pSaveButton, m_pStartButton, m_pCheatsButton, m_pCheatsBack, m_pCloseButton };
 	for ( int i = 0; i < ARRAYSIZE( pButtons ); i++ )
 	{
@@ -2291,6 +2681,12 @@ void CGESplitScreenMenu::HandlePads()
 		return;
 	}
 
+	if ( m_pMapPicker->IsOpen() )
+	{
+		m_pMapPicker->HandlePads( m_Pads );
+		return;
+	}
+
 	if ( m_Pads.Dir( GESS_DIR_UP ) )		MoveFocus( -1 );
 	if ( m_Pads.Dir( GESS_DIR_DOWN ) )		MoveFocus( 1 );
 	if ( m_Pads.Dir( GESS_DIR_LEFT ) )		ChangeFocused( -1 );
@@ -2316,7 +2712,7 @@ void CGESplitScreenMenu::PostChildPaint()
 {
 	BaseClass::PostChildPaint();
 
-	if ( !m_bPadFocusShown || m_pIntro->IsOpen() || m_pKeyboard->IsOpen() || m_pCharPicker->IsOpen() || m_pCustomPicker->IsOpen() || !m_Nav.IsValidIndex( m_iFocus ) || !IsNavUsable( m_iFocus ) )
+	if ( !m_bPadFocusShown || m_pIntro->IsOpen() || m_pKeyboard->IsOpen() || m_pCharPicker->IsOpen() || m_pMapPicker->IsOpen() || m_pCustomPicker->IsOpen() || !m_Nav.IsValidIndex( m_iFocus ) || !IsNavUsable( m_iFocus ) )
 		return;
 
 	// Gold outline around the setting the controller is on
@@ -2351,6 +2747,36 @@ const char *CGESplitScreenMenu::GetSelectedCharacter()
 {
 	KeyValues *pData = m_pCharacter->GetActiveItemUserData();
 	return pData ? pData->GetString( "ident", CHAR_RANDOM_IDENT ) : CHAR_RANDOM_IDENT;
+}
+
+void CGESplitScreenMenu::OnMapPicked( KeyValues *data )
+{
+	m_Pads.Reset();
+	if ( data->GetInt( "accepted" ) )
+	{
+		const char *map = data->GetString( "map" );
+		for ( int i = 0; i < m_pMap->GetItemCount(); i++ )
+		{
+			KeyValues *pData = m_pMap->GetItemUserData( m_pMap->GetItemIDFromRow( i ) );
+			if ( pData && !Q_stricmp( pData->GetString( "name" ), map ) )
+			{
+				// The list reports the change (OnTextChanged), which saves it
+				m_pMap->ActivateItemByRow( i );
+				break;
+			}
+		}
+	}
+	UpdateMapButton();
+}
+
+// The Map button shows the map's name
+void CGESplitScreenMenu::UpdateMapButton()
+{
+	KeyValues *pData = m_pMap->GetActiveItemUserData();
+	const char *map = pData ? pData->GetString( "name" ) : GESSMatch()->Settings().map;
+	char name[128];
+	CGESSMapPicker::NiceName( map, name, sizeof( name ) );
+	m_pMapButton->SetText( VarArgs( "%s  (choose...)", name ) );
 }
 
 void CGESplitScreenMenu::OnCharacterPicked( KeyValues *data )
@@ -2698,6 +3124,7 @@ void CGESplitScreenMenu::StoreControlsIntoMatch()
 void CGESplitScreenMenu::UpdateMatchControls()
 {
 	const GESSMatchSettings_t &set = GESSMatch()->Settings();
+	UpdateMapButton();
 
 	// Teams come from the mode: only the "(teams)" modes are team games
 	const int mode = GESSMatch()->FindMode( set.mode );
@@ -2856,6 +3283,18 @@ void CGESplitScreenMenu::OnCommand( const char *command )
 		int idx = GESSProfiles()->Add();
 		if ( idx >= 0 )
 			RefreshProfileList( idx );
+	}
+	else if ( !Q_stricmp( command, "pickmap" ) )
+	{
+		CUtlVector<CUtlString> maps;
+		for ( int i = 0; i < m_pMap->GetItemCount(); i++ )
+		{
+			KeyValues *pData = m_pMap->GetItemUserData( m_pMap->GetItemIDFromRow( i ) );
+			if ( pData )
+				maps.AddToTail( pData->GetString( "name" ) );
+		}
+		if ( maps.Count() > 0 )
+			m_pMapPicker->Open( maps, GESSMatch()->Settings().map );
 	}
 	else if ( !Q_stricmp( command, "pickchar" ) )
 	{
