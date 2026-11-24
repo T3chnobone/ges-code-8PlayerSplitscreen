@@ -718,7 +718,7 @@ static bool ImportCompiledMdl( const char *srcPath, const char *headName, char *
 
 	// Check it's a model with a head bone
 	const studiohdr_t *pHdr = (const studiohdr_t *)mdl.Base();
-	if ( pHdr->id != IDSTUDIOHEADER )
+	if ( pHdr->id != ( ( 'T' << 24 ) + ( 'S' << 16 ) + ( 'D' << 8 ) + 'I' ) )
 	{
 		SetMsg( err, errLen, "%s isn't a Source model", srcPath );
 		return false;
