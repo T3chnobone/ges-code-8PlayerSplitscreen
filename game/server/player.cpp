@@ -2235,6 +2235,11 @@ void CBasePlayer::PlayerDeathThink(void)
 	}
 
 #ifdef GE_DLL
+	// Nobody respawns before ge_respawndelay is up, and pressing fire before then
+	// doesn't count (it used to be remembered, respawning them as soon as it was up)
+	if ( gpGlobals->curtime < m_flDeathTime + MAX( DEATH_ANIMATION_TIME, ge_respawndelay.GetFloat() ) )
+		return;
+
 	// Force a hard 20 second death limit to prevent annoyances
 	if ( !fAttackDown && gpGlobals->curtime < (m_flDeathTime + 20.0f) )
 	{

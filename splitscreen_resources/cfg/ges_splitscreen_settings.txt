@@ -1,0 +1,9 @@
+// Split screen settings for testing. Edit with any text editor, then start a
+// split screen match (or load the next map) for the changes to take effect.
+"SplitScreenSettings"
+{
+	// Seconds a player stays dead before "Press FIRE to respawn" shows and they
+	// can respawn (at least 3, the length of the death animation).
+	// GoldenEye: Source's own default is 6.
+	"respawn_delay"		"4"
+}

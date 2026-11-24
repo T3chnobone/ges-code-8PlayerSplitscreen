@@ -23,6 +23,9 @@ ConVar ges_paint_deathscreen_style( "ges_paint_deathscreen_style", "0", 0,
 	"Paintball cheat's death screen: 0 the paint colours mixed, 1 one random paint colour per death." );
 
 #define GESS_MATCH_FILE		"cfg/ges_splitscreen_match.txt"
+// Settings for testing, edited by hand (not in the menus)
+#define GESS_SETTINGS_FILE	"cfg/ges_splitscreen_settings.txt"
+#define GESS_DEFAULT_RESPAWN_DELAY	4.0f
 #define GESS_MATCH_PYDIR	"python/ges/GamePlay/*.py"
 
 // Players a split screen server makes room for (8 local players plus some online)
@@ -311,8 +314,29 @@ void CGESplitScreenMatch::Validate()
 	}
 }
 
+// cfg/ges_splitscreen_settings.txt: read each time a match's settings are applied,
+// so an edit takes effect from the next match or map. Written with the defaults
+// when it's missing.
+static void GESS_ApplySettingsFile()
+{
+	KeyValues *pKV = new KeyValues( "SplitScreenSettings" );
+	if ( !pKV->LoadFromFile( filesystem, GESS_SETTINGS_FILE, "MOD" ) )
+	{
+		pKV->SetFloat( "respawn_delay", GESS_DEFAULT_RESPAWN_DELAY );
+		pKV->SaveToFile( filesystem, GESS_SETTINGS_FILE, "MOD" );
+	}
+
+	// Seconds dead before "Press FIRE to respawn" shows and the player can respawn
+	const float flDelay = clamp( pKV->GetFloat( "respawn_delay", GESS_DEFAULT_RESPAWN_DELAY ), 0.0f, 60.0f );
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_respawndelay %g\n", flDelay ) );
+
+	pKV->deleteThis();
+}
+
 void CGESplitScreenMatch::ApplyCvars( bool bMode )
 {
+	GESS_ApplySettingsFile();
+
 	if ( bMode )
 	{
 		// Keep this mode for the whole session instead of rotating scenarios

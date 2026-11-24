@@ -1106,11 +1106,23 @@ void CGESplitScreenHud::PaintPlayerHud( int slot, C_BasePlayer *pPlayer, const G
 		return;
 	}
 
+	// When each player died (the server's death time is only sent to player 1, so
+	// it's noted here when their body stops being alive)
+	static float s_flDiedAt[GES_SS_MAX_PLAYERS] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 	if ( !pPlayer->IsAlive() )
 	{
-		DrawText( m_hFontLarge, vp.x + vp.w / 2, vp.y + vp.h / 2, Color( 255, 80, 80, 230 ), "Press FIRE to respawn", true );
+		if ( s_flDiedAt[slot] < 0 || s_flDiedAt[slot] > gpGlobals->curtime )
+			s_flDiedAt[slot] = gpGlobals->curtime;
+
+		// No prompt until the server lets them respawn (ge_respawndelay, set from
+		// cfg/ges_splitscreen_settings.txt in a split screen match)
+		static ConVarRef ge_respawndelay( "ge_respawndelay" );
+		const float flDelay = Max( DEATH_ANIMATION_TIME, ge_respawndelay.IsValid() ? ge_respawndelay.GetFloat() : 0.0f );
+		if ( gpGlobals->curtime - s_flDiedAt[slot] >= flDelay )
+			DrawText( m_hFontLarge, vp.x + vp.w / 2, vp.y + vp.h / 2, Color( 255, 80, 80, 230 ), "Press FIRE to respawn", true );
 		return;
 	}
+	s_flDiedAt[slot] = -1;
 
 	// Crosshair
 	if ( pSS->GetSlotMenu( slot ) == GESS_MENU_NONE )
