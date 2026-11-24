@@ -630,3 +630,17 @@ screens: the first "players per display" players go on the left half and the res
   back, and B still closes the START menu.
 - **SPLIT SCREEN on the main menu opens the Match page** instead of Profiles. The Profiles tab (or
   Y on player 1's controller) is one press away; `ges_splitscreen_profiles` still opens Profiles.
+
+## Changes (20 November)
+- **Mod version and update check on the main menu.** The bottom right corner of the main menu shows
+  "Split Screen Mod v0.2". Once per game start the newest GitHub release is fetched
+  (`api.github.com/repos/T3chnobone/ges-code-8PlayerSplitscreen/releases/latest`, through Steam's
+  HTTP client, which does HTTPS) and its tag is compared with the built-in version. If it is newer a
+  gold line under it says "Update available: v0.3 - click to download", and a click opens that
+  release's page, where the setup is. No network or no Steam just leaves the version showing.
+  `CGESSVersionLabel` in `game/client/ges/vgui/ge_splitscreen_version.cpp`.
+  - **Bump `GES_SS_VERSION` in `ge_splitscreen_version.h` for every release**, to the release tag
+    without the "v" (tag `v0.3` -> `"0.3"`).
+  - `ges_ss_version` prints the version and what the check found. `ges_ss_check_update` checks again;
+    `ges_ss_check_update 9.9` pretends 9.9 is the newest release, to see the message.
+    `ges_ss_update_check 0` turns the check off.
