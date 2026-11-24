@@ -35,6 +35,7 @@
 #include "view.h"
 #include "c_team.h"
 #include "c_ge_radarresource.h"
+#include "ge_splitscreen_client.h"
 #include "materialsystem/imaterial.h"
 #include "materialsystem/imesh.h"
 
@@ -229,6 +230,14 @@ extern float g_flHeadOffset;
 void CGETargetID::DrawOverheadIcons()
 {
 	C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+#ifdef GE_DLL
+	// Split screen: this is drawn in every player's view, so use the player whose view
+	// it is (player 1 is the engine's local player, so the other players saw their own
+	// icon over their head and the icons of player 1's team instead of their own)
+	C_BasePlayer *pViewer = ToBasePlayer( GESS_GetRenderViewer() );
+	if ( pViewer )
+		pLocalPlayer = pViewer;
+#endif
 	if ( !pLocalPlayer )
 		return;
 
