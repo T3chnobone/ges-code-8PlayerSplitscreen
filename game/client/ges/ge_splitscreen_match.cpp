@@ -394,11 +394,7 @@ void CGESplitScreenMatch::ApplyCvars( bool bMode )
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_velocity %g\n", g_GESSTurboModes[m_Settings.turbo].value ) );
 
 	// The radar, for everyone (the server's setting; a game mode can still force it on)
-	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowradar %d\n", m_Settings.radar ? 1 : 0 ) );
-	// Team modes' configs (TournamentDM.cfg) hide the other team on the radar, which
-	// leaves a 1 against 1 team game with an empty radar: show everyone
-	engine->ClientCmd_Unrestricted( "ge_radar_showenemyteam 1\n" );
-	// Aim assist for the players on controllers (split screen only; keyboard and mouse never get it)
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowradar %d\n", m_Settings.radar ? 1 : 0 ) );	// Aim assist for the players on controllers (split screen only; keyboard and mouse never get it)
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_ss_aimassist %d\n", m_Settings.aimassist ) );
 	// Cheats (the Cheats page), for everyone
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
