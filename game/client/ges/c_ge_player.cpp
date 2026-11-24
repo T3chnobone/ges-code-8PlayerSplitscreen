@@ -325,6 +325,29 @@ void C_GEPlayer::ItemPreFrame( void )
 
 void C_GEPlayer::ClientThink( void )
 {
+	// Split screen guests aren't the engine's local player, so the zoom below never
+	// ran for them and aiming down the sights only zoomed player 1's view. Their aim
+	// mode comes from the server (m_flFullZoomTime); zoom their view to match.
+	if ( !IsLocalPlayer() && GESS_IsLocalGuest( this ) )
+	{
+		CGEWeapon *pGEWeapon = ToGEWeapon( GetActiveWeapon() );
+		int zoom = 0;
+		if ( IsAlive() && !IsObserver() && pGEWeapon && pGEWeapon->IsWeaponVisible() && StartedAimMode() )
+			zoom = (int) pGEWeapon->GetZoomOffset();
+
+		if ( zoom == 0 && ( !IsAlive() || IsObserver() ) )
+		{
+			// Dead or spectating: unzoom straight away, as player 1 does
+			if ( m_flZoomEnd != 0 || GetZoom() != 0 )
+				SetZoom( 0, true );
+		}
+		else if ( zoom != (int) m_flZoomEnd )
+		{
+			SetZoom( zoom );
+		}
+		m_iNewZoomOffset = zoom;
+	}
+
 	if ( IsLocalPlayer() )
 	{
 		// See if we need to zoom in/out based on our aim mode
