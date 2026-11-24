@@ -52,6 +52,24 @@ const GESSCheatDef_t g_GESSCheats[GESS_NUM_CHEATS] =
 	{ "paintball", "Paintball", "Shots leave splats of mixed paint colours on walls and props instead of bullet holes.", "ge_cheat_paintball" },
 };
 
+// The Cheats page's Jump height (ge_ss_jumpheight: how many times higher than normal)
+const GESSChoice_t g_GESSJumpHeights[GESS_NUM_JUMPHEIGHTS] =
+{
+	{ "Normal", 1.0f },
+	{ "High (twice as high)", 2.0f },
+	{ "Moon (four times as high)", 4.0f },
+};
+
+// The Cheats page's Turbo mode: GoldenEye: Source's own online setting (ge_velocity),
+// with the names its server info uses
+const GESSChoice_t g_GESSTurboModes[GESS_NUM_TURBOMODES] =
+{
+	{ "Slow (0.7x speed)", 0.7f },
+	{ "Normal", 1.0f },
+	{ "Turbo (1.5x speed)", 1.5f },
+	{ "Light speed (2x speed)", 2.0f },
+};
+
 static CGESplitScreenMatch s_GESSMatch;
 CGESplitScreenMatch *GESSMatch() { return &s_GESSMatch; }
 
@@ -62,6 +80,8 @@ CGESplitScreenMatch::CGESplitScreenMatch()
 	Q_strncpy( m_Settings.weaponset, GESS_WEAPONSET_RANDOM, sizeof( m_Settings.weaponset ) );
 	m_Settings.teams = false;
 	m_Settings.jump = true;
+	m_Settings.jumpheight = 0;
+	m_Settings.turbo = GESS_TURBO_NORMAL;
 	m_Settings.radar = true;
 	m_Settings.aimassist = 0;
 	for ( int i = 0; i < GESS_MAX_CHEATS; i++ )
@@ -89,6 +109,8 @@ void CGESplitScreenMatch::Load()
 		Q_strncpy( m_Settings.weaponset, pKV->GetString( "weaponset", m_Settings.weaponset ), sizeof( m_Settings.weaponset ) );
 		m_Settings.teams = pKV->GetBool( "teams", m_Settings.teams );
 		m_Settings.jump = pKV->GetBool( "jump", m_Settings.jump );
+		m_Settings.jumpheight = pKV->GetInt( "jumpheight", m_Settings.jumpheight );
+		m_Settings.turbo = pKV->GetInt( "turbo", m_Settings.turbo );
 		m_Settings.radar = pKV->GetBool( "radar", m_Settings.radar );
 		m_Settings.aimassist = pKV->GetInt( "aimassist", m_Settings.aimassist );
 		for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
@@ -116,6 +138,8 @@ void CGESplitScreenMatch::Save()
 	pKV->SetString( "weaponset", m_Settings.weaponset );
 	pKV->SetBool( "teams", m_Settings.teams );
 	pKV->SetBool( "jump", m_Settings.jump );
+	pKV->SetInt( "jumpheight", m_Settings.jumpheight );
+	pKV->SetInt( "turbo", m_Settings.turbo );
 	pKV->SetBool( "radar", m_Settings.radar );
 	pKV->SetInt( "aimassist", m_Settings.aimassist );
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
@@ -284,6 +308,8 @@ void CGESplitScreenMatch::Validate()
 {
 	m_Settings.wincondition = clamp( m_Settings.wincondition, 0, 2 );
 	m_Settings.aimassist = clamp( m_Settings.aimassist, 0, 3 );
+	m_Settings.jumpheight = clamp( m_Settings.jumpheight, 0, GESS_NUM_JUMPHEIGHTS - 1 );
+	m_Settings.turbo = clamp( m_Settings.turbo, 0, GESS_NUM_TURBOMODES - 1 );
 	m_Settings.timelimit = clamp( m_Settings.timelimit, 0, GESS_MATCH_TIME_MAX );
 	m_Settings.killlimit = clamp( m_Settings.killlimit, 1, GESS_MATCH_KILLS_MAX );
 	m_Settings.perdisplay = clamp( m_Settings.perdisplay, 1, GES_SS_MAX_PLAYERS );
@@ -340,6 +366,10 @@ void CGESplitScreenMatch::ApplyCvars( bool bMode )
 	// Jumping on or off, for everyone: it's the server's movement rule, so the
 	// guests obey it too
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowjump %d\n", m_Settings.jump ? 1 : 0 ) );
+	// How high (the Cheats page's Jump height)
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_ss_jumpheight %g\n", g_GESSJumpHeights[m_Settings.jumpheight].value ) );
+	// Turbo mode (the Cheats page): everyone's running speed, GoldenEye: Source's online setting
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_velocity %g\n", g_GESSTurboModes[m_Settings.turbo].value ) );
 
 	// The radar, for everyone (the server's setting; a game mode can still force it on)
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowradar %d\n", m_Settings.radar ? 1 : 0 ) );

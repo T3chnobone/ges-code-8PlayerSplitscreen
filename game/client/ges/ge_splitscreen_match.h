@@ -57,6 +57,18 @@ struct GESSCheatDef_t
 #define GESS_MAX_CHEATS		16
 extern const GESSCheatDef_t g_GESSCheats[GESS_NUM_CHEATS];
 
+// The Cheats page's Jump height and Turbo mode choices: a name and the cvar value
+struct GESSChoice_t
+{
+	const char *name;
+	float value;
+};
+#define GESS_NUM_JUMPHEIGHTS	3
+#define GESS_NUM_TURBOMODES		4
+#define GESS_TURBO_NORMAL		1	// g_GESSTurboModes' 1x speed
+extern const GESSChoice_t g_GESSJumpHeights[GESS_NUM_JUMPHEIGHTS];	// ge_ss_jumpheight
+extern const GESSChoice_t g_GESSTurboModes[GESS_NUM_TURBOMODES];	// ge_velocity
+
 struct GESSMatchSettings_t
 {
 	char map[64];
@@ -64,6 +76,8 @@ struct GESSMatchSettings_t
 	char weaponset[64];	// ge_weaponset value, GESS_WEAPONSET_RANDOM for a random set each round
 	bool teams;
 	bool jump;		// ge_allowjump: players can jump
+	int  jumpheight;	// ge_ss_jumpheight (Cheats page): index into g_GESSJumpHeights
+	int  turbo;		// ge_velocity (Cheats page, the online Turbo mode): index into g_GESSTurboModes
 	bool radar;		// ge_allowradar: the radar shows
 	int  aimassist;	// ge_ss_aimassist: 0 off, 1 classic (shots home in), 2 sticky, 3 slowdown (controller players)
 	bool cheats[GESS_MAX_CHEATS];	// g_GESSCheats on / off

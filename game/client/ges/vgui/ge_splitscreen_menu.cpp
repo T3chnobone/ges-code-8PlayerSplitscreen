@@ -1687,6 +1687,12 @@ private:
 	CheckButton	*m_pCheat[GESS_MAX_CHEATS];	// g_GESSCheats
 	Label		*m_pCheatHelp[GESS_MAX_CHEATS];
 	Button		*m_pCheatsBack;
+	Label		*m_pJumpHelp;			// Cheats page: under the Jumping tick box
+	Label		*m_pJumpHeightLabel;
+	ComboBox	*m_pJumpHeight;			// ge_ss_jumpheight (g_GESSJumpHeights)
+	Label		*m_pTurboLabel;
+	ComboBox	*m_pTurbo;				// ge_velocity (g_GESSTurboModes), the online Turbo mode
+	Label		*m_pTurboHelp;
 	Label		*m_pPadHint;
 	Button		*m_pCloseButton;
 	CGESSOnScreenKeyboard *m_pKeyboard;
@@ -1722,7 +1728,7 @@ private:
 	Label		*m_pWeaponsLabel;
 	ComboBox	*m_pWeapons;
 	CheckButton	*m_pTeams;
-	CheckButton	*m_pJump;			// ge_allowjump
+	CheckButton	*m_pJump;			// ge_allowjump (on the Cheats page)
 	CheckButton	*m_pRadar;			// ge_allowradar
 	bool		m_bTeamsChoice;		// What the player picked (modes that force teams on/off don't change it)
 	Label		*m_pWinLabel;
@@ -1830,8 +1836,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pWeaponsLabel = new Label( this, "WeaponsLabel", "Weapons" );
 	m_pWeapons = new ComboBox( this, "Weapons", 15, false );
 	m_pTeams = new CheckButton( this, "Teams", "Team game (MI6 vs Janus)" );
-	m_pJump = new CheckButton( this, "Jump", "Jumping allowed (right stick click)" );
-	m_pRadar = new CheckButton( this, "Radar", "Radar" );
+	m_pRadar = new CheckButton( this, "Radar", "Radar (shows where the other players are)" );
 
 	m_pAimLabel = new Label( this, "AimLabel", "Aim assist" );
 	m_pAim = new ComboBox( this, "AimAssist", ARRAYSIZE( s_AimAssistNames ), false );
@@ -1880,9 +1885,21 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 		m_pCheat[i] = new CheckButton( this, VarArgs( "Cheat_%s", g_GESSCheats[i].key ), g_GESSCheats[i].label );
 		m_pCheatHelp[i] = new Label( this, VarArgs( "CheatHelp_%s", g_GESSCheats[i].key ), g_GESSCheats[i].help );
 	}
+	// Jumping, how high, and the online game's Turbo mode
+	m_pJump = new CheckButton( this, "Jump", "Jumping" );
+	m_pJumpHelp = new Label( this, "JumpHelp", "Players can jump (A on a controller, space on the keyboard)." );
+	m_pJumpHeightLabel = new Label( this, "JumpHeightLabel", "Jump height" );
+	m_pJumpHeight = new ComboBox( this, "JumpHeight", GESS_NUM_JUMPHEIGHTS, false );
+	for ( int i = 0; i < GESS_NUM_JUMPHEIGHTS; i++ )
+		m_pJumpHeight->AddItem( g_GESSJumpHeights[i].name, new KeyValues( "jumpheight", "value", i ) );
+	m_pTurboLabel = new Label( this, "TurboLabel", "Turbo mode" );
+	m_pTurbo = new ComboBox( this, "Turbo", GESS_NUM_TURBOMODES, false );
+	for ( int i = 0; i < GESS_NUM_TURBOMODES; i++ )
+		m_pTurbo->AddItem( g_GESSTurboModes[i].name, new KeyValues( "turbo", "value", i ) );
+	m_pTurboHelp = new Label( this, "TurboHelp", "How fast everyone runs, like the online game's Turbo mode." );
 	m_pCheatsBack = new Button( this, "CheatsBack", "Back", this, "cheatsback" );
 
-	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pAimLabel, m_pAim, m_pWinLabel, m_pWin,
+	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pTeams, m_pRadar, m_pAimLabel, m_pAim, m_pWinLabel, m_pWin,
 		m_pTimeLabel, m_pTime, m_pKillsLabel, m_pKills, m_pPerDisplayLabel, m_pPerDisplay, m_pPadCount, m_pDiagram, m_pSummary, m_pStartButton, m_pCheatsButton };
 	for ( int i = 0; i < ARRAYSIZE( matchPanels ); i++ )
 		match.AddToTail( matchPanels[i] );
@@ -1895,7 +1912,9 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 		cheats.AddToTail( m_pCheat[i] );
 		cheats.AddToTail( m_pCheatHelp[i] );
 	}
-	cheats.AddToTail( m_pCheatsBack );
+	Panel *cheatPanels[] = { m_pJump, m_pJumpHelp, m_pJumpHeightLabel, m_pJumpHeight, m_pTurboLabel, m_pTurbo, m_pTurboHelp, m_pCheatsBack };
+	for ( int i = 0; i < ARRAYSIZE( cheatPanels ); i++ )
+		cheats.AddToTail( cheatPanels[i] );
 
 	// ---- Common ----
 	m_pPadHint = new Label( this, "PadHint", "D-pad: move   Left/Right: change   A: select   B: close   Y: Profiles / Match   START: join   LB/RB: your profile" );
@@ -1910,7 +1929,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 
 	// Every control reports changes to us
 	Panel *signalPanels[] = { m_pProfileList, m_pName, m_pCharacter, m_pSensitivity, m_pInvert, m_pInvited,
-		m_pMap, m_pMode, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pAim, m_pWin, m_pTime, m_pKills, m_pPerDisplay };
+		m_pMap, m_pMode, m_pWeapons, m_pTeams, m_pJump, m_pRadar, m_pAim, m_pWin, m_pTime, m_pKills, m_pPerDisplay, m_pJumpHeight, m_pTurbo };
 	for ( int i = 0; i < ARRAYSIZE( signalPanels ); i++ )
 		signalPanels[i]->AddActionSignalTarget( this );
 
@@ -1930,7 +1949,6 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pMode, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pWeapons, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pTeams, GESS_NAV_CHECK, GESS_PAGE_MATCH );
-	AddNav( m_pJump, GESS_NAV_CHECK, GESS_PAGE_MATCH );
 	AddNav( m_pRadar, GESS_NAV_CHECK, GESS_PAGE_MATCH );
 	AddNav( m_pAim, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pWin, GESS_NAV_COMBO, GESS_PAGE_MATCH );
@@ -1941,6 +1959,9 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pStartButton, GESS_NAV_BUTTON, GESS_PAGE_MATCH );
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
 		AddNav( m_pCheat[i], GESS_NAV_CHECK, GESS_PAGE_CHEATS );
+	AddNav( m_pJump, GESS_NAV_CHECK, GESS_PAGE_CHEATS );
+	AddNav( m_pJumpHeight, GESS_NAV_COMBO, GESS_PAGE_CHEATS );
+	AddNav( m_pTurbo, GESS_NAV_COMBO, GESS_PAGE_CHEATS );
 	AddNav( m_pCheatsBack, GESS_NAV_BUTTON, GESS_PAGE_CHEATS );
 	AddNav( m_pCloseButton, GESS_NAV_BUTTON, -1 );
 
@@ -2121,8 +2142,7 @@ void CGESplitScreenMenu::PerformLayout()
 	y += P( 30 );
 	m_pTeams->SetBounds( fieldX - P( 4 ), y, fieldW, rowH );
 	y += P( 28 );
-	m_pJump->SetBounds( fieldX - P( 4 ), y, fieldW / 2 + P( 40 ), rowH );
-	m_pRadar->SetBounds( fieldX - P( 4 ) + fieldW / 2 + P( 50 ), y, fieldW / 2 - P( 50 ), rowH );
+	m_pRadar->SetBounds( fieldX - P( 4 ), y, fieldW, rowH );
 	y += P( 32 );
 	m_pAimLabel->SetBounds( x, y, labelW, rowH );
 	m_pAim->SetBounds( fieldX, y, fieldW, rowH );
@@ -2166,6 +2186,15 @@ void CGESplitScreenMenu::PerformLayout()
 		m_pCheatHelp[i]->SetBounds( x + P( 26 ), y + rowH, W - P( 66 ), P( 20 ) );
 		y += P( 52 );
 	}
+	m_pJump->SetBounds( x, y, W - P( 40 ), rowH );
+	m_pJumpHelp->SetBounds( x + P( 26 ), y + rowH, W - P( 66 ), P( 20 ) );
+	y += P( 52 );
+	m_pJumpHeightLabel->SetBounds( x + P( 26 ), y, labelW - P( 26 ), rowH );
+	m_pJumpHeight->SetBounds( fieldX, y, fieldW, rowH );
+	y += P( 40 );
+	m_pTurboLabel->SetBounds( x, y, labelW, rowH );
+	m_pTurbo->SetBounds( fieldX, y, fieldW, rowH );
+	m_pTurboHelp->SetBounds( x + P( 26 ), y + rowH + P( 4 ), W - P( 66 ), P( 20 ) );
 	m_pCheatsBack->SetBounds( P( 20 ), buttonY, P( 100 ), buttonH );
 	m_pCloseButton->SetBounds( W - P( 20 + 80 ), buttonY, P( 80 ), buttonH );
 
@@ -2584,6 +2613,8 @@ void CGESplitScreenMenu::LoadMatchIntoControls()
 	m_pTeams->SetSelected( set.teams );
 	m_bTeamsChoice = set.teams;
 	m_pJump->SetSelected( set.jump );
+	m_pJumpHeight->ActivateItemByRow( clamp( set.jumpheight, 0, GESS_NUM_JUMPHEIGHTS - 1 ) );
+	m_pTurbo->ActivateItemByRow( clamp( set.turbo, 0, GESS_NUM_TURBOMODES - 1 ) );
 	m_pRadar->SetSelected( set.radar );
 	m_pWin->ActivateItemByRow( clamp( set.wincondition, 0, ARRAYSIZE( s_WinConditionNames ) - 1 ) );
 	m_pAim->ActivateItemByRow( clamp( set.aimassist, 0, ARRAYSIZE( s_AimAssistNames ) - 1 ) );
@@ -2651,6 +2682,12 @@ void CGESplitScreenMenu::StoreControlsIntoMatch()
 	pData = m_pAim->GetActiveItemUserData();
 	if ( pData )
 		set.aimassist = pData->GetInt( "value" );
+	pData = m_pJumpHeight->GetActiveItemUserData();
+	if ( pData )
+		set.jumpheight = pData->GetInt( "value" );
+	pData = m_pTurbo->GetActiveItemUserData();
+	if ( pData )
+		set.turbo = pData->GetInt( "value" );
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
 		set.cheats[i] = m_pCheat[i]->IsSelected();
 
@@ -2695,6 +2732,10 @@ void CGESplitScreenMenu::UpdateMatchControls()
 
 	m_pKills->SetEnabled( set.wincondition == 1 );
 	m_pKillsLabel->SetEnabled( set.wincondition == 1 );
+
+	// Jump height only matters while jumping is on
+	m_pJumpHeight->SetEnabled( set.jump );
+	m_pJumpHeightLabel->SetEnabled( set.jump );
 
 	// Describe the match in plain words
 	const bool bTeams = m_pTeams->IsSelected();
@@ -2756,7 +2797,8 @@ void CGESplitScreenMenu::OnTextChanged( vgui::Panel *panel )
 		return;
 	}
 
-	if ( panel == m_pMap || panel == m_pMode || panel == m_pWeapons || panel == m_pAim || panel == m_pWin || panel == m_pTime || panel == m_pKills || panel == m_pPerDisplay )
+	if ( panel == m_pMap || panel == m_pMode || panel == m_pWeapons || panel == m_pAim || panel == m_pWin || panel == m_pTime || panel == m_pKills || panel == m_pPerDisplay
+		|| panel == m_pJumpHeight || panel == m_pTurbo )
 	{
 		// The player picked a number: remember it, even when fewer controllers
 		// are connected later

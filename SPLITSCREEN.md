@@ -95,7 +95,6 @@ On the Match page you pick:
   weapons, so the list is greyed out for it.
 - **Team game**: MI6 vs Janus. It is greyed out for modes that are always or never team
   games (for example the Golden Gun is never a team game, Capture the Key always is).
-- **Jumping allowed**: `ge_allowjump` for everyone in the match (guests too). Jump is A / Cross.
 - **Radar**: `ge_allowradar` for everyone in the match. Each player sees GoldenEye's own radar in
   their view (see Changes, 15 November). A game mode that forces the radar on still shows it.
 - **Aim assist** (`ge_ss_aimassist`, saved as `aimassist`): only for the players on controllers
@@ -122,6 +121,11 @@ On the Match page you pick:
     paint colours run down your screen instead of blood (`materials/VGUI/hud/paintscreen`). The
     dust puffs on walls are unchanged. GoldenEye's own Paintball mode
     (`ge_paintball`, Create Server) is separate and unchanged.
+  - *Jumping* (`ge_allowjump`, saved as `jump`): for everyone in the match (guests too). Jump is
+    A / Cross. *Jump height* (`ge_ss_jumpheight`, saved as `jumpheight`): Normal, High (twice as
+    high) or Moon (four times as high), greyed out while jumping is off.
+  - *Turbo mode* (`ge_velocity`, saved as `turbo`): GoldenEye: Source's own online Turbo mode,
+    how fast everyone runs: Slow (0.7x), Normal, Turbo (1.5x) or Light speed (2x).
 - **Win condition**:
   - *Timed, highest score*: the mode's normal scoring when the time limit runs out.
   - *First to N kills*: the match ends as soon as a player (or team) reaches the kill limit.
@@ -621,3 +625,15 @@ screens: the first "players per display" players go on the left half and the res
   back, and B still closes the START menu.
 - **SPLIT SCREEN on the main menu opens the Match page** instead of Profiles. The Profiles tab (or
   Y on player 1's controller) is one press away; `ges_splitscreen_profiles` still opens Profiles.
+
+## Changes (24 November)
+
+- **Jump and Turbo options on the Cheats page.** *Jumping* moved from the Match page to the Cheats
+  page, with a new *Jump height* choice (Normal, High 2x, Moon 4x) under it: a replicated
+  `ge_ss_jumpheight` that `CGameMovement::CheckJumpButton` multiplies the take-off speed by the
+  square root of, so movement prediction matches the server. *Turbo mode* sets the online game's
+  `ge_velocity` (Slow 0.7x, Normal, Turbo 1.5x, Light speed 2x); the scoreboard and server info show
+  "Turbo" the same as online. Both are saved with the match (`jumpheight`, `turbo`) and set for
+  every match; like the other match settings they stay set afterwards, so set `ge_velocity 1` and
+  `ge_ss_jumpheight 1` before hosting online in the same session.
+- **Radar** now has its own row on the Match page: "Radar (shows where the other players are)".

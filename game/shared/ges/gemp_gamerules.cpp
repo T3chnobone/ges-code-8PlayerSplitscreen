@@ -83,6 +83,7 @@ extern ConVar mp_chattime;
 
 ConVar ge_allowradar		( "ge_allowradar", "1", FCVAR_REPLICATED|FCVAR_NOTIFY, "Allow clients to use their radars." );
 ConVar ge_allowjump			( "ge_allowjump",  "1", FCVAR_REPLICATED|FCVAR_NOTIFY, "Toggles allowing players to jump." );
+ConVar ge_ss_jumpheight		( "ge_ss_jumpheight", "1", FCVAR_REPLICATED|FCVAR_NOTIFY, "Jump height multiplier: 1 normal, 2 high, 4 moon (set by the Split Screen menu's Cheats page).", true, 1.0f, true, 4.0f );
 ConVar ge_ss_aimassist		( "ge_ss_aimassist", "0", FCVAR_REPLICATED, "Split screen: aim assist for the players on controllers (never keyboard and mouse): 0 off, 1 classic GoldenEye (shots home in on an enemy near the crosshair), 2 sticky aim, 3 slowdown near a target." );
 ConVar ge_cheat_bighead		( "ge_cheat_bighead", "0", FCVAR_REPLICATED, "Cheat: every character's head is drawn twice as big, and the head hitbox grows with it (set by the Split Screen menu's Cheats page)." );
 ConVar ge_cheat_paintball		( "ge_cheat_paintball", "0", FCVAR_REPLICATED, "Cheat: bullet impacts on walls and props leave mixed-colour paint splats (set by the Split Screen menu's Cheats page)." );
