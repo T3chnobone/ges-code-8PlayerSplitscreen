@@ -1184,9 +1184,22 @@ void CGEMPRules::Think()
 		{
 			s_pTransitionFixed = this;
 			if ( m_flChangeLevelTime > 0 )
+			{
 				m_flChangeLevelTime = gpGlobals->curtime + GE_CHANGELEVEL_DELAY;
+			}
+			else if ( ge_nextnextmap.GetString()[0] )
+			{
+				// LevelInitPreEntity skips it when engine->IsMapValid says no, which this
+				// install's maps can wrongly get: go where we were heading anyway
+				char szNext[64];
+				Q_strncpy( szNext, ge_nextnextmap.GetString(), sizeof( szNext ) );
+				ge_nextnextmap.SetValue( "" );
+				SetupChangeLevel( szNext );
+			}
 			else
+			{
 				SetupChangeLevel();
+			}
 		}
 	}
 	else

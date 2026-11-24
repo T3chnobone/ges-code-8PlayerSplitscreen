@@ -255,7 +255,9 @@ static void GESS_MatchEnd_Choose( int choice )
 		char szMap[MAX_PATH];
 		V_FileBase( engine->GetLevelName(), szMap, sizeof( szMap ) );
 		Msg( "Split screen: play again (%s)\n", szMap );
-		engine->ClientCmd_Unrestricted( VarArgs( "changelevel %s\n", szMap ) );
+		// The engine's own changelevel: GoldenEye's checks the map with engine->IsMapValid,
+		// which wrongly says no to this install's maps
+		engine->ClientCmd_Unrestricted( VarArgs( "__real_changelevel %s\n", szMap ) );
 	}
 	else
 	{
@@ -283,14 +285,19 @@ bool GESS_MatchEnd_Update()
 
 	// Keep a finished split screen match on its results until a choice is made
 	// (the server's cvar, found each time: server.dll loads with the first map)
+	// (Kept on after a choice: the level change is on its way)
+	const bool bSplitMatch = engine->IsInGame() && GESS_IsLocalSplitMatch();
 	ConVar *pHold = g_pCVar ? g_pCVar->FindVar( "ges_ss_matchend_hold" ) : NULL;
 	if ( pHold )
 	{
-		const bool bHold = ges_ss_matchend_prompt.GetBool() && engine->IsInGame() && GESS_IsLocalSplitMatch() &&
-			!GESplitScreenClient()->IsExitingToMenu() && !s_bEndChosen;
+		const bool bHold = ges_ss_matchend_prompt.GetBool() && bSplitMatch && !GESplitScreenClient()->IsExitingToMenu();
 		if ( pHold->GetBool() != bHold )
 			pHold->SetValue( bHold ? 1 : 0 );
 	}
+	// The server knows it's a split screen match (one match report, team modes with one player a team)
+	ConVar *pSplit = g_pCVar ? g_pCVar->FindVar( "ges_ss_splitmatch" ) : NULL;
+	if ( pSplit && pSplit->GetBool() != bSplitMatch )
+		pSplit->SetValue( bSplitMatch ? 1 : 0 );
 
 	// Left the game or a new map loaded
 	if ( !engine->IsInGame() )

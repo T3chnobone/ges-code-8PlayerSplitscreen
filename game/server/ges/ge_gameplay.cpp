@@ -614,6 +614,7 @@ void CGEBaseGameplayManager::ShutdownScenario()
 }
 
 // Set by the split screen client while it plays a local split screen match
+ConVar ges_ss_splitmatch( "ges_ss_splitmatch", "0", FCVAR_GAMEDLL | FCVAR_DONTRECORD, "Split screen: 1 while a local split screen match is played on this server (one match report, team modes start with one player a team)." );
 ConVar ges_ss_matchend_hold( "ges_ss_matchend_hold", "0", FCVAR_GAMEDLL | FCVAR_DONTRECORD, "Split screen: 1 keeps a finished match on its results (no map change) until the players choose Play Again or Return to Menu." );
 
 void CGEBaseGameplayManager::ResetState()
@@ -823,7 +824,8 @@ void CGEBaseGameplayManager::EndMatch()
 	// If we are currently in a round, we need to end it first
 	if ( IsInRound() )
 	{
-		if ( m_iRoundCount > 1 )
+		// A split screen match shows only the match report, never a round report first
+		if ( m_iRoundCount > 1 && !ges_ss_splitmatch.GetBool() )
 		{
 			// Do a full round ending since we played more than 1 round
 			EndRound();
