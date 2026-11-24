@@ -44,6 +44,7 @@ public:
 
 	// A player's head also puts a copy on each death ragdoll of that player
 	void SetOwnerPlayer( C_BasePlayer *pPlayer ) { m_hOwnerPlayer = pPlayer; }
+	void CopyToRagdoll( C_BaseAnimating *pRagdoll );
 
 	// Removes the head and gives the source its own head back
 	void Destroy();
@@ -73,6 +74,14 @@ private:
 // Works out the model for a networked custom head. False when there's none or
 // it isn't available on this PC (the body then keeps its own head).
 bool GECustomHead_GetModel( int headChar, int headSkin, const char *headFile, char *pszModel, int len, int &skin );
+
+// A player's death ragdoll is being made (C_HL2MPRagdoll::CreateHL2MPRagdoll).
+// Before it reads the player's bones: shows the player's own head again, so the
+// ragdoll's head physics start from a real pose, not a head shrunk to nothing.
+// Returns whether it did; pass that to GECustomHead_RagdollCreated.
+bool GECustomHead_PreRagdoll( C_BaseAnimating *pPlayer );
+// After: hides the player's head again and puts a copy of the custom head on the ragdoll
+void GECustomHead_RagdollCreated( C_BaseAnimating *pPlayer, C_BaseAnimating *pRagdoll, bool bWasHiding );
 
 // Path of an imported head's model
 void GECustomHead_ImportedModelPath( const char *headFile, char *pszModel, int len );

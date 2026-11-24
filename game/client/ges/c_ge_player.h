@@ -88,6 +88,7 @@ public:
 
 	// Custom character (ge_customchar.h): the head drawn on this body
 	void UpdateCustomHead();
+	C_GECustomHead *GetCustomHead() { return m_hCustomHead.Get(); }
 
 	virtual void		FireBullets( const FireBulletsInfo_t &info );
 	virtual bool		Weapon_Switch( CBaseCombatWeapon *pWeapon, int viewmodelindex = GE_RIGHT_HAND );

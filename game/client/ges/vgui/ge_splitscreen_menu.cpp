@@ -1360,6 +1360,11 @@ private:
 
 	static void CharacterName( const char *ident, char *out, int outLen )
 	{
+		if ( GECustomChar_IsCustom( ident ) )
+		{
+			Q_strncpy( out, "Custom", outLen );
+			return;
+		}
 		const CGECharData *pChar = ident && ident[0] ? GECharacters()->Get( ident ) : NULL;
 		if ( !pChar || !Q_stricmp( ident, CHAR_RANDOM_IDENT ) || pChar == GECharacters()->GetRandomChar() )
 		{

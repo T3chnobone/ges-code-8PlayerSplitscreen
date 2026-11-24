@@ -117,7 +117,7 @@ private:
 		// Turns a little from side to side, facing the camera
 		const float t = Plat_FloatTime() - m_flStart;
 		matrix3x4_t root;
-		AngleMatrix( QAngle( 0, 160.0f + 30.0f * sinf( t * 0.5f ), 0 ), vec3_origin, root );
+		AngleMatrix( QAngle( 0, 340.0f + 30.0f * sinf( t * 0.5f ), 0 ), vec3_origin, root );
 		m_Body.m_flTime = t;
 
 		CStudioHdr bodyHdr( pBodyHdr, mdlcache );
@@ -260,7 +260,8 @@ void CGECustomCharPicker::PerformLayout()
 	BaseClass::PerformLayout();
 	const int w = GetWide(), h = GetTall();
 	const int px = w * 55 / 100;
-	m_pPreview->SetBounds( px, GECP_PX( 34 ), w - px - GECP_PX( 14 ), h - GECP_PX( 34 + 40 ) );
+	// Below it: the status text (Paint), then the controller hint
+	m_pPreview->SetBounds( px, GECP_PX( 34 ), w - px - GECP_PX( 14 ), h - GECP_PX( 34 + 40 + 56 ) );
 }
 
 void CGECustomCharPicker::Rebuild()
@@ -778,12 +779,13 @@ void CGECustomCharPicker::Paint()
 		}
 	}
 
-	// Status (import progress / errors), wrapped above Done / Cancel
+	// Status (import progress / errors), wrapped under the preview (left of
+	// it there may be no room between Apply fit and Done / Cancel)
 	if ( m_szStatus[0] )
 	{
-		int x, y, rw, rh;
-		RowRect( ROW_APPLY, x, y, rw, rh );
-		int ty = y + rh + GECP_PX( 10 );
+		const int x = w * 55 / 100;
+		const int rw = w - x - GECP_PX( 14 );
+		int ty = h - GECP_PX( 40 + 52 );
 		const char *p = m_szStatus;
 		char line[256];
 		while ( *p )

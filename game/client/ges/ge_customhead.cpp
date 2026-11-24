@@ -12,6 +12,7 @@
 #include "filesystem.h"
 #include "c_hl2mp_player.h"
 #include "ge_customhead_import.h"
+#include "c_ge_player.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -136,17 +137,53 @@ void C_GECustomHead::ClientThink()
 		return;
 	}
 
-	// The player died: their ragdoll gets a copy of this head
+	// The player died: their ragdoll gets a copy of this head (normally done
+	// when the ragdoll is made, GECustomHead_RagdollCreated; this catches the rest)
 	C_HL2MP_Player *pPlayer = dynamic_cast<C_HL2MP_Player *>( m_hOwnerPlayer.Get() );
 	if ( pPlayer )
 	{
 		C_BaseAnimating *pRagdoll = pPlayer->GetRagdoll();
-		if ( pRagdoll && pRagdoll != m_hLastRagdoll.Get() && pRagdoll->GetModelPtr() )
-		{
-			m_hLastRagdoll = pRagdoll;
-			C_GECustomHead::Create( pRagdoll, m_szModel, m_nSkin );
-		}
+		if ( pRagdoll && pRagdoll->GetModelPtr() )
+			CopyToRagdoll( pRagdoll );
 	}
+}
+
+void C_GECustomHead::CopyToRagdoll( C_BaseAnimating *pRagdoll )
+{
+	if ( !pRagdoll || pRagdoll == m_hLastRagdoll.Get() || pRagdoll->GEIsHidingHead() )
+		return;
+	m_hLastRagdoll = pRagdoll;
+	C_GECustomHead::Create( pRagdoll, m_szModel, m_nSkin );
+}
+
+static C_GECustomHead *GECustomHead_ForPlayer( C_BaseAnimating *pPlayer )
+{
+	C_GEPlayer *pGEPlayer = dynamic_cast<C_GEPlayer *>( pPlayer );
+	return pGEPlayer ? pGEPlayer->GetCustomHead() : NULL;
+}
+
+bool GECustomHead_PreRagdoll( C_BaseAnimating *pPlayer )
+{
+	if ( !pPlayer || !pPlayer->GEIsHidingHead() )
+		return false;
+	pPlayer->GESetHideHead( false );
+	pPlayer->InvalidateBoneCache();
+	return true;
+}
+
+void GECustomHead_RagdollCreated( C_BaseAnimating *pPlayer, C_BaseAnimating *pRagdoll, bool bWasHiding )
+{
+	if ( !pPlayer )
+		return;
+	if ( bWasHiding )
+	{
+		pPlayer->GESetHideHead( true );
+		pPlayer->InvalidateBoneCache();
+	}
+
+	C_GECustomHead *pHead = GECustomHead_ForPlayer( pPlayer );
+	if ( pHead && pRagdoll && pRagdoll->GetModelPtr() )
+		pHead->CopyToRagdoll( pRagdoll );
 }
 
 bool C_GECustomHead::ShouldDraw()
