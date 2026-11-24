@@ -1649,8 +1649,8 @@ private:
 	ComboBox	*m_pWeapons;
 	CheckButton	*m_pTeams;
 	CheckButton	*m_pJump;			// ge_allowjump (on the Cheats page)
-	CheckButton	*m_pRadar;			// ge_allowradar
-	bool		m_bTeamsChoice;		// What the player picked (modes that force teams on/off don't change it)
+	CheckButton	*m_pRadar;			// Cheats page: "No Radar" (ticked = ge_allowradar 0)
+	Label		*m_pRadarHelp;
 	Label		*m_pWinLabel;
 	ComboBox	*m_pWin;
 	Label		*m_pAimLabel;
@@ -1754,8 +1754,12 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pMode = new ComboBox( this, "Mode", 12, false );
 	m_pWeaponsLabel = new Label( this, "WeaponsLabel", "Weapons" );
 	m_pWeapons = new ComboBox( this, "Weapons", 15, false );
+	// Teams come from the game mode (the "(teams)" modes), no tick box
 	m_pTeams = new CheckButton( this, "Teams", "Team game (MI6 vs Janus)" );
-	m_pRadar = new CheckButton( this, "Radar", "Radar (shows where the other players are)" );
+	m_pTeams->SetVisible( false );
+	// No Radar is on the Cheats page (ticked = radar off)
+	m_pRadar = new CheckButton( this, "Radar", "No Radar" );
+	m_pRadarHelp = new Label( this, "RadarHelp", "Nobody gets the radar that shows where the other players are." );
 
 	m_pAimLabel = new Label( this, "AimLabel", "Aim assist" );
 	m_pAim = new ComboBox( this, "AimAssist", ARRAYSIZE( s_AimAssistNames ), false );
@@ -1818,7 +1822,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	m_pTurboHelp = new Label( this, "TurboHelp", "How fast everyone runs, like the online game's Turbo mode." );
 	m_pCheatsBack = new Button( this, "CheatsBack", "Back", this, "cheatsback" );
 
-	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pTeams, m_pRadar, m_pAimLabel, m_pAim, m_pWinLabel, m_pWin,
+	Panel *matchPanels[] = { m_pMapLabel, m_pMap, m_pModeLabel, m_pMode, m_pWeaponsLabel, m_pWeapons, m_pAimLabel, m_pAim, m_pWinLabel, m_pWin,
 		m_pTimeLabel, m_pTime, m_pKillsLabel, m_pKills, m_pPerDisplayLabel, m_pPerDisplay, m_pPadCount, m_pDiagram, m_pSummary, m_pStartButton, m_pCheatsButton };
 	for ( int i = 0; i < ARRAYSIZE( matchPanels ); i++ )
 		match.AddToTail( matchPanels[i] );
@@ -1831,7 +1835,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 		cheats.AddToTail( m_pCheat[i] );
 		cheats.AddToTail( m_pCheatHelp[i] );
 	}
-	Panel *cheatPanels[] = { m_pJump, m_pJumpHelp, m_pJumpHeightLabel, m_pJumpHeight, m_pTurboLabel, m_pTurbo, m_pTurboHelp, m_pCheatsBack };
+	Panel *cheatPanels[] = { m_pRadar, m_pRadarHelp, m_pJump, m_pJumpHelp, m_pJumpHeightLabel, m_pJumpHeight, m_pTurboLabel, m_pTurbo, m_pTurboHelp, m_pCheatsBack };
 	for ( int i = 0; i < ARRAYSIZE( cheatPanels ); i++ )
 		cheats.AddToTail( cheatPanels[i] );
 
@@ -1868,8 +1872,6 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pMap, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pMode, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pWeapons, GESS_NAV_COMBO, GESS_PAGE_MATCH );
-	AddNav( m_pTeams, GESS_NAV_CHECK, GESS_PAGE_MATCH );
-	AddNav( m_pRadar, GESS_NAV_CHECK, GESS_PAGE_MATCH );
 	AddNav( m_pAim, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pWin, GESS_NAV_COMBO, GESS_PAGE_MATCH );
 	AddNav( m_pTime, GESS_NAV_NUMBER, GESS_PAGE_MATCH, 0, GESS_MATCH_TIME_MAX );
@@ -1879,6 +1881,7 @@ CGESplitScreenMenu::CGESplitScreenMenu( vgui::VPANEL parent ) : BaseClass( NULL,
 	AddNav( m_pStartButton, GESS_NAV_BUTTON, GESS_PAGE_MATCH );
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
 		AddNav( m_pCheat[i], GESS_NAV_CHECK, GESS_PAGE_CHEATS );
+	AddNav( m_pRadar, GESS_NAV_CHECK, GESS_PAGE_CHEATS );
 	AddNav( m_pJump, GESS_NAV_CHECK, GESS_PAGE_CHEATS );
 	AddNav( m_pJumpHeight, GESS_NAV_COMBO, GESS_PAGE_CHEATS );
 	AddNav( m_pTurbo, GESS_NAV_COMBO, GESS_PAGE_CHEATS );
@@ -2061,10 +2064,6 @@ void CGESplitScreenMenu::PerformLayout()
 	y += P( 32 );
 	m_pWeaponsLabel->SetBounds( x, y, labelW, rowH );
 	m_pWeapons->SetBounds( fieldX, y, fieldW, rowH );
-	y += P( 30 );
-	m_pTeams->SetBounds( fieldX - P( 4 ), y, fieldW, rowH );
-	y += P( 28 );
-	m_pRadar->SetBounds( fieldX - P( 4 ), y, fieldW, rowH );
 	y += P( 32 );
 	m_pAimLabel->SetBounds( x, y, labelW, rowH );
 	m_pAim->SetBounds( fieldX, y, fieldW, rowH );
@@ -2108,6 +2107,9 @@ void CGESplitScreenMenu::PerformLayout()
 		m_pCheatHelp[i]->SetBounds( x + P( 26 ), y + rowH, W - P( 66 ), P( 20 ) );
 		y += P( 52 );
 	}
+	m_pRadar->SetBounds( x, y, W - P( 40 ), rowH );
+	m_pRadarHelp->SetBounds( x + P( 26 ), y + rowH, W - P( 66 ), P( 20 ) );
+	y += P( 52 );
 	m_pJump->SetBounds( x, y, W - P( 40 ), rowH );
 	m_pJumpHelp->SetBounds( x + P( 26 ), y + rowH, W - P( 66 ), P( 20 ) );
 	y += P( 52 );
@@ -2604,11 +2606,10 @@ void CGESplitScreenMenu::LoadMatchIntoControls()
 		m_pWeapons->ActivateItemByRow( row );
 
 	m_pTeams->SetSelected( set.teams );
-	m_bTeamsChoice = set.teams;
 	m_pJump->SetSelected( set.jump );
 	m_pJumpHeight->ActivateItemByRow( clamp( set.jumpheight, 0, GESS_NUM_JUMPHEIGHTS - 1 ) );
 	m_pTurbo->ActivateItemByRow( clamp( set.turbo, 0, GESS_NUM_TURBOMODES - 1 ) );
-	m_pRadar->SetSelected( set.radar );
+	m_pRadar->SetSelected( !set.radar );
 	m_pWin->ActivateItemByRow( clamp( set.wincondition, 0, ARRAYSIZE( s_WinConditionNames ) - 1 ) );
 	m_pAim->ActivateItemByRow( clamp( set.aimassist, 0, ARRAYSIZE( s_AimAssistNames ) - 1 ) );
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
@@ -2684,9 +2685,8 @@ void CGESplitScreenMenu::StoreControlsIntoMatch()
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
 		set.cheats[i] = m_pCheat[i]->IsSelected();
 
-	set.teams = m_pTeams->IsSelected();
 	set.jump = m_pJump->IsSelected();
-	set.radar = m_pRadar->IsSelected();
+	set.radar = !m_pRadar->IsSelected();
 	set.timelimit = GetEntryInt( m_pTime, set.timelimit );
 	set.killlimit = GetEntryInt( m_pKills, set.killlimit );
 
@@ -2699,28 +2699,21 @@ void CGESplitScreenMenu::UpdateMatchControls()
 {
 	const GESSMatchSettings_t &set = GESSMatch()->Settings();
 
-	// Teams can only be toggled for modes that support both
+	// Teams come from the mode: only the "(teams)" modes are team games
 	const int mode = GESSMatch()->FindMode( set.mode );
 	const GESSTeamSupport_t teams = mode >= 0 ? GESSMatch()->GetMode( mode ).teams : GESS_TEAMS_OPTIONAL;
-	m_pTeams->SetEnabled( teams == GESS_TEAMS_OPTIONAL );
 
 	// Modes that hand out their own weapons ignore the weapon set
 	const bool bOwnWeapons = mode >= 0 && GESSMatch()->GetMode( mode ).ownWeapons;
 	m_pWeapons->SetEnabled( !bOwnWeapons );
 	m_pWeaponsLabel->SetEnabled( !bOwnWeapons );
-	if ( teams != GESS_TEAMS_OPTIONAL && m_pTeams->IsSelected() != ( teams == GESS_TEAMS_ALWAYS ) )
+	const bool bModeTeams = teams == GESS_TEAMS_ALWAYS;
+	if ( m_pTeams->IsSelected() != bModeTeams || GESSMatch()->Settings().teams != bModeTeams )
 	{
 		m_bLoading = true;
-		m_pTeams->SetSelected( teams == GESS_TEAMS_ALWAYS );
+		m_pTeams->SetSelected( bModeTeams );
 		m_bLoading = false;
-	}
-	else if ( teams == GESS_TEAMS_OPTIONAL && m_pTeams->IsSelected() != m_bTeamsChoice )
-	{
-		// Back on a mode where teams are optional: the player's own choice again
-		m_bLoading = true;
-		m_pTeams->SetSelected( m_bTeamsChoice );
-		m_bLoading = false;
-		GESSMatch()->Settings().teams = m_bTeamsChoice;
+		GESSMatch()->Settings().teams = bModeTeams;
 	}
 
 	m_pKills->SetEnabled( set.wincondition == 1 );
@@ -2824,14 +2817,6 @@ void CGESplitScreenMenu::OnCheckButtonChecked( vgui::Panel *panel )
 {
 	if ( m_bLoading )
 		return;
-
-	if ( panel == m_pTeams )
-	{
-		m_bTeamsChoice = m_pTeams->IsSelected();
-		StoreControlsIntoMatch();
-		UpdateMatchControls();
-		return;
-	}
 
 	bool bCheat = false;
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )

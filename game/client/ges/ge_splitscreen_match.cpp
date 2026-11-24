@@ -333,10 +333,8 @@ void CGESplitScreenMatch::Validate()
 
 	if ( mode >= 0 )
 	{
-		if ( m_Modes[mode].teams == GESS_TEAMS_NEVER )
-			m_Settings.teams = false;
-		else if ( m_Modes[mode].teams == GESS_TEAMS_ALWAYS )
-			m_Settings.teams = true;
+		// Teams come from the mode: the "(teams)" modes are team games, the rest aren't
+		m_Settings.teams = m_Modes[mode].teams == GESS_TEAMS_ALWAYS;
 	}
 }
 

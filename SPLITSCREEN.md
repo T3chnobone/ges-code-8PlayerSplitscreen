@@ -681,3 +681,13 @@ friend can join with `connect <address>`; it changes every time a map loads.
   every match; like the other match settings they stay set afterwards, so set `ge_velocity 1` and
   `ge_ss_jumpheight 1` before hosting online in the same session.
 - **Radar** now has its own row on the Match page: "Radar (shows where the other players are)".
+
+- **Team games come from the mode.** The Match page's Team game tick box is gone: Capture the Key
+  (teams) and Tournament Deathmatch (teams) are team games, every other mode plays without teams.
+- **No Radar is a cheat.** The Match page's Radar tick box moved to the Cheats page as "No Radar"
+  (ticked: nobody gets the radar). Still saved as `radar` in the match settings.
+- **Play Again / Return to Menu.** 5 seconds after a split screen match ends, a bar at the bottom
+  offers Play Again (same map and settings) or Return to Menu; the server holds the results meanwhile
+  (`ges_ss_matchend_hold`). `ges_ss_matchend_delay` sets the wait, `ges_ss_matchend_prompt 0` turns it
+  off, `ges_ss_debug_matchend` shows it straight away.
+- **ge_transition no longer strands you** in its small black room: it moves on 1 second after loading.
