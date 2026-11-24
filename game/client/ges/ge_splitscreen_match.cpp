@@ -395,6 +395,9 @@ void CGESplitScreenMatch::ApplyCvars( bool bMode )
 
 	// The radar, for everyone (the server's setting; a game mode can still force it on)
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowradar %d\n", m_Settings.radar ? 1 : 0 ) );
+	// Team modes' configs (TournamentDM.cfg) hide the other team on the radar, which
+	// leaves a 1 against 1 team game with an empty radar: show everyone
+	engine->ClientCmd_Unrestricted( "ge_radar_showenemyteam 1\n" );
 	// Aim assist for the players on controllers (split screen only; keyboard and mouse never get it)
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_ss_aimassist %d\n", m_Settings.aimassist ) );
 	// Cheats (the Cheats page), for everyone
@@ -430,15 +433,20 @@ void CGESplitScreenMatch::OnLevelInit()
 {
 	// The scenario's own config runs while the map loads and may change the
 	// limits, so set ours again now that we're in. Only for a match we started.
-	if ( m_bPendingApply )
-		m_flApplyTime = gpGlobals->realtime + 1.0f;
-
 	// Joined someone else's server: that's online play, not our match
 	INetChannelInfo *pNet = engine->GetNetChannelInfo();
 	if ( m_bMatchActive && pNet && !pNet->IsLoopback() )
 	{
 		m_bMatchActive = false;
 		m_bPendingApply = false;
+	}
+
+	// (Every map of the match, not just the first: Play Again and the next map
+	// run the mode's config again too)
+	if ( m_bPendingApply || m_bMatchActive )
+	{
+		m_bPendingApply = true;
+		m_flApplyTime = gpGlobals->realtime + 1.0f;
 	}
 }
 
