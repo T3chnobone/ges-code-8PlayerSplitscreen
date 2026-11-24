@@ -48,6 +48,10 @@ void GESS_UpdateMenuMouse( bool bWant );
 	#undef PlaySound
 #endif
 
+// ge_splitscreen_matchend.cpp: Play Again / Return to Menu after a match
+bool GESS_MatchEnd_Update();
+void GESS_MatchEnd_Reset();
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -451,6 +455,8 @@ void CGESplitScreenClient::Shutdown()
 
 void CGESplitScreenClient::LevelInitPostEntity()
 {
+	GESS_MatchEnd_Reset();
+
 	// Re-apply the split screen match limits after the scenario config ran
 	GESSMatch()->OnLevelInit();
 
@@ -487,6 +493,8 @@ void CGESplitScreenClient::LevelInitPostEntity()
 
 void CGESplitScreenClient::LevelShutdownPreEntity()
 {
+	GESS_MatchEnd_Reset();
+
 	m_bSplitActive = false;
 	m_bPregame = false;
 	SetRenderSlot( -1 );
@@ -1295,6 +1303,13 @@ void CGESplitScreenClient::Update( float frametime )
 	BlockPauseMenu();
 	UpdateHostLook( dt );
 	UpdatePregame();
+
+	// After a split screen match: Play Again / Return to Menu (uses the presses first)
+	if ( GESS_MatchEnd_Update() )
+	{
+		for ( int i = 0; i < GES_SS_MAX_PLAYERS; i++ )
+			m_Slots[i].menu = GESS_MENU_NONE;
+	}
 
 	if ( ges_ss_enable.GetBool() )
 	{

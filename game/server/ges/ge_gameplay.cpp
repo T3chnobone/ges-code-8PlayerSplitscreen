@@ -613,6 +613,9 @@ void CGEBaseGameplayManager::ShutdownScenario()
 	GetScenario()->Shutdown();
 }
 
+// Set by the split screen client while it plays a local split screen match
+ConVar ges_ss_matchend_hold( "ges_ss_matchend_hold", "0", FCVAR_GAMEDLL | FCVAR_DONTRECORD, "Split screen: 1 keeps a finished match on its results (no map change) until the players choose Play Again or Return to Menu." );
+
 void CGEBaseGameplayManager::ResetState()
 {
 	m_bGameOver = false;
@@ -664,8 +667,9 @@ void CGEBaseGameplayManager::OnThink()
 		return;
 	}
 
-	// Check if the game over time is over
-	if ( IsGameOver() && IsInFinalIntermission() && GetRemainingIntermission() <= 0 )
+	// Check if the game over time is over. A local split screen match holds here
+	// until a player picks Play Again or Return to Menu (ges_ss_matchend_hold).
+	if ( IsGameOver() && IsInFinalIntermission() && GetRemainingIntermission() <= 0 && !ges_ss_matchend_hold.GetBool() )
 	{
 		GEMPRules()->SetupChangeLevel();
 		return;

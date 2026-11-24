@@ -365,6 +365,8 @@ public:
 	// A split screen match started from the Split Screen menu is running on our own server
 	bool IsSplitMatch() const;
 	bool ShouldSuppressGameMenus() const;
+	// Player 1 chose Exit game: the results show, then back to the menu
+	bool IsExitingToMenu() const { return m_flExitToMenuTime > 0; }
 private:
 	void SendJoin( int slot );
 	void LeaveSlot( int slot );

@@ -1171,6 +1171,30 @@ void CGEMPRules::Think()
 	Assert( GEGameplay() != NULL );
 	GEGameplay()->OnThink();
 
+#ifndef CLIENT_DLL
+	// ge_transition is a tiny empty room the server passes through between two
+	// heavy maps. The switch onward is set up in LevelInitPreEntity, while
+	// gpGlobals->curtime still holds the previous map's clock, so the change was
+	// scheduled as far in the future as the last map had run (minutes in the
+	// small black room). Reschedule it once against this map's clock.
+	static const void *s_pTransitionFixed = NULL;
+	if ( !Q_stricmp( STRING( gpGlobals->mapname ), "ge_transition" ) )
+	{
+		if ( s_pTransitionFixed != this )
+		{
+			s_pTransitionFixed = this;
+			if ( m_flChangeLevelTime > 0 )
+				m_flChangeLevelTime = gpGlobals->curtime + GE_CHANGELEVEL_DELAY;
+			else
+				SetupChangeLevel();
+		}
+	}
+	else
+	{
+		s_pTransitionFixed = NULL;
+	}
+#endif
+
 	if ( m_flChangeLevelTime > 0 && gpGlobals->curtime > m_flChangeLevelTime )
 	{
 		ChangeLevel();
@@ -1431,7 +1455,9 @@ void CGEMPRules::SetupChangeLevel( const char *next_level /*= NULL*/ )
 	MapSelectionData *curMapData = m_pMapManager->GetCurrentMapSelectionData();
 	MapSelectionData *nextMapData = m_pMapManager->GetMapSelectionData(m_szNextLevel);
 
-	if ( nextMapData && curMapData && nextMapData->resintensity + curMapData->resintensity >= 10 )
+	// (Playing the same map again needs no transition: its assets are already loaded)
+	if ( nextMapData && curMapData && nextMapData->resintensity + curMapData->resintensity >= 10 &&
+		Q_stricmp( curMapData->mapname, m_szNextLevel ) )
 	{
 		ge_nextnextmap.SetValue(m_szNextLevel);
 		Q_strncpy(m_szNextLevel, "ge_transition", sizeof(m_szNextLevel));
