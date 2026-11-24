@@ -547,7 +547,8 @@ static bool GetReferenceHeadBone( matrix3x4_t &poseToBone, Vector &headPos )
 			continue;
 
 		const int idx = modelinfo->GetModelIndex( pChar->m_pSkins[0]->szModel );
-		const model_t *pModel = idx != -1 ? modelinfo->GetModel( idx ) : NULL;
+		// Not precached outside a map (the main menu), so load it
+		const model_t *pModel = idx != -1 ? modelinfo->GetModel( idx ) : modelinfo->FindOrLoadModel( pChar->m_pSkins[0]->szModel );
 		studiohdr_t *pHdr = pModel ? modelinfo->GetStudiomodel( pModel ) : NULL;
 		if ( !pHdr )
 			continue;
