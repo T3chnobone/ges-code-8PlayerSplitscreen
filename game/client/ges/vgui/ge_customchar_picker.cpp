@@ -610,7 +610,7 @@ void CGECustomCharPicker::OnKeyCodePressed( KeyCode code )
 	else BaseClass::OnKeyCodePressed( code );
 }
 
-void CGECustomCharPicker::RowRect( int row, int &x, int &y, int &w, int &h ) const
+void CGECustomCharPicker::RowRect( int row, int &x, int &y, int &w, int &h )
 {
 	const int width = GetWide() * 55 / 100 - GECP_PX( 28 );
 	x = GECP_PX( 14 );
@@ -629,7 +629,7 @@ void CGECustomCharPicker::RowRect( int row, int &x, int &y, int &w, int &h ) con
 	}
 }
 
-int CGECustomCharPicker::HitRow( int &side ) const
+int CGECustomCharPicker::HitRow( int &side )
 {
 	int mx, my;
 	input()->GetCursorPos( mx, my );

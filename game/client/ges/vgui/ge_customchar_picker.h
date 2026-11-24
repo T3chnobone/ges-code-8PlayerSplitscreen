@@ -80,8 +80,8 @@ private:
 	void StartImport( const char *path );
 	void BrowseForHead();
 
-	void RowRect( int row, int &x, int &y, int &w, int &h ) const;
-	int  HitRow( int &side ) const;
+	void RowRect( int row, int &x, int &y, int &w, int &h );
+	int  HitRow( int &side );
 	void RowText( int row, char *label, int labelLen, char *value, int valueLen ) const;
 	void DrawString( vgui::HFont font, int x, int y, Color col, const char *text );
 	int  TextWide( vgui::HFont font, const char *text );
