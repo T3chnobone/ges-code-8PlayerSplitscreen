@@ -372,6 +372,7 @@ CGESplitScreenClient::CGESplitScreenClient() : CAutoGameSystemPerFrame( "CGESpli
 		s.calRow = GESS_CALROW_REMEASURE;
 		s.calPad = -1;
 		memset( s.calBackup, 0, sizeof( s.calBackup ) );
+		ResetReloadHold( i );
 		m_GuestProfile[i] = CGESSProfiles::DefaultProfile();
 		m_iSlotPad[i] = -1;
 		m_bSlotHadPad[i] = false;
@@ -3209,13 +3210,60 @@ int CGESplitScreenClient::ComputeButtons( const GESSPadState_t &pad ) const
 	if ( pad.IsDown( GESS_PAD_RT ) )		buttons |= IN_ATTACK;
 	if ( pad.IsDown( GESS_PAD_LT ) )		buttons |= IN_AIMMODE;
 	if ( pad.IsDown( GESS_PAD_RB ) )		buttons |= IN_ATTACK2;
-	// Face buttons: A / Cross jumps, X / Square reloads, B / Circle crouches
+	// Face buttons: A / Cross jumps, B / Circle crouches. X / Square (reload: tap
+	// reloads, a short hold uses) goes through ReloadHoldButtons.
 	if ( pad.IsDown( GESS_PAD_A ) )			buttons |= IN_JUMP;
-	if ( pad.IsDown( GESS_PAD_X ) )			buttons |= IN_RELOAD;
 	if ( pad.IsDown( GESS_PAD_B ) )			buttons |= IN_DUCK;
 	if ( pad.IsDown( GESS_PAD_LSTICK ) )	buttons |= IN_DUCK;
 	if ( pad.IsDown( GESS_PAD_RSTICK ) )	buttons |= IN_USE;		// action / open doors
 	// Back / Select does nothing: the leaderboard is on START
+	return buttons;
+}
+
+static ConVar ges_ss_hold_use_time( "ges_ss_hold_use_time", "0.25", FCVAR_ARCHIVE, "Split screen: holding reload this many seconds uses (opens doors) instead of reloading, like the N64 game. A tap reloads. 0: reload and use stay separate.", true, 0.0f, true, 2.0f );
+
+void CGESplitScreenClient::ResetReloadHold( int slot )
+{
+	ReloadHold_t &h = m_ReloadHold[slot];
+	h.down = false;
+	h.downTime = 0;
+	h.reloadUntil = 0;
+}
+
+int CGESplitScreenClient::ReloadHoldButtons( int slot, bool bDown )
+{
+	ReloadHold_t &h = m_ReloadHold[slot];
+	const float holdTime = ges_ss_hold_use_time.GetFloat();
+	if ( holdTime <= 0.0f )
+	{
+		ResetReloadHold( slot );
+		return bDown ? IN_RELOAD : 0;
+	}
+
+	const float now = gpGlobals->realtime;
+	int buttons = 0;
+	if ( bDown )
+	{
+		if ( !h.down )
+		{
+			h.down = true;
+			h.downTime = now;
+		}
+		// Held long enough: use (doors, buttons) for as long as it stays down
+		if ( now - h.downTime >= holdTime )
+			buttons |= IN_USE;
+	}
+	else if ( h.down )
+	{
+		// Let go before the hold time: a tap, reload. Sent for a few ticks so the
+		// server can't miss it.
+		h.down = false;
+		if ( now - h.downTime < holdTime )
+			h.reloadUntil = now + 0.1f;
+	}
+
+	if ( now < h.reloadUntil )
+		buttons |= IN_RELOAD;
 	return buttons;
 }
 
@@ -3230,15 +3278,25 @@ void CGESplitScreenClient::ComputeMove( const GESSPadState_t &pad, float &forwar
 void CGESplitScreenClient::HostCreateMove( float frametime, CUserCmd *cmd, QAngle &viewangles, bool active )
 {
 	if ( !ges_ss_enable.GetBool() || !active )
+	{
+		ResetReloadHold( 0 );
 		return;
+	}
+
+	// Reload (the keyboard's or the controller's X): a tap reloads, a short hold
+	// uses, like the N64 game. The keyboard's own use key still works too.
+	const bool bKeyReload = ( cmd->buttons & IN_RELOAD ) != 0;
+	cmd->buttons &= ~IN_RELOAD;
 
 	const int padIndex = GetSlotPad( 0 );
-	if ( padIndex < 0 )
-		return;
+	const GESSPadState_t *pPad = padIndex >= 0 ? &GESSGamepads()->GetPad( padIndex ) : NULL;
+	const bool bPadPlays = pPad && pPad->connected && m_Slots[0].menu == GESS_MENU_NONE && !IsGameUIVisible() && !m_bPregame;
 
-	const GESSPadState_t &pad = GESSGamepads()->GetPad( padIndex );
-	if ( !pad.connected || m_Slots[0].menu != GESS_MENU_NONE || IsGameUIVisible() || m_bPregame )
+	cmd->buttons |= ReloadHoldButtons( 0, bKeyReload || ( bPadPlays && pPad->IsDown( GESS_PAD_X ) ) );
+
+	if ( !bPadPlays )
 		return;
+	const GESSPadState_t &pad = *pPad;
 
 	// Look: every frame in UpdateHostLook (this runs once per tick, not per frame)
 
@@ -3265,7 +3323,10 @@ void CGESplitScreenClient::FillGuestCmds( CUserCmd *cmd )
 
 		LocalSlot_t &s = m_Slots[slot];
 		if ( !ges_ss_enable.GetBool() || s.state != GESS_SLOT_JOINED )
+		{
+			ResetReloadHold( slot );
 			continue;
+		}
 
 		g.active = true;
 		g.viewangles = s.angles;
@@ -3277,10 +3338,13 @@ void CGESplitScreenClient::FillGuestCmds( CUserCmd *cmd )
 
 		const GESSPadState_t &pad = GESSGamepads()->GetPad( GetSlotPad( slot ) );
 		if ( !pad.connected || s.menu != GESS_MENU_NONE || enginevgui->IsGameUIVisible() || m_bPregame )
+		{
+			ResetReloadHold( slot );
 			continue;	// Stand still while in a menu (or waiting for the match to start)
+		}
 
 		ComputeMove( pad, g.forwardmove, g.sidemove );
-		g.buttons = ComputeButtons( pad );
+		g.buttons = ComputeButtons( pad ) | ReloadHoldButtons( slot, pad.IsDown( GESS_PAD_X ) );
 		if ( g.forwardmove > 0 ) g.buttons |= IN_FORWARD;
 		if ( g.forwardmove < 0 ) g.buttons |= IN_BACK;
 		if ( g.sidemove > 0 ) g.buttons |= IN_MOVERIGHT;

@@ -277,10 +277,10 @@ the next round" in that player's own view.
 | Left trigger | Aim mode |
 | RB | Alt fire / zoom |
 | A | Jump (when the match allows jumping) |
-| X | Reload |
+| X | Reload (tap) / use: open doors, press buttons (hold briefly) |
 | B / left stick click | Crouch |
 | Y / LB | Next / previous weapon |
-| Right stick click | Use (doors, buttons) |
+| Right stick click | Use (doors, buttons) straight away |
 | Back | Nothing (the leaderboard is on START) |
 | Start | Join / leaderboard and menu |
 
@@ -346,6 +346,7 @@ friend can join with `connect <address>`; it changes every time a map loads.
 | `ges_ss_aim_sticky` / `ges_ss_aim_slowdown` / `ges_ss_aim_radius` | 0.85 / 0.4 / 1.5 | Sticky aim strength, slowdown speed, degrees around a target that count as on it |
 | `ges_ss_pad_deadzone` | 0.22 | Fixed stick dead zone (when not measured, or with auto off) |
 | `ges_ss_menu_pad_nav` / `ges_ss_menu_hide_mouse` | 1 / 0 | Controller drives the game's menus / hide the mouse there |
+| `ges_ss_hold_use_time` | 0.25 | Seconds reload (X, or the keyboard's reload key) must be held to use instead of reloading (0: reload only reloads) |
 | `ges_ss_pad_backend` | auto | `sdl` or `xinput` |
 | `ge_wincondition` | 0 | 0 score, 1 kills, 2 kill/death ratio |
 | `ge_killlimit` | 0 | Kills that end the match with `ge_wincondition 1` (0 = none) |
@@ -656,3 +657,11 @@ friend can join with `connect <address>`; it changes every time a map loads.
   - `ges_ss_version` prints the version and what the check found. `ges_ss_check_update` checks again;
     `ges_ss_check_update 9.9` pretends 9.9 is the newest release, to see the message.
     `ges_ss_update_check 0` turns the check off.
+
+## Changes (24 November)
+
+- **Hold reload to open doors**, like the N64 game: tapping X / Square reloads, holding it for a
+  quarter of a second uses instead (open doors, press buttons) for as long as it stays held, and
+  doesn't reload. The reload is sent when a tap is let go. The same goes for player 1's keyboard
+  reload key (the keyboard's use key still works too). The right stick click still uses straight
+  away. `ges_ss_hold_use_time` sets the hold time; 0 puts reload back to plain reload.

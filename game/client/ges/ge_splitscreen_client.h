@@ -372,6 +372,10 @@ private:
 	void RestoreHostName();
 
 	int  ComputeButtons( const GESSPadState_t &pad ) const;
+	// Reload button like the N64 game: a tap reloads (when it's let go), held for
+	// ges_ss_hold_use_time it uses (opens doors) instead. Returns IN_RELOAD / IN_USE.
+	int  ReloadHoldButtons( int slot, bool bDown );
+	void ResetReloadHold( int slot );
 	void ComputeMove( const GESSPadState_t &pad, float &forward, float &side ) const;
 	float LookScale( int slot, const GESSPadState_t &pad ) const;
 	// Sticky aim / slowdown near a target (ge_ss_aimassist 2 / 3): turns angles to follow a
@@ -379,6 +383,13 @@ private:
 	float ApplyAimAssist( int slot, C_BasePlayer *pPlayer, QAngle &angles );
 
 	LocalSlot_t m_Slots[GES_SS_MAX_PLAYERS];
+	struct ReloadHold_t
+	{
+		bool	down;			// Reload is held
+		float	downTime;		// When it went down
+		float	reloadUntil;	// A tap sends IN_RELOAD until then
+	};
+	ReloadHold_t m_ReloadHold[GES_SS_MAX_PLAYERS];
 	int		m_iSlotPad[GES_SS_MAX_PLAYERS];	// Controller of each player, -1 = none
 	bool	m_bSlotHadPad[GES_SS_MAX_PLAYERS];	// Had a controller since joining (shows "Controller disconnected")
 

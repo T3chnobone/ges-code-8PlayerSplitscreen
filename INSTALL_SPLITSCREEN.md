@@ -106,7 +106,7 @@ In the game:
 | Right trigger | Fire |
 | Left trigger | Aim mode |
 | RB | Alt fire / zoom |
-| X | Reload |
+| X | Tap: reload. Hold briefly: use (open doors, press buttons) |
 | Y / LB | Next / previous weapon |
 | A | Jump (when the match allows jumping) |
 | B or left stick click | Crouch |
