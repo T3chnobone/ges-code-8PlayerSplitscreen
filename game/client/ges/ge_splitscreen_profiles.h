@@ -19,7 +19,7 @@
 
 #define GES_SS_MAX_PROFILES			16
 #define GES_SS_PROFILE_NAME_LEN		32
-#define GES_SS_PROFILE_CHAR_LEN		32
+#define GES_SS_PROFILE_CHAR_LEN		96	// Fits a custom character spec (ge_customchar.h)
 
 #define GES_SS_SENS_MIN		0.1f
 #define GES_SS_SENS_MAX		3.0f

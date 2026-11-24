@@ -20,6 +20,8 @@
 #include "ge_splitscreen_client.h"
 #include "clientmode_ge.h"
 #include "ge_character_data.h"
+#include "ge_customchar.h"
+#include "ge_customchar_picker.h"
 #include "gemp_gamerules.h"
 #include "ge_panelhelper.h"
 #include "c_ge_playerresource.h"
@@ -69,6 +71,10 @@ CGECharSelect::CGECharSelect(IViewPort *pViewPort) : EditablePanel(NULL, PANEL_C
 	m_pCharSkins = (GEVertListPanel*) FindChildByName( "CharSkins" );
 
 	ResetCharacterGrid();
+
+	m_pCustomPicker = new CGECustomCharPicker( this );
+	m_pCustomPicker->AddActionSignalTarget( this );
+	m_szCustomSpec[0] = '\0';
 
 	SetVisible( false );
 
@@ -140,6 +146,16 @@ void CGECharSelect::OnCommand( const char *command )
 
 		const CGECharData *pChar = m_vCharacters[idx];
 
+		// Custom: pick the body and head in its window first (it joins from OnCustomCharPicked)
+		if ( pChar == GECustomChar_RosterEntry() )
+		{
+			int w, h;
+			GetSize( w, h );
+			m_pCustomPicker->SetBounds( w / 16, h / 10, w - w / 8, h - h / 5 );
+			m_pCustomPicker->Open( m_szCustomSpec[0] ? m_szCustomSpec : CHAR_CUSTOM_IDENT );
+			return;
+		}
+
 		char strargs[36];
 		char strcmd[100];
 		Q_snprintf(strargs, 36, "%s %i", pChar->szIdentifier, m_iCurrSkin );
@@ -202,6 +218,11 @@ void CGECharSelect::UpdateCharacterList( void )
 	// Add random char to the front
 	m_vCharacters.AddToHead( GECharacters()->GetRandomChar() );
 
+	// Custom (any body with any head) at the end. Not in team games: the body
+	// would have to belong to the team.
+	if ( !GEMPRules() || !GEMPRules()->IsTeamplay() )
+		m_vCharacters.AddToTail( GECustomChar_RosterEntry() );
+
 	// Populate the first page of characters
 	PopulateCharacterGrid();
 
@@ -211,6 +232,15 @@ void CGECharSelect::UpdateCharacterList( void )
 
 void CGECharSelect::SetSelectedCharacter( const char *ident, int skin /*=0*/ ) 
 {
+	// A custom spec (from ge_favchar): remember it, select the Custom entry
+	if ( GECustomChar_IsCustom( ident ) )
+	{
+		if ( Q_stricmp( ident, CHAR_CUSTOM_IDENT ) )
+			Q_strncpy( m_szCustomSpec, ident, sizeof( m_szCustomSpec ) );
+		ident = CHAR_CUSTOM_IDENT;
+		skin = 0;
+	}
+
 	int idx = FindCharacter( ident );
 	if ( idx == -1 )
 		idx = 0; // Default to first char (random)
@@ -261,7 +291,7 @@ void CGECharSelect::SetSelectedCharacter( const char *ident, int skin /*=0*/ )
 	m_iCurrSkin = skin;
 	
 	// Set the characters model
-	if ( !Q_stricmp(ident, CHAR_RANDOM_IDENT) )
+	if ( !Q_stricmp(ident, CHAR_RANDOM_IDENT) || pChar == GECustomChar_RosterEntry() )
 	{
 		// Show the random selection model
 		m_pCharModel->SwapModel( CHARSELECT_RANDOM_MDL );
@@ -402,6 +432,20 @@ void CGECharSelect::CharacterDoubleClicked( KeyValues *data )
 {
 	CharacterClicked( data );
 	OnCommand( "Ok" );
+}
+
+void CGECharSelect::OnCustomCharPicked( KeyValues *data )
+{
+	if ( !data->GetInt( "accepted" ) )
+		return;		// Back to the character select
+
+	const char *spec = data->GetString( "spec" );
+	Q_strncpy( m_szCustomSpec, spec, sizeof( m_szCustomSpec ) );
+	engine->ClientCmd( VarArgs( "joinclass %s\n", spec ) );
+	ge_favchar.SetValue( spec );
+
+	SetVisible( false );
+	gViewPortInterface->ShowBackGround( false );
 }
 
 void CGECharSelect::SkinClicked( KeyValues *data )

@@ -14,6 +14,7 @@
 #include "ge_splitscreen_match.h"
 #include "ge_musicmanager.h"
 #include "ge_character_data.h"
+#include "ge_customchar.h"
 #include "c_gemp_player.h"
 #include "c_hl2mp_player.h"
 #include "usercmd.h"
@@ -2668,7 +2669,7 @@ void CGESplitScreenClient::ApplyHostChoice()
 	// The profile's character, or a random one when it doesn't fit the team
 	if ( IsTeamplay() )
 	{
-		const CGECharData *pChar = GECharacters()->Get( character );
+		const CGECharData *pChar = GECustomChar_GetBodyChar( character );
 		if ( !pChar || team == MAX_GE_TEAMS || pChar->iTeam != team )
 			character = CHAR_RANDOM_IDENT;
 	}
