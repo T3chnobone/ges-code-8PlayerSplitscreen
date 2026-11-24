@@ -318,6 +318,18 @@ borderless and the size of both monitors. You can also launch with
 With `ges_ss_dualscreen 2` (the default), a window wider than 2.6:1 is treated as two
 screens: the first "players per display" players go on the left half and the rest on the right.
 
+## Playing online with Steam friends
+
+Host with **Create Server** (internet, not LAN). The engine also opens the game on Steam's relay
+network (`sv_use_steam_networking 1`), so friends can join without port forwarding, and it tells
+Steam how to reach the server you're on. Friends who have the mod installed can then use
+**Join Game** on you in their Steam friends list.
+
+**INVITE FRIENDS** in the in-game menu (`ges_invite_friends`) opens the Steam overlay's friends
+list, where **Invite to Game** on a friend sends them an invite. With the overlay off, it opens Steam's own
+friends window instead, where the same right-click works. Without Steam, `status` in the console shows the relay address (`udp/ip`, starting 169.254), which a
+friend can join with `connect <address>`; it changes every time a map loads.
+
 ## Console variables
 
 | Cvar | Default | Meaning |
