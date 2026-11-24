@@ -65,16 +65,31 @@ C_GECustomHead *C_GECustomHead::Create( C_BaseAnimating *pSource, const char *ps
 	if ( !pSource || !pszModel || !pszModel[0] )
 		return NULL;
 
+	// Character heads are precached by the map; an imported head isn't, so load it
+	// now and give it a client-side model index
+	int modelIndex = modelinfo->GetModelIndex( pszModel );
+	if ( modelIndex == -1 )
+	{
+		if ( modelinfo->FindOrLoadModel( pszModel ) )
+			modelIndex = modelinfo->RegisterDynamicModel( pszModel, true );
+		if ( modelIndex == -1 || !modelinfo->GetModel( modelIndex ) )
+		{
+			Warning( "Custom head %s couldn't be loaded\n", pszModel );
+			return NULL;
+		}
+	}
+
 	C_GECustomHead *pHead = new C_GECustomHead;
-	if ( !pHead->InitializeAsClientEntity( pszModel, RENDER_GROUP_OPAQUE_ENTITY ) )
+	if ( !pHead->InitializeAsClientEntityByIndex( modelIndex, RENDER_GROUP_OPAQUE_ENTITY ) )
 	{
 		pHead->Release();
 		return NULL;
 	}
 
-	// Needs the head bone, or there's nothing to put on the body
+	// Needs the head bone, or there's nothing to put on the body (an imported
+	// head may still be loading; it's drawn once it has)
 	CStudioHdr *pHdr = pHead->GetModelPtr();
-	if ( !pHdr || Studio_BoneIndexByName( pHdr, GE_CUSTOMHEAD_BONE ) < 0 )
+	if ( !pHead->IsDynamicModelLoading() && ( !pHdr || Studio_BoneIndexByName( pHdr, GE_CUSTOMHEAD_BONE ) < 0 ) )
 	{
 		Warning( "Custom head %s has no %s bone\n", pszModel, GE_CUSTOMHEAD_BONE );
 		pHead->Release();
