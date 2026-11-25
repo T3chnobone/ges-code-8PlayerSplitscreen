@@ -88,6 +88,7 @@ bool GECustomHead_GetImportInfo( const char *headName, char *srcPath, int srcLen
 	fit.forward = pHead->GetFloat( "forward", 0.0f );
 	fit.turn = pHead->GetInt( "turn", 0 ) & 3;
 	fit.zUp = pHead->GetInt( "z_up", 0 ) != 0;
+	Q_strncpy( fit.texture, pHead->GetString( "texture" ), sizeof( fit.texture ) );
 	return true;
 }
 
@@ -701,6 +702,7 @@ static void RememberHead( const char *headName, const char *srcPath, const char 
 		pHead->SetFloat( "forward", pFit->forward );
 		pHead->SetInt( "turn", pFit->turn & 3 );
 		pHead->SetInt( "z_up", pFit->zUp ? 1 : 0 );
+		pHead->SetString( "texture", pFit->texture );
 	}
 	SaveManifest();
 }
@@ -777,6 +779,22 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 	if ( !ParseObj( srcPath, mesh, err, errLen ) )
 		return false;
 
+	// A picked texture goes on the whole head
+	const bool bPickedTexture = fit.texture[0] != '\0';
+	if ( bPickedTexture )
+	{
+		if ( !filesystem->FileExists( fit.texture ) )
+		{
+			SetMsg( err, errLen, "Texture %s not found", fit.texture );
+			return false;
+		}
+		for ( int m = 0; m < mesh.mats.Count(); m++ )
+		{
+			mesh.mats[m]->texture = fit.texture;
+			mesh.mats[m]->color.Init( 1, 1, 1 );
+		}
+	}
+
 	matrix3x4_t poseToBone;
 	Vector headPos;
 	if ( !GetReferenceHeadBone( poseToBone, headPos ) )
@@ -800,6 +818,21 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 		pos[i] = v;
 		VectorMin( mins, v, mins );
 		VectorMax( maxs, v, maxs );
+	}
+
+	// Corners without UVs (a mesh made without any): projected around the head,
+	// so the middle of the image is on the face and its sides wrap to the back
+	CUtlVector<Vector2D> genUV;
+	{
+		genUV.SetCount( pos.Count() );
+		const float cx = ( mins.x + maxs.x ) * 0.5f, cy = ( mins.y + maxs.y ) * 0.5f;
+		const float tall = Max( maxs.z - mins.z, 0.001f );
+		for ( int i = 0; i < pos.Count(); i++ )
+		{
+			const float ang = atan2f( pos[i].y - cy, pos[i].x - cx );		// 0 = straight ahead, + = the head's left
+			genUV[i].x = clamp( 0.5f + ang / ( 2.0f * M_PI_F ), 0.0f, 1.0f );
+			genUV[i].y = clamp( ( pos[i].z - mins.z ) / tall, 0.0f, 1.0f );
+		}
 	}
 
 	// Size it like a head and sit it on the neck: the bottom just under the head
@@ -911,7 +944,7 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 				const ObjVert_t &ov = mat.tris[t + k];
 				const Vector &p = pos[ov.v];
 				const Vector &n = bFileNormals ? ( ov.n >= 0 ? nrm[ov.n] : Vector( 0, 0, 1 ) ) : nrm[ov.v];
-				const Vector2D uv = ov.t >= 0 ? mesh.uv[ov.t] : Vector2D( 0, 0 );
+				const Vector2D uv = ov.t >= 0 ? mesh.uv[ov.t] : genUV[ov.v];
 				smd.Printf( "0 %f %f %f %f %f %f %f %f\n", p.x, p.y, p.z, n.x, n.y, n.z, uv.x, uv.y );
 			}
 		}
@@ -960,6 +993,7 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 	pPending->SetFloat( "forward", fit.forward );
 	pPending->SetInt( "turn", fit.turn & 3 );
 	pPending->SetInt( "z_up", fit.zUp ? 1 : 0 );
+	pPending->SetString( "texture", fit.texture );
 	return true;
 }
 
@@ -1027,6 +1061,7 @@ GEHeadImportState_t GECustomHead_PollImport( char *headName, int nameLen, char *
 					fit.forward = pPending->GetFloat( "forward" );
 					fit.turn = pPending->GetInt( "turn" );
 					fit.zUp = pPending->GetInt( "z_up" ) != 0;
+					Q_strncpy( fit.texture, pPending->GetString( "texture" ), sizeof( fit.texture ) );
 				}
 				char src[MAX_PATH];
 				Q_strncpy( src, pPending ? pPending->GetString( "source" ) : "", sizeof( src ) );
@@ -1068,7 +1103,7 @@ GEHeadImportState_t GECustomHead_PollImport( char *headName, int nameLen, char *
 	return s_ImportState;
 }
 
-CON_COMMAND( ge_customhead_import, "Imports a head for the Custom character: ge_customhead_import <full path to .obj or .mdl> [scale] [height] [forward] [quarter turns] [z up 0/1]" )
+CON_COMMAND( ge_customhead_import, "Imports a head for the Custom character: ge_customhead_import <full path to .obj or .mdl> [scale] [height] [forward] [quarter turns] [z up 0/1] [full path of a texture image]" )
 {
 	if ( args.ArgC() < 2 )
 	{
@@ -1082,6 +1117,7 @@ CON_COMMAND( ge_customhead_import, "Imports a head for the Custom character: ge_
 	if ( args.ArgC() > 4 ) fit.forward = atof( args[4] );
 	if ( args.ArgC() > 5 ) fit.turn = atoi( args[5] ) & 3;
 	if ( args.ArgC() > 6 ) fit.zUp = atoi( args[6] ) != 0;
+	if ( args.ArgC() > 7 ) Q_strncpy( fit.texture, args[7], sizeof( fit.texture ) );
 
 	char err[512];
 	if ( GECustomHead_StartImport( args[1], fit, err, sizeof( err ) ) )

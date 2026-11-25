@@ -7,7 +7,8 @@
 //
 //      Source can only draw compiled models, so a picked file becomes one in
 //      the mod's models/ges_custom_heads folder:
-//        * .obj (with its .mtl and textures: png, jpg, tga, bmp): the mesh is
+//        * .obj (with its .mtl and textures: png, jpg, tga, bmp, or one image
+//          picked for it, GEHeadFit_t::texture): the mesh is
 //          fitted on the head bone, the textures become VTF + VMT, and the SDK's
 //          studiomdl.exe (next to the game's engine) compiles it. It runs in the
 //          background; poll GECustomHead_PollImport().
@@ -31,13 +32,16 @@
 // How an .obj head is placed on the head bone
 struct GEHeadFit_t
 {
-	GEHeadFit_t() { scale = 1.0f; height = 0.0f; forward = 0.0f; turn = 0; zUp = false; }
+	GEHeadFit_t() { scale = 1.0f; height = 0.0f; forward = 0.0f; turn = 0; zUp = false; texture[0] = '\0'; }
 
 	float	scale;		// 1 = the usual head size (the mesh is sized to fit first)
 	float	height;		// Units up / down
 	float	forward;	// Units forward / back
 	int		turn;		// Quarter turns to the left (0-3)
 	bool	zUp;		// The file is Z up (most are Y up, like Blender's default .obj export)
+	char	texture[260];	// Image put on the whole head instead of the .mtl's textures ("" = the .mtl's).
+							// A mesh without UVs gets them projected around the head, the image's
+							// middle on the face.
 };
 
 enum GEHeadImportState_t
