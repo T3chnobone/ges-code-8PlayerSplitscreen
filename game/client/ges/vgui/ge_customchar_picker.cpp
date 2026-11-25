@@ -798,7 +798,7 @@ void CGECustomCharPicker::RowText( int row, char *label, int labelLen, char *val
 	case ROW_SIZE:		Q_strncpy( label, "Head size", labelLen ); Q_snprintf( value, valueLen, "%.2f", m_Fit.scale ); break;
 	case ROW_HEIGHT:	Q_strncpy( label, "Up / down", labelLen ); Q_snprintf( value, valueLen, "%+.1f", m_Fit.height ); break;
 	case ROW_FORWARD:	Q_strncpy( label, "Forward / back", labelLen ); Q_snprintf( value, valueLen, "%+.1f", m_Fit.forward ); break;
-	case ROW_TURN:		Q_strncpy( label, "Turn", labelLen ); Q_snprintf( value, valueLen, "%d degrees", m_Fit.turn * 90 ); break;
+	case ROW_TURN:		Q_strncpy( label, "Turn", labelLen ); Q_snprintf( value, valueLen, "%d degrees", ( ( m_Fit.turn + 1 ) & 3 ) * 90 ); break;	// 0 = the usual way round
 	case ROW_UPAXIS:	Q_strncpy( label, "File's up axis", labelLen ); Q_strncpy( value, m_Fit.zUp ? "Z up" : "Y up (Blender default)", valueLen ); break;
 	case ROW_APPLY:		Q_strncpy( label, "Apply fit", labelLen ); break;
 	case ROW_DONE:		Q_strncpy( label, "Done", labelLen ); break;

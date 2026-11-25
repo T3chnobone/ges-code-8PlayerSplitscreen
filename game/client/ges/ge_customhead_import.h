@@ -32,12 +32,12 @@
 // How an .obj head is placed on the head bone
 struct GEHeadFit_t
 {
-	GEHeadFit_t() { scale = 1.0f; height = 0.0f; forward = 0.0f; turn = 0; zUp = false; wrap = false; texture[0] = '\0'; }
+	GEHeadFit_t() { scale = 1.0f; height = 0.0f; forward = 0.0f; turn = 3; zUp = false; wrap = false; texture[0] = '\0'; }
 
 	float	scale;		// 1 = the usual head size (the mesh is sized to fit first)
 	float	height;		// Units up / down
 	float	forward;	// Units forward / back
-	int		turn;		// Quarter turns to the left (0-3)
+	int		turn;		// Quarter turns to the left (0-3); 3 faces a usual .obj the way the characters face
 	bool	zUp;		// The file is Z up (most are Y up, like Blender's default .obj export)
 	char	texture[260];	// Image put on the whole head instead of the .mtl's textures ("" = the .mtl's).
 							// A mesh without UVs gets them projected around the head, the image's

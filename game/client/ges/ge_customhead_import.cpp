@@ -540,7 +540,28 @@ static bool MakeTexture( const ObjMaterial_t &mat, const char *absVtf, bool &bHa
 //-----------------------------------------------------------------------------
 // Where the head bone is in a character's reference pose
 //-----------------------------------------------------------------------------
-static bool GetReferenceHeadBone( matrix3x4_t &poseToBone, Vector &headPos )
+// The way the characters face in their model (pose) space, from the head to
+// the eyes. GoldenEye: Source's characters face -Y there.
+static Vector ReferenceForward( studiohdr_t *pHdr, const Vector &headPos )
+{
+	for ( int a = 0; a < pHdr->numlocalattachments; a++ )
+	{
+		const mstudioattachment_t *pAtt = pHdr->pLocalAttachment( a );
+		if ( Q_stricmp( pAtt->pszName(), "eyes" ) || pAtt->localbone < 0 || pAtt->localbone >= pHdr->numbones )
+			continue;
+		matrix3x4_t boneToPose, attToPose;
+		MatrixInvert( pHdr->pBone( pAtt->localbone )->poseToBone, boneToPose );
+		ConcatTransforms( boneToPose, pAtt->local, attToPose );
+		Vector eyes;
+		MatrixGetColumn( attToPose, 3, eyes );
+		Vector fwd( eyes.x - headPos.x, eyes.y - headPos.y, 0 );
+		if ( VectorNormalize( fwd ) > 0.5f )
+			return fwd;
+	}
+	return Vector( 0, -1, 0 );
+}
+
+static bool GetReferenceHeadBone( matrix3x4_t &poseToBone, Vector &headPos, Vector &forward )
 {
 	for ( int i = 0; i < GECharacters()->Count(); i++ )
 	{
@@ -563,6 +584,7 @@ static bool GetReferenceHeadBone( matrix3x4_t &poseToBone, Vector &headPos )
 				matrix3x4_t boneToPose;
 				MatrixInvert( poseToBone, boneToPose );
 				MatrixGetColumn( boneToPose, 3, headPos );
+				forward = ReferenceForward( pHdr, headPos );
 				return true;
 			}
 		}
@@ -798,15 +820,16 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 	}
 
 	matrix3x4_t poseToBone;
-	Vector headPos;
-	if ( !GetReferenceHeadBone( poseToBone, headPos ) )
+	Vector headPos, forward;
+	if ( !GetReferenceHeadBone( poseToBone, headPos, forward ) )
 	{
 		SetMsg( err, errLen, "Couldn't load a character model to fit the head to" );
 		return false;
 	}
 
-	// The file's axes -> the game's (X forward, Y left, Z up). A Y up .obj faces +Z
-	// (Blender's default export), a Z up one faces -Y.
+	// The file's axes -> the model's (Z up). A Y up .obj faces +Z (Blender's
+	// default export), a Z up one faces -Y; both come out facing +X, and the
+	// default turn (GEHeadFit_t) points that the way the characters face.
 	CUtlVector<Vector> pos;
 	pos.SetCount( mesh.pos.Count() );
 	const float turnRad = DEG2RAD( 90.0f * ( fit.turn & 3 ) );
@@ -828,12 +851,15 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 	CUtlVector<Vector2D> genUV;
 	{
 		genUV.SetCount( pos.Count() );
+		// Middle of the image where the characters face; to the viewer's right
+		// (the head's left: up x forward) the image's right
 		const float cx = ( mins.x + maxs.x ) * 0.5f, cy = ( mins.y + maxs.y ) * 0.5f;
 		const float tall = Max( maxs.z - mins.z, 0.001f );
+		const float faceAng = atan2f( forward.y, forward.x );
 		for ( int i = 0; i < pos.Count(); i++ )
 		{
-			const float ang = atan2f( pos[i].y - cy, pos[i].x - cx );		// 0 = straight ahead, + = the head's left
-			genUV[i].x = clamp( 0.5f + ang / ( 2.0f * M_PI_F ), 0.0f, 1.0f );
+			const float ang = AngleNormalize( RAD2DEG( atan2f( pos[i].y - cy, pos[i].x - cx ) - faceAng ) );	// 0 = the face, + = the head's left
+			genUV[i].x = clamp( 0.5f + ang / 360.0f, 0.0f, 1.0f );
 			genUV[i].y = clamp( ( pos[i].z - mins.z ) / tall, 0.0f, 1.0f );
 		}
 	}
@@ -843,7 +869,7 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 	const float height = Max( maxs.z - mins.z, 0.001f );
 	const float scale = GE_HEAD_TARGET_HEIGHT * clamp( fit.scale, 0.1f, 10.0f ) / height;
 	const Vector center( ( mins.x + maxs.x ) * 0.5f, ( mins.y + maxs.y ) * 0.5f, mins.z );
-	const Vector target( headPos.x + 1.0f + fit.forward, headPos.y, headPos.z - 2.5f + fit.height );
+	const Vector target = headPos + forward * ( 1.0f + fit.forward ) + Vector( 0, 0, fit.height - 2.5f );
 
 	// Model space -> head bone space (the head is drawn on the body's head bone)
 	for ( int i = 0; i < pos.Count(); i++ )
