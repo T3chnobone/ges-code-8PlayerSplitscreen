@@ -235,6 +235,8 @@ CGECustomCharPicker::CGECustomCharPicker( Panel *pParent ) : BaseClass( pParent,
 	m_bCanFit = false;
 	m_szFitSource[0] = '\0';
 	m_bImporting = false;
+	m_bTextureDialog = false;
+	m_bReimportPending = false;
 	m_szStatus[0] = '\0';
 	m_pOwnPads = new CGESSMenuPadReader;
 	m_flLastPadsFromOwner = 0;
@@ -319,6 +321,7 @@ void CGECustomCharPicker::Open( const char *spec )
 	UpdatePreview();
 
 	SetVisible( true );
+	SetZPos( 1000 );	// Over the character select's grid
 	MoveToFront();
 	RequestFocus();
 	InvalidateLayout();
@@ -389,7 +392,9 @@ bool CGECustomCharPicker::IsRowUsable( int row ) const
 {
 	switch ( row )
 	{
-	case ROW_SIZE: case ROW_HEIGHT: case ROW_FORWARD: case ROW_TURN: case ROW_UPAXIS: case ROW_APPLY:
+	case ROW_TEXMAP:
+		return m_bCanFit && !m_bImporting && m_Fit.texture[0];
+	case ROW_TEXTURE: case ROW_SIZE: case ROW_HEIGHT: case ROW_FORWARD: case ROW_TURN: case ROW_UPAXIS: case ROW_APPLY:
 		return m_bCanFit && !m_bImporting;
 	case ROW_IMPORT:
 		return !m_bImporting;
@@ -446,6 +451,18 @@ void CGECustomCharPicker::Change( int row, int dir )
 	case ROW_FORWARD:	m_Fit.forward = clamp( m_Fit.forward + 0.5f * dir, -12.0f, 12.0f ); break;
 	case ROW_TURN:		m_Fit.turn = ( m_Fit.turn + dir + 4 ) & 3; break;
 	case ROW_UPAXIS:	m_Fit.zUp = !m_Fit.zUp; break;
+	case ROW_TEXMAP:
+		m_Fit.wrap = !m_Fit.wrap;
+		m_bReimportPending = true;
+		return;
+	case ROW_TEXTURE:
+		// Left / right: back to the .obj's own (.mtl) textures
+		if ( m_Fit.texture[0] )
+		{
+			m_Fit.texture[0] = '\0';
+			m_bReimportPending = true;
+		}
+		return;
 	default:
 		return;		// Buttons don't change with left / right
 	}
@@ -470,6 +487,9 @@ void CGECustomCharPicker::Activate( int row )
 		break;
 	case ROW_IMPORT:
 		BrowseForHead();
+		break;
+	case ROW_TEXTURE:
+		BrowseForTexture();
 		break;
 	case ROW_APPLY:
 		StartImport( m_szFitSource );
@@ -514,10 +534,54 @@ void CGECustomCharPicker::BrowseForHead()
 	pDialog->AddActionSignalTarget( this );
 	pDialog->DoModal( false );
 	m_hFileDialog = pDialog;
+	m_bTextureDialog = false;
+}
+
+void CGECustomCharPicker::BrowseForTexture()
+{
+	if ( m_hFileDialog.Get() )
+		m_hFileDialog->MarkForDeletion();
+
+	FileOpenDialog *pDialog = new FileOpenDialog( this, "Pick a texture for the head", true );
+	pDialog->AddFilter( "*.png;*.jpg;*.jpeg;*.tga;*.bmp", "Images (*.png, *.jpg, *.tga, *.bmp)", true );
+	pDialog->AddFilter( "*.png", "PNG (*.png)", false );
+	pDialog->AddFilter( "*.jpg;*.jpeg", "JPEG (*.jpg)", false );
+	pDialog->AddFilter( "*.tga", "Targa (*.tga)", false );
+	pDialog->AddFilter( "*.bmp", "Bitmap (*.bmp)", false );
+	char dir[MAX_PATH] = "";
+	if ( m_Fit.texture[0] )
+		Q_ExtractFilePath( m_Fit.texture, dir, sizeof( dir ) );
+	else if ( m_szFitSource[0] )
+		Q_ExtractFilePath( m_szFitSource, dir, sizeof( dir ) );
+	else
+		Q_strncpy( dir, ge_customhead_lastdir.GetString(), sizeof( dir ) );
+	if ( dir[0] )
+		pDialog->SetStartDirectory( dir );
+	pDialog->AddActionSignalTarget( this );
+	pDialog->DoModal( false );
+	m_hFileDialog = pDialog;
+	m_bTextureDialog = true;
 }
 
 void CGECustomCharPicker::OnFileSelected( const char *fullpath )
 {
+	if ( m_bTextureDialog )
+	{
+		// The head is made again with this image on it (same fit)
+		m_bTextureDialog = false;
+		if ( m_bCanFit && fullpath && fullpath[0] )
+		{
+			// A picked image is usually not laid out for the file's UVs (a photo
+			// of a face): wrapped around the head first, the next row changes it
+			if ( !m_Fit.texture[0] )
+				m_Fit.wrap = true;
+			Q_strncpy( m_Fit.texture, fullpath, sizeof( m_Fit.texture ) );
+			m_bReimportPending = true;
+		}
+		RequestFocus();
+		return;
+	}
+
 	char dir[MAX_PATH];
 	Q_ExtractFilePath( fullpath, dir, sizeof( dir ) );
 	ge_customhead_lastdir.SetValue( dir );
@@ -548,6 +612,12 @@ void CGECustomCharPicker::OnThink()
 	BaseClass::OnThink();
 	if ( !IsVisible() )
 		return;
+
+	if ( m_bReimportPending && !m_bImporting )
+	{
+		m_bReimportPending = false;
+		StartImport( m_szFitSource );
+	}
 
 	// Import finished?
 	if ( m_bImporting )
@@ -616,14 +686,22 @@ void CGECustomCharPicker::RowRect( int row, int &x, int &y, int &w, int &h )
 	const int width = GetWide() * 55 / 100 - GECP_PX( 28 );
 	x = GECP_PX( 14 );
 	w = width;
-	h = GECP_PX( 30 );
+	const int fullH = GECP_PX( 30 );
 	const int gap = GECP_PX( 4 );
-	y = GECP_PX( 40 ) + row * ( h + gap );
+
+	// Rows down to Apply fit share the room above Done / Cancel, smaller when
+	// the window is short (split screen)
+	const int top = GECP_PX( 40 ), sectionGap = GECP_PX( 10 );
+	const int room = GetTall() - GECP_PX( 14 ) - fullH - gap - top - sectionGap;
+	const int step = clamp( room / ( ROW_APPLY + 1 ), GECP_PX( 16 ), fullH + gap );
+	h = Min( fullH, step - Max( 1, gap * step / ( fullH + gap ) ) );
+	y = top + row * step;
 	if ( row >= ROW_SIZE )
-		y += GECP_PX( 10 );		// Fit rows a little apart
+		y += sectionGap;		// Fit rows a little apart
 	if ( row >= ROW_DONE )
 	{
 		// Done / Cancel side by side at the bottom
+		h = fullH;
 		y = GetTall() - GECP_PX( 14 ) - h;
 		w = ( width - gap ) / 2;
 		x = row == ROW_DONE ? x : x + w + gap;
@@ -659,7 +737,7 @@ void CGECustomCharPicker::OnMousePressed( MouseCode code )
 		return;
 	m_iFocus = row;
 
-	const bool bSetting = row == ROW_BODY || row == ROW_HEAD || ( row >= ROW_SIZE && row <= ROW_UPAXIS );
+	const bool bSetting = row == ROW_BODY || row == ROW_HEAD || row == ROW_TEXMAP || ( row >= ROW_SIZE && row <= ROW_UPAXIS );
 	if ( bSetting )
 		Change( row, side < 0 ? -1 : 1 );
 	else
@@ -704,10 +782,23 @@ void CGECustomCharPicker::RowText( int row, char *label, int labelLen, char *val
 		break;
 	}
 	case ROW_IMPORT:	Q_strncpy( label, "Import your own head...", labelLen ); Q_strncpy( value, ".obj or .mdl", valueLen ); break;
+	case ROW_TEXTURE:
+		Q_strncpy( label, "Head texture...", labelLen );
+		if ( !m_bCanFit )
+			Q_strncpy( value, "for imported .obj heads", valueLen );
+		else if ( m_Fit.texture[0] )
+			Q_snprintf( value, valueLen, "%s  (< > to remove)", V_UnqualifiedFileName( m_Fit.texture ) );
+		else
+			Q_strncpy( value, "png, jpg, tga, bmp", valueLen );
+		break;
+	case ROW_TEXMAP:
+		Q_strncpy( label, "Texture placement", labelLen );
+		Q_strncpy( value, m_Fit.wrap ? "Wrapped around the head" : "The file's UV map", valueLen );
+		break;
 	case ROW_SIZE:		Q_strncpy( label, "Head size", labelLen ); Q_snprintf( value, valueLen, "%.2f", m_Fit.scale ); break;
 	case ROW_HEIGHT:	Q_strncpy( label, "Up / down", labelLen ); Q_snprintf( value, valueLen, "%+.1f", m_Fit.height ); break;
 	case ROW_FORWARD:	Q_strncpy( label, "Forward / back", labelLen ); Q_snprintf( value, valueLen, "%+.1f", m_Fit.forward ); break;
-	case ROW_TURN:		Q_strncpy( label, "Turn", labelLen ); Q_snprintf( value, valueLen, "%d degrees", m_Fit.turn * 90 ); break;
+	case ROW_TURN:		Q_strncpy( label, "Turn", labelLen ); Q_snprintf( value, valueLen, "%d degrees", ( ( m_Fit.turn + 1 ) & 3 ) * 90 ); break;	// 0 = the usual way round
 	case ROW_UPAXIS:	Q_strncpy( label, "File's up axis", labelLen ); Q_strncpy( value, m_Fit.zUp ? "Z up" : "Y up (Blender default)", valueLen ); break;
 	case ROW_APPLY:		Q_strncpy( label, "Apply fit", labelLen ); break;
 	case ROW_DONE:		Q_strncpy( label, "Done", labelLen ); break;
@@ -751,7 +842,7 @@ void CGECustomCharPicker::Paint()
 		RowRect( row, x, y, rw, rh );
 		const bool bUsable = IsRowUsable( row );
 		const bool bFocus = row == m_iFocus;
-		const bool bButton = row == ROW_IMPORT || row == ROW_APPLY || row == ROW_DONE || row == ROW_CANCEL;
+		const bool bButton = row == ROW_IMPORT || row == ROW_TEXTURE || row == ROW_APPLY || row == ROW_DONE || row == ROW_CANCEL;
 
 		surface()->DrawSetColor( bButton ? Color( 52, 52, 52, 255 ) : Color( 34, 34, 34, 255 ) );
 		surface()->DrawFilledRect( x, y, x + rw, y + rh );
@@ -771,7 +862,7 @@ void CGECustomCharPicker::Paint()
 
 		if ( value[0] )
 		{
-			const bool bSetting = row != ROW_IMPORT;
+			const bool bSetting = row != ROW_IMPORT && row != ROW_TEXTURE;
 			const Color valCol = bUsable ? ( bSetting ? Color( 230, 200, 80, 255 ) : Color( 170, 170, 170, 255 ) ) : Color( 90, 90, 90, 255 );
 			char shown[200];
 			Q_snprintf( shown, sizeof( shown ), bSetting ? "<  %s  >" : "%s", value );

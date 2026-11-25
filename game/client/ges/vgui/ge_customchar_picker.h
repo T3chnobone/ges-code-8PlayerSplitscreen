@@ -54,6 +54,8 @@ public:
 		ROW_BODY = 0,
 		ROW_HEAD,
 		ROW_IMPORT,
+		ROW_TEXTURE,	// Image for the imported head (re-imports it)
+		ROW_TEXMAP,		// The image on the file's UVs, or wrapped around the head
 		ROW_SIZE,
 		ROW_HEIGHT,
 		ROW_FORWARD,
@@ -79,6 +81,7 @@ private:
 	void LoadFitForHead();
 	void StartImport( const char *path );
 	void BrowseForHead();
+	void BrowseForTexture();
 
 	void RowRect( int row, int &x, int &y, int &w, int &h );
 	int  HitRow( int &side );
@@ -109,6 +112,8 @@ private:
 	float m_flLastPadsFromOwner;
 
 	vgui::DHANDLE<vgui::Panel> m_hFileDialog;
+	bool m_bReimportPending;	// Convert the head again on the next think (not mid input handling)
+	bool m_bTextureDialog;		// m_hFileDialog picks a texture, not a head
 	vgui::HFont m_hFont, m_hSmallFont;
 };
 

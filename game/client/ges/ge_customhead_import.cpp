@@ -88,6 +88,8 @@ bool GECustomHead_GetImportInfo( const char *headName, char *srcPath, int srcLen
 	fit.forward = pHead->GetFloat( "forward", 0.0f );
 	fit.turn = pHead->GetInt( "turn", 0 ) & 3;
 	fit.zUp = pHead->GetInt( "z_up", 0 ) != 0;
+	Q_strncpy( fit.texture, pHead->GetString( "texture" ), sizeof( fit.texture ) );
+	fit.wrap = pHead->GetInt( "wrap", 0 ) != 0;
 	return true;
 }
 
@@ -538,7 +540,28 @@ static bool MakeTexture( const ObjMaterial_t &mat, const char *absVtf, bool &bHa
 //-----------------------------------------------------------------------------
 // Where the head bone is in a character's reference pose
 //-----------------------------------------------------------------------------
-static bool GetReferenceHeadBone( matrix3x4_t &poseToBone, Vector &headPos )
+// The way the characters face in their model (pose) space, from the head to
+// the eyes. GoldenEye: Source's characters face -Y there.
+static Vector ReferenceForward( studiohdr_t *pHdr, const Vector &headPos )
+{
+	for ( int a = 0; a < pHdr->numlocalattachments; a++ )
+	{
+		const mstudioattachment_t *pAtt = pHdr->pLocalAttachment( a );
+		if ( Q_stricmp( pAtt->pszName(), "eyes" ) || pAtt->localbone < 0 || pAtt->localbone >= pHdr->numbones )
+			continue;
+		matrix3x4_t boneToPose, attToPose;
+		MatrixInvert( pHdr->pBone( pAtt->localbone )->poseToBone, boneToPose );
+		ConcatTransforms( boneToPose, pAtt->local, attToPose );
+		Vector eyes;
+		MatrixGetColumn( attToPose, 3, eyes );
+		Vector fwd( eyes.x - headPos.x, eyes.y - headPos.y, 0 );
+		if ( VectorNormalize( fwd ) > 0.5f )
+			return fwd;
+	}
+	return Vector( 0, -1, 0 );
+}
+
+static bool GetReferenceHeadBone( matrix3x4_t &poseToBone, Vector &headPos, Vector &forward )
 {
 	for ( int i = 0; i < GECharacters()->Count(); i++ )
 	{
@@ -561,6 +584,7 @@ static bool GetReferenceHeadBone( matrix3x4_t &poseToBone, Vector &headPos )
 				matrix3x4_t boneToPose;
 				MatrixInvert( poseToBone, boneToPose );
 				MatrixGetColumn( boneToPose, 3, headPos );
+				forward = ReferenceForward( pHdr, headPos );
 				return true;
 			}
 		}
@@ -701,6 +725,8 @@ static void RememberHead( const char *headName, const char *srcPath, const char 
 		pHead->SetFloat( "forward", pFit->forward );
 		pHead->SetInt( "turn", pFit->turn & 3 );
 		pHead->SetInt( "z_up", pFit->zUp ? 1 : 0 );
+		pHead->SetString( "texture", pFit->texture );
+		pHead->SetInt( "wrap", pFit->wrap ? 1 : 0 );
 	}
 	SaveManifest();
 }
@@ -777,16 +803,33 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 	if ( !ParseObj( srcPath, mesh, err, errLen ) )
 		return false;
 
+	// A picked texture goes on the whole head
+	const bool bPickedTexture = fit.texture[0] != '\0';
+	if ( bPickedTexture )
+	{
+		if ( !filesystem->FileExists( fit.texture ) )
+		{
+			SetMsg( err, errLen, "Texture %s not found", fit.texture );
+			return false;
+		}
+		for ( int m = 0; m < mesh.mats.Count(); m++ )
+		{
+			mesh.mats[m]->texture = fit.texture;
+			mesh.mats[m]->color.Init( 1, 1, 1 );
+		}
+	}
+
 	matrix3x4_t poseToBone;
-	Vector headPos;
-	if ( !GetReferenceHeadBone( poseToBone, headPos ) )
+	Vector headPos, forward;
+	if ( !GetReferenceHeadBone( poseToBone, headPos, forward ) )
 	{
 		SetMsg( err, errLen, "Couldn't load a character model to fit the head to" );
 		return false;
 	}
 
-	// The file's axes -> the game's (X forward, Y left, Z up). A Y up .obj faces +Z
-	// (Blender's default export), a Z up one faces -Y.
+	// The file's axes -> the model's (Z up). A Y up .obj faces +Z (Blender's
+	// default export), a Z up one faces -Y; both come out facing +X, and the
+	// default turn (GEHeadFit_t) points that the way the characters face.
 	CUtlVector<Vector> pos;
 	pos.SetCount( mesh.pos.Count() );
 	const float turnRad = DEG2RAD( 90.0f * ( fit.turn & 3 ) );
@@ -802,12 +845,31 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 		VectorMax( maxs, v, maxs );
 	}
 
+	// Corners without UVs (a mesh made without any), or all of them when a picked
+	// texture is to be wrapped around the head: projected around it,
+	// so the middle of the image is on the face and its sides wrap to the back
+	CUtlVector<Vector2D> genUV;
+	{
+		genUV.SetCount( pos.Count() );
+		// Middle of the image where the characters face; to the viewer's right
+		// (the head's left: up x forward) the image's right
+		const float cx = ( mins.x + maxs.x ) * 0.5f, cy = ( mins.y + maxs.y ) * 0.5f;
+		const float tall = Max( maxs.z - mins.z, 0.001f );
+		const float faceAng = atan2f( forward.y, forward.x );
+		for ( int i = 0; i < pos.Count(); i++ )
+		{
+			const float ang = AngleNormalize( RAD2DEG( atan2f( pos[i].y - cy, pos[i].x - cx ) - faceAng ) );	// 0 = the face, + = the head's left
+			genUV[i].x = clamp( 0.5f + ang / 360.0f, 0.0f, 1.0f );
+			genUV[i].y = clamp( ( pos[i].z - mins.z ) / tall, 0.0f, 1.0f );
+		}
+	}
+
 	// Size it like a head and sit it on the neck: the bottom just under the head
 	// bone (at the top of the neck), centred a little in front of it
 	const float height = Max( maxs.z - mins.z, 0.001f );
 	const float scale = GE_HEAD_TARGET_HEIGHT * clamp( fit.scale, 0.1f, 10.0f ) / height;
 	const Vector center( ( mins.x + maxs.x ) * 0.5f, ( mins.y + maxs.y ) * 0.5f, mins.z );
-	const Vector target( headPos.x + 1.0f + fit.forward, headPos.y, headPos.z - 2.5f + fit.height );
+	const Vector target = headPos + forward * ( 1.0f + fit.forward ) + Vector( 0, 0, fit.height - 2.5f );
 
 	// Model space -> head bone space (the head is drawn on the body's head bone)
 	for ( int i = 0; i < pos.Count(); i++ )
@@ -911,7 +973,7 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 				const ObjVert_t &ov = mat.tris[t + k];
 				const Vector &p = pos[ov.v];
 				const Vector &n = bFileNormals ? ( ov.n >= 0 ? nrm[ov.n] : Vector( 0, 0, 1 ) ) : nrm[ov.v];
-				const Vector2D uv = ov.t >= 0 ? mesh.uv[ov.t] : Vector2D( 0, 0 );
+				const Vector2D uv = ( ov.t >= 0 && !( bPickedTexture && fit.wrap ) ) ? mesh.uv[ov.t] : genUV[ov.v];
 				smd.Printf( "0 %f %f %f %f %f %f %f %f\n", p.x, p.y, p.z, n.x, n.y, n.z, uv.x, uv.y );
 			}
 		}
@@ -960,6 +1022,8 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 	pPending->SetFloat( "forward", fit.forward );
 	pPending->SetInt( "turn", fit.turn & 3 );
 	pPending->SetInt( "z_up", fit.zUp ? 1 : 0 );
+	pPending->SetString( "texture", fit.texture );
+	pPending->SetInt( "wrap", fit.wrap ? 1 : 0 );
 	return true;
 }
 
@@ -1027,6 +1091,8 @@ GEHeadImportState_t GECustomHead_PollImport( char *headName, int nameLen, char *
 					fit.forward = pPending->GetFloat( "forward" );
 					fit.turn = pPending->GetInt( "turn" );
 					fit.zUp = pPending->GetInt( "z_up" ) != 0;
+					Q_strncpy( fit.texture, pPending->GetString( "texture" ), sizeof( fit.texture ) );
+					fit.wrap = pPending->GetInt( "wrap" ) != 0;
 				}
 				char src[MAX_PATH];
 				Q_strncpy( src, pPending ? pPending->GetString( "source" ) : "", sizeof( src ) );
@@ -1068,7 +1134,7 @@ GEHeadImportState_t GECustomHead_PollImport( char *headName, int nameLen, char *
 	return s_ImportState;
 }
 
-CON_COMMAND( ge_customhead_import, "Imports a head for the Custom character: ge_customhead_import <full path to .obj or .mdl> [scale] [height] [forward] [quarter turns] [z up 0/1]" )
+CON_COMMAND( ge_customhead_import, "Imports a head for the Custom character: ge_customhead_import <full path to .obj or .mdl> [scale] [height] [forward] [quarter turns] [z up 0/1] [full path of a texture image]" )
 {
 	if ( args.ArgC() < 2 )
 	{
@@ -1082,6 +1148,7 @@ CON_COMMAND( ge_customhead_import, "Imports a head for the Custom character: ge_
 	if ( args.ArgC() > 4 ) fit.forward = atof( args[4] );
 	if ( args.ArgC() > 5 ) fit.turn = atoi( args[5] ) & 3;
 	if ( args.ArgC() > 6 ) fit.zUp = atoi( args[6] ) != 0;
+	if ( args.ArgC() > 7 ) Q_strncpy( fit.texture, args[7], sizeof( fit.texture ) );
 
 	char err[512];
 	if ( GECustomHead_StartImport( args[1], fit, err, sizeof( err ) ) )
