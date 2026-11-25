@@ -236,6 +236,7 @@ CGECustomCharPicker::CGECustomCharPicker( Panel *pParent ) : BaseClass( pParent,
 	m_szFitSource[0] = '\0';
 	m_bImporting = false;
 	m_bTextureDialog = false;
+	m_bReimportPending = false;
 	m_szStatus[0] = '\0';
 	m_pOwnPads = new CGESSMenuPadReader;
 	m_flLastPadsFromOwner = 0;
@@ -452,7 +453,7 @@ void CGECustomCharPicker::Change( int row, int dir )
 		if ( m_Fit.texture[0] )
 		{
 			m_Fit.texture[0] = '\0';
-			StartImport( m_szFitSource );
+			m_bReimportPending = true;
 		}
 		return;
 	default:
@@ -564,7 +565,7 @@ void CGECustomCharPicker::OnFileSelected( const char *fullpath )
 		if ( m_bCanFit && fullpath && fullpath[0] )
 		{
 			Q_strncpy( m_Fit.texture, fullpath, sizeof( m_Fit.texture ) );
-			StartImport( m_szFitSource );
+			m_bReimportPending = true;
 		}
 		RequestFocus();
 		return;
@@ -600,6 +601,12 @@ void CGECustomCharPicker::OnThink()
 	BaseClass::OnThink();
 	if ( !IsVisible() )
 		return;
+
+	if ( m_bReimportPending && !m_bImporting )
+	{
+		m_bReimportPending = false;
+		StartImport( m_szFitSource );
+	}
 
 	// Import finished?
 	if ( m_bImporting )

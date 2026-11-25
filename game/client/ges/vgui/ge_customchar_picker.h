@@ -111,6 +111,7 @@ private:
 	float m_flLastPadsFromOwner;
 
 	vgui::DHANDLE<vgui::Panel> m_hFileDialog;
+	bool m_bReimportPending;	// Convert the head again on the next think (not mid input handling)
 	bool m_bTextureDialog;		// m_hFileDialog picks a texture, not a head
 	vgui::HFont m_hFont, m_hSmallFont;
 };
