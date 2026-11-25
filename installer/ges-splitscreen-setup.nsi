@@ -1,6 +1,6 @@
 ; GoldenEye: Source Split Screen Mod - setup wizard (NSIS 3, Unicode)
 ;
-; Build:  makensis -DVERSION=0.1.0 -DGAME_TITLE="GoldenEye: Source - Split Screen Mod" ges-splitscreen-setup.nsi
+; Build:  makensis -DVERSION=0.3.0 -DGAME_TITLE="GoldenEye: Source - Split Screen Mod" ges-splitscreen-setup.nsi
 ; Expects the files to install in .\payload\ laid out like the gesource folder
 ; (bin\client.dll, bin\server.dll, ..., resource\*.res, materials\..., gameinfo.txt, steam.inf).
 
@@ -9,7 +9,7 @@ ManifestDPIAware true
 SetCompressor /SOLID lzma
 
 !ifndef VERSION
-  !define VERSION "0.1.0"
+  !define VERSION "0.3.0"
 !endif
 !ifndef GAME_TITLE
   !define GAME_TITLE "GoldenEye: Source - Split Screen Mod"

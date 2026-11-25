@@ -9,7 +9,7 @@
 #   GES-SplitScreenMod-Setup-<version>.exe  offline setup with this version's files inside
 set -e
 cd "$(dirname "$0")"
-VERSION="${1:-0.1.0}"; TITLE="${2:-GoldenEye: Source - Split Screen Mod}"
+VERSION="${1:-0.3.0}"; TITLE="${2:-GoldenEye: Source - Split Screen Mod}"
 for f in client.dll server.dll SDL2.dll shadereditor.dll game_shader_generic_procshader.dll; do
   [ -f "payload/bin/$f" ] || { echo "missing payload/bin/$f"; exit 1; }
 done

@@ -650,10 +650,10 @@ friend can join with `connect <address>`; it changes every time a map loads.
 
 ## Changes (20 November)
 - **Mod version and update check on the main menu.** The bottom right corner of the main menu shows
-  "Split Screen Mod v0.2". Once per game start the newest GitHub release is fetched
+  "Split Screen Mod v0.3". Once per game start the newest GitHub release is fetched
   (`api.github.com/repos/T3chnobone/ges-code-8PlayerSplitscreen/releases/latest`, through Steam's
   HTTP client, which does HTTPS) and its tag is compared with the built-in version. If it is newer a
-  gold line under it says "Update available: v0.3 - click to download", and a click opens that
+  gold line under it says "Update available: v0.4 - click to download", and a click opens that
   release's page, where the setup is. No network or no Steam just leaves the version showing.
   `CGESSVersionLabel` in `game/client/ges/vgui/ge_splitscreen_version.cpp`.
   - **Bump `GES_SS_VERSION` in `ge_splitscreen_version.h` for every release**, to the release tag
@@ -669,8 +669,6 @@ friend can join with `connect <address>`; it changes every time a map loads.
   doesn't reload. The reload is sent when a tap is let go. The same goes for player 1's keyboard
   reload key (the keyboard's use key still works too). The right stick click still uses straight
   away. `ges_ss_hold_use_time` sets the hold time; 0 puts reload back to plain reload.
-
-## Changes (24 November)
 
 - **Jump and Turbo options on the Cheats page.** *Jumping* moved from the Match page to the Cheats
   page, with a new *Jump height* choice (Normal, High 2x, Moon 4x) under it: a replicated

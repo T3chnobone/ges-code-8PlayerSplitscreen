@@ -12,7 +12,7 @@
 #pragma once
 #endif
 
-#define GES_SS_VERSION			"0.2"
+#define GES_SS_VERSION			"0.3"
 
 // GitHub API: the newest published release (drafts and pre-releases are skipped)
 #define GES_SS_LATEST_RELEASE_API	"https://api.github.com/repos/T3chnobone/ges-code-8PlayerSplitscreen/releases/latest"
