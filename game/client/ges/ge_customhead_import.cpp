@@ -89,6 +89,7 @@ bool GECustomHead_GetImportInfo( const char *headName, char *srcPath, int srcLen
 	fit.turn = pHead->GetInt( "turn", 0 ) & 3;
 	fit.zUp = pHead->GetInt( "z_up", 0 ) != 0;
 	Q_strncpy( fit.texture, pHead->GetString( "texture" ), sizeof( fit.texture ) );
+	fit.wrap = pHead->GetInt( "wrap", 0 ) != 0;
 	return true;
 }
 
@@ -703,6 +704,7 @@ static void RememberHead( const char *headName, const char *srcPath, const char 
 		pHead->SetInt( "turn", pFit->turn & 3 );
 		pHead->SetInt( "z_up", pFit->zUp ? 1 : 0 );
 		pHead->SetString( "texture", pFit->texture );
+		pHead->SetInt( "wrap", pFit->wrap ? 1 : 0 );
 	}
 	SaveManifest();
 }
@@ -820,7 +822,8 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 		VectorMax( maxs, v, maxs );
 	}
 
-	// Corners without UVs (a mesh made without any): projected around the head,
+	// Corners without UVs (a mesh made without any), or all of them when a picked
+	// texture is to be wrapped around the head: projected around it,
 	// so the middle of the image is on the face and its sides wrap to the back
 	CUtlVector<Vector2D> genUV;
 	{
@@ -944,7 +947,7 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 				const ObjVert_t &ov = mat.tris[t + k];
 				const Vector &p = pos[ov.v];
 				const Vector &n = bFileNormals ? ( ov.n >= 0 ? nrm[ov.n] : Vector( 0, 0, 1 ) ) : nrm[ov.v];
-				const Vector2D uv = ov.t >= 0 ? mesh.uv[ov.t] : genUV[ov.v];
+				const Vector2D uv = ( ov.t >= 0 && !( bPickedTexture && fit.wrap ) ) ? mesh.uv[ov.t] : genUV[ov.v];
 				smd.Printf( "0 %f %f %f %f %f %f %f %f\n", p.x, p.y, p.z, n.x, n.y, n.z, uv.x, uv.y );
 			}
 		}
@@ -994,6 +997,7 @@ static bool ImportObj( const char *srcPath, const char *headName, const GEHeadFi
 	pPending->SetInt( "turn", fit.turn & 3 );
 	pPending->SetInt( "z_up", fit.zUp ? 1 : 0 );
 	pPending->SetString( "texture", fit.texture );
+	pPending->SetInt( "wrap", fit.wrap ? 1 : 0 );
 	return true;
 }
 
@@ -1062,6 +1066,7 @@ GEHeadImportState_t GECustomHead_PollImport( char *headName, int nameLen, char *
 					fit.turn = pPending->GetInt( "turn" );
 					fit.zUp = pPending->GetInt( "z_up" ) != 0;
 					Q_strncpy( fit.texture, pPending->GetString( "texture" ), sizeof( fit.texture ) );
+					fit.wrap = pPending->GetInt( "wrap" ) != 0;
 				}
 				char src[MAX_PATH];
 				Q_strncpy( src, pPending ? pPending->GetString( "source" ) : "", sizeof( src ) );

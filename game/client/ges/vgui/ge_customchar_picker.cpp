@@ -321,6 +321,7 @@ void CGECustomCharPicker::Open( const char *spec )
 	UpdatePreview();
 
 	SetVisible( true );
+	SetZPos( 1000 );	// Over the character select's grid
 	MoveToFront();
 	RequestFocus();
 	InvalidateLayout();
@@ -391,6 +392,8 @@ bool CGECustomCharPicker::IsRowUsable( int row ) const
 {
 	switch ( row )
 	{
+	case ROW_TEXMAP:
+		return m_bCanFit && !m_bImporting && m_Fit.texture[0];
 	case ROW_TEXTURE: case ROW_SIZE: case ROW_HEIGHT: case ROW_FORWARD: case ROW_TURN: case ROW_UPAXIS: case ROW_APPLY:
 		return m_bCanFit && !m_bImporting;
 	case ROW_IMPORT:
@@ -448,6 +451,10 @@ void CGECustomCharPicker::Change( int row, int dir )
 	case ROW_FORWARD:	m_Fit.forward = clamp( m_Fit.forward + 0.5f * dir, -12.0f, 12.0f ); break;
 	case ROW_TURN:		m_Fit.turn = ( m_Fit.turn + dir + 4 ) & 3; break;
 	case ROW_UPAXIS:	m_Fit.zUp = !m_Fit.zUp; break;
+	case ROW_TEXMAP:
+		m_Fit.wrap = !m_Fit.wrap;
+		m_bReimportPending = true;
+		return;
 	case ROW_TEXTURE:
 		// Left / right: back to the .obj's own (.mtl) textures
 		if ( m_Fit.texture[0] )
@@ -564,6 +571,10 @@ void CGECustomCharPicker::OnFileSelected( const char *fullpath )
 		m_bTextureDialog = false;
 		if ( m_bCanFit && fullpath && fullpath[0] )
 		{
+			// A picked image is usually not laid out for the file's UVs (a photo
+			// of a face): wrapped around the head first, the next row changes it
+			if ( !m_Fit.texture[0] )
+				m_Fit.wrap = true;
 			Q_strncpy( m_Fit.texture, fullpath, sizeof( m_Fit.texture ) );
 			m_bReimportPending = true;
 		}
@@ -726,7 +737,7 @@ void CGECustomCharPicker::OnMousePressed( MouseCode code )
 		return;
 	m_iFocus = row;
 
-	const bool bSetting = row == ROW_BODY || row == ROW_HEAD || ( row >= ROW_SIZE && row <= ROW_UPAXIS );
+	const bool bSetting = row == ROW_BODY || row == ROW_HEAD || row == ROW_TEXMAP || ( row >= ROW_SIZE && row <= ROW_UPAXIS );
 	if ( bSetting )
 		Change( row, side < 0 ? -1 : 1 );
 	else
@@ -779,6 +790,10 @@ void CGECustomCharPicker::RowText( int row, char *label, int labelLen, char *val
 			Q_snprintf( value, valueLen, "%s  (< > to remove)", V_UnqualifiedFileName( m_Fit.texture ) );
 		else
 			Q_strncpy( value, "png, jpg, tga, bmp", valueLen );
+		break;
+	case ROW_TEXMAP:
+		Q_strncpy( label, "Texture placement", labelLen );
+		Q_strncpy( value, m_Fit.wrap ? "Wrapped around the head" : "The file's UV map", valueLen );
 		break;
 	case ROW_SIZE:		Q_strncpy( label, "Head size", labelLen ); Q_snprintf( value, valueLen, "%.2f", m_Fit.scale ); break;
 	case ROW_HEIGHT:	Q_strncpy( label, "Up / down", labelLen ); Q_snprintf( value, valueLen, "%+.1f", m_Fit.height ); break;

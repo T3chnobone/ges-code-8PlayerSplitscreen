@@ -55,6 +55,7 @@ public:
 		ROW_HEAD,
 		ROW_IMPORT,
 		ROW_TEXTURE,	// Image for the imported head (re-imports it)
+		ROW_TEXMAP,		// The image on the file's UVs, or wrapped around the head
 		ROW_SIZE,
 		ROW_HEIGHT,
 		ROW_FORWARD,
