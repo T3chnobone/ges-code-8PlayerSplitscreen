@@ -33,6 +33,7 @@
 #include "ge_utils.h"
 #include "ge_weapon.h"
 #include "weapons_resource.h"
+#include "GameEventListener.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -40,6 +41,52 @@
 using namespace vgui;
 
 void GESS_PaintRadar( int slot, C_BasePlayer *pViewer, int vx, int vy, int vw, int vh );
+
+// When each player died (gpGlobals->curtime), from the server's player_death event, so
+// every local player's "Press FIRE to respawn" waits the full time from the moment they
+// died, whatever their body's networked state is doing meanwhile
+#define GESS_MIN_PROMPT_DELAY	4.0f
+
+class CGESSDeathTimes : public CGameEventListener
+{
+public:
+	CGESSDeathTimes() : m_bListening( false )
+	{
+		for ( int i = 0; i <= MAX_PLAYERS; i++ )
+			m_flDiedAt[i] = -1;
+	}
+
+	void Listen()
+	{
+		if ( m_bListening || !gameeventmanager )
+			return;
+		ListenForGameEvent( "player_death" );
+		ListenForGameEvent( "player_spawn" );
+		m_bListening = true;
+	}
+
+	virtual void FireGameEvent( IGameEvent *event )
+	{
+		C_BasePlayer *pPlayer = UTIL_PlayerByUserId( event->GetInt( "userid" ) );
+		if ( !pPlayer || pPlayer->entindex() < 1 || pPlayer->entindex() > MAX_PLAYERS )
+			return;
+		m_flDiedAt[pPlayer->entindex()] = !Q_stricmp( event->GetName(), "player_death" ) ? gpGlobals->curtime : -1;
+	}
+
+	// -1 when not known (or from an earlier map)
+	float DiedAt( int entindex ) const
+	{
+		if ( entindex < 1 || entindex > MAX_PLAYERS )
+			return -1;
+		const float t = m_flDiedAt[entindex];
+		return t > gpGlobals->curtime ? -1 : t;
+	}
+
+private:
+	bool	m_bListening;
+	float	m_flDiedAt[MAX_PLAYERS + 1];
+};
+static CGESSDeathTimes s_DeathTimes;
 
 ConVar ges_ss_hud_hint( "ges_ss_hud_hint", "1", FCVAR_ARCHIVE, "Show 'press START to join' when controllers are connected." );
 
@@ -1106,11 +1153,28 @@ void CGESplitScreenHud::PaintPlayerHud( int slot, C_BasePlayer *pPlayer, const G
 		return;
 	}
 
+	// When each player died (the server's death time is only sent to player 1, so
+	// it's noted here when their body stops being alive)
+	static float s_flDiedAt[GES_SS_MAX_PLAYERS] = { -1, -1, -1, -1, -1, -1, -1, -1 };
 	if ( !pPlayer->IsAlive() )
 	{
-		DrawText( m_hFontLarge, vp.x + vp.w / 2, vp.y + vp.h / 2, Color( 255, 80, 80, 230 ), "Press FIRE to respawn", true );
+		if ( s_flDiedAt[slot] < 0 || s_flDiedAt[slot] > gpGlobals->curtime )
+			s_flDiedAt[slot] = gpGlobals->curtime;
+		// The server's death event is the true moment (the body can stop being alive late)
+		s_DeathTimes.Listen();
+		const float flEventDied = s_DeathTimes.DiedAt( pPlayer->entindex() );
+		const float flDiedAt = flEventDied >= 0 ? Min( flEventDied, s_flDiedAt[slot] ) : s_flDiedAt[slot];
+
+		// Blood or paint runs down the view first: no prompt until the server lets them
+		// respawn (ge_respawndelay, set from cfg/ges_splitscreen_settings.txt in a split
+		// screen match), and never before GESS_MIN_PROMPT_DELAY
+		static ConVarRef ge_respawndelay( "ge_respawndelay" );
+		const float flDelay = Max( GESS_MIN_PROMPT_DELAY, ge_respawndelay.IsValid() ? ge_respawndelay.GetFloat() : 0.0f );
+		if ( gpGlobals->curtime - flDiedAt >= flDelay )
+			DrawText( m_hFontLarge, vp.x + vp.w / 2, vp.y + vp.h / 2, Color( 255, 80, 80, 230 ), "Press FIRE to respawn", true );
 		return;
 	}
+	s_flDiedAt[slot] = -1;
 
 	// Crosshair
 	if ( pSS->GetSlotMenu( slot ) == GESS_MENU_NONE )

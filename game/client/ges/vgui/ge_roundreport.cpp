@@ -28,6 +28,7 @@
 #include "ge_gamerules.h"
 #include "gemp_gamerules.h"
 #include "ge_utils.h"
+#include "ge_splitscreen_client.h"
 
 #include <KeyValues.h>
 #include "IGameUIFuncs.h" // for key bindings
@@ -109,6 +110,11 @@ void CGERoundReport::FireGameEvent( IGameEvent *event )
 	{
 		// Don't show the report if we asked not to
 		if ( !event->GetBool( "showreport" ) )
+			return;
+
+		// A split screen match is one round: only its match report shows
+		if ( !event->GetBool( "isfinal" ) &&
+			( GESplitScreenClient()->IsSplitMatch() || GESplitScreenClient()->HasLocalGuests() ) )
 			return;
 
 		// Always play our music if we are scoring
@@ -666,7 +672,9 @@ void CGERoundReport::SetupAwardPanel( const char *name, CBasePlayer *player, int
 		control->SetControlString( "AwardName", GetAwardPrintName(iAward) );
 		control->SetControlString( "PlayerName", GEUTIL_RemoveColorHints( name ) );
 		// If the local player won this award, make it obvious by showing a check mark
-		if ( player == CBasePlayer::GetLocalPlayer() )
+		// (not in split screen: one report for every player on this screen)
+		if ( player == CBasePlayer::GetLocalPlayer() &&
+			!( GESplitScreenClient()->IsSplitMatch() || GESplitScreenClient()->HasLocalGuests() ) )
 			control->SetControlVisible( "CheckIcon", true );
 
 		char icon[64];

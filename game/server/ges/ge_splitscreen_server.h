@@ -18,6 +18,7 @@
 #include "igamesystem.h"
 #include "ge_splitscreen_shared.h"
 #include "ge_character_data.h"
+#include "ge_customchar.h"
 
 class CGEMPPlayer;
 class CUserCmd;
@@ -67,7 +68,7 @@ private:
 		int		guestUserId;
 		int		ownerUserId;
 		int		slot;
-		char	character[MAX_CHAR_IDENT];
+		char	character[GE_CUSTOMCHAR_SPEC_LEN];	// Identifier, "_random" or a custom spec
 		int		team;			// Chosen team (TEAM_MI6 / TEAM_JANUS), MAX_GE_TEAMS or 0 = auto assign
 		bool	bJoinedGame;
 		float	flOwnerMissingSince;
@@ -89,7 +90,7 @@ private:
 	float	m_flLevelStartTime;	// When the current map started (guests dropped by the map change)
 	int		m_iPendingOwnerUserId;
 	int		m_iPendingSlot;
-	char	m_szPendingChar[MAX_CHAR_IDENT];
+	char	m_szPendingChar[GE_CUSTOMCHAR_SPEC_LEN];
 	int		m_iPendingTeam;
 };
 

@@ -6,6 +6,7 @@
 
 #include "cbase.h"
 #include "ge_charPanel.h"
+#include "ge_customchar.h"
 #include <vgui/ISurface.h>
 
 // memdbgon must be the last include file in a .cpp file!!!
@@ -44,8 +45,10 @@ void GECharPanel::SetCharacter( const CGECharData *pChar )
 	{
 		Q_strncpy( m_szCharIdent, pChar->szIdentifier, MAX_CHAR_IDENT );
 
-		Q_snprintf( m_szOnImage,  128, "charselect/%s_portrait_S", pChar->szIdentifier );
-		Q_snprintf( m_szOffImage, 128, "charselect/%s_portrait_N", pChar->szIdentifier );
+		// "Custom" (ge_customchar.h) has no portrait of its own: it uses random's
+		const char *portrait = Q_stricmp( pChar->szIdentifier, CHAR_CUSTOM_IDENT ) ? pChar->szIdentifier : CHAR_RANDOM_IDENT;
+		Q_snprintf( m_szOnImage,  128, "charselect/%s_portrait_S", portrait );
+		Q_snprintf( m_szOffImage, 128, "charselect/%s_portrait_N", portrait );
 
 		SetImage( m_szOffImage );
 //		m_pCharName->SetText( pChar->szPrintName );

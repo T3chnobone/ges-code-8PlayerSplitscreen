@@ -83,6 +83,7 @@ extern ConVar mp_chattime;
 
 ConVar ge_allowradar		( "ge_allowradar", "1", FCVAR_REPLICATED|FCVAR_NOTIFY, "Allow clients to use their radars." );
 ConVar ge_allowjump			( "ge_allowjump",  "1", FCVAR_REPLICATED|FCVAR_NOTIFY, "Toggles allowing players to jump." );
+ConVar ge_ss_jumpheight		( "ge_ss_jumpheight", "1", FCVAR_REPLICATED|FCVAR_NOTIFY, "Jump height multiplier: 1 normal, 2 high, 4 moon (set by the Split Screen menu's Cheats page).", true, 1.0f, true, 4.0f );
 ConVar ge_ss_aimassist		( "ge_ss_aimassist", "0", FCVAR_REPLICATED, "Split screen: aim assist for the players on controllers (never keyboard and mouse): 0 off, 1 classic GoldenEye (shots home in on an enemy near the crosshair), 2 sticky aim, 3 slowdown near a target." );
 ConVar ge_cheat_bighead		( "ge_cheat_bighead", "0", FCVAR_REPLICATED, "Cheat: every character's head is drawn twice as big, and the head hitbox grows with it (set by the Split Screen menu's Cheats page)." );
 ConVar ge_cheat_paintball		( "ge_cheat_paintball", "0", FCVAR_REPLICATED, "Cheat: bullet impacts on walls and props leave mixed-colour paint splats (set by the Split Screen menu's Cheats page)." );
@@ -1170,6 +1171,43 @@ void CGEMPRules::Think()
 	Assert( GEGameplay() != NULL );
 	GEGameplay()->OnThink();
 
+#ifndef CLIENT_DLL
+	// ge_transition is a tiny empty room the server passes through between two
+	// heavy maps. The switch onward is set up in LevelInitPreEntity, while
+	// gpGlobals->curtime still holds the previous map's clock, so the change was
+	// scheduled as far in the future as the last map had run (minutes in the
+	// small black room). Reschedule it once against this map's clock.
+	static const void *s_pTransitionFixed = NULL;
+	if ( !Q_stricmp( STRING( gpGlobals->mapname ), "ge_transition" ) )
+	{
+		if ( s_pTransitionFixed != this )
+		{
+			s_pTransitionFixed = this;
+			if ( m_flChangeLevelTime > 0 )
+			{
+				m_flChangeLevelTime = gpGlobals->curtime + GE_CHANGELEVEL_DELAY;
+			}
+			else if ( ge_nextnextmap.GetString()[0] )
+			{
+				// LevelInitPreEntity skips it when engine->IsMapValid says no, which this
+				// install's maps can wrongly get: go where we were heading anyway
+				char szNext[64];
+				Q_strncpy( szNext, ge_nextnextmap.GetString(), sizeof( szNext ) );
+				ge_nextnextmap.SetValue( "" );
+				SetupChangeLevel( szNext );
+			}
+			else
+			{
+				SetupChangeLevel();
+			}
+		}
+	}
+	else
+	{
+		s_pTransitionFixed = NULL;
+	}
+#endif
+
 	if ( m_flChangeLevelTime > 0 && gpGlobals->curtime > m_flChangeLevelTime )
 	{
 		ChangeLevel();
@@ -1430,7 +1468,9 @@ void CGEMPRules::SetupChangeLevel( const char *next_level /*= NULL*/ )
 	MapSelectionData *curMapData = m_pMapManager->GetCurrentMapSelectionData();
 	MapSelectionData *nextMapData = m_pMapManager->GetMapSelectionData(m_szNextLevel);
 
-	if ( nextMapData && curMapData && nextMapData->resintensity + curMapData->resintensity >= 10 )
+	// (Playing the same map again needs no transition: its assets are already loaded)
+	if ( nextMapData && curMapData && nextMapData->resintensity + curMapData->resintensity >= 10 &&
+		Q_stricmp( curMapData->mapname, m_szNextLevel ) )
 	{
 		ge_nextnextmap.SetValue(m_szNextLevel);
 		Q_strncpy(m_szNextLevel, "ge_transition", sizeof(m_szNextLevel));

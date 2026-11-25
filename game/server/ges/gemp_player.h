@@ -246,7 +246,7 @@ protected:
 	CNetworkVar( int, m_iSplitAmmo );			// Active weapon reserve ammo, for the owner's split HUD
 
 	bool	m_bSplitHost;
-	char	m_szSplitHostChar[32];			// Profile character (or CHAR_RANDOM_IDENT)
+	char	m_szSplitHostChar[GE_CUSTOMCHAR_SPEC_LEN];	// Profile character (or CHAR_RANDOM_IDENT, or a custom spec)
 	float	m_flSplitHostCharTime;			// When to give a split screen host their character, 0 = not pending
 
 	CNetworkVar( int, m_iMatchKills );			// Kills this match, for the kills / K:D win conditions

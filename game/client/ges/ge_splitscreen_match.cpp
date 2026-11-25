@@ -23,6 +23,9 @@ ConVar ges_paint_deathscreen_style( "ges_paint_deathscreen_style", "0", 0,
 	"Paintball cheat's death screen: 0 the paint colours mixed, 1 one random paint colour per death." );
 
 #define GESS_MATCH_FILE		"cfg/ges_splitscreen_match.txt"
+// Settings for testing, edited by hand (not in the menus)
+#define GESS_SETTINGS_FILE	"cfg/ges_splitscreen_settings.txt"
+#define GESS_DEFAULT_RESPAWN_DELAY	4.0f
 #define GESS_MATCH_PYDIR	"python/ges/GamePlay/*.py"
 
 // Players a split screen server makes room for (8 local players plus some online)
@@ -52,6 +55,24 @@ const GESSCheatDef_t g_GESSCheats[GESS_NUM_CHEATS] =
 	{ "paintball", "Paintball", "Shots leave splats of mixed paint colours on walls and props instead of bullet holes.", "ge_cheat_paintball" },
 };
 
+// The Cheats page's Jump height (ge_ss_jumpheight: how many times higher than normal)
+const GESSChoice_t g_GESSJumpHeights[GESS_NUM_JUMPHEIGHTS] =
+{
+	{ "Normal", 1.0f },
+	{ "High (twice as high)", 2.0f },
+	{ "Moon (four times as high)", 4.0f },
+};
+
+// The Cheats page's Turbo mode: GoldenEye: Source's own online setting (ge_velocity),
+// with the names its server info uses
+const GESSChoice_t g_GESSTurboModes[GESS_NUM_TURBOMODES] =
+{
+	{ "Slow (0.7x speed)", 0.7f },
+	{ "Normal", 1.0f },
+	{ "Turbo (1.5x speed)", 1.5f },
+	{ "Light speed (2x speed)", 2.0f },
+};
+
 static CGESplitScreenMatch s_GESSMatch;
 CGESplitScreenMatch *GESSMatch() { return &s_GESSMatch; }
 
@@ -62,6 +83,8 @@ CGESplitScreenMatch::CGESplitScreenMatch()
 	Q_strncpy( m_Settings.weaponset, GESS_WEAPONSET_RANDOM, sizeof( m_Settings.weaponset ) );
 	m_Settings.teams = false;
 	m_Settings.jump = true;
+	m_Settings.jumpheight = 0;
+	m_Settings.turbo = GESS_TURBO_NORMAL;
 	m_Settings.radar = true;
 	m_Settings.aimassist = 0;
 	for ( int i = 0; i < GESS_MAX_CHEATS; i++ )
@@ -89,6 +112,8 @@ void CGESplitScreenMatch::Load()
 		Q_strncpy( m_Settings.weaponset, pKV->GetString( "weaponset", m_Settings.weaponset ), sizeof( m_Settings.weaponset ) );
 		m_Settings.teams = pKV->GetBool( "teams", m_Settings.teams );
 		m_Settings.jump = pKV->GetBool( "jump", m_Settings.jump );
+		m_Settings.jumpheight = pKV->GetInt( "jumpheight", m_Settings.jumpheight );
+		m_Settings.turbo = pKV->GetInt( "turbo", m_Settings.turbo );
 		m_Settings.radar = pKV->GetBool( "radar", m_Settings.radar );
 		m_Settings.aimassist = pKV->GetInt( "aimassist", m_Settings.aimassist );
 		for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
@@ -116,6 +141,8 @@ void CGESplitScreenMatch::Save()
 	pKV->SetString( "weaponset", m_Settings.weaponset );
 	pKV->SetBool( "teams", m_Settings.teams );
 	pKV->SetBool( "jump", m_Settings.jump );
+	pKV->SetInt( "jumpheight", m_Settings.jumpheight );
+	pKV->SetInt( "turbo", m_Settings.turbo );
 	pKV->SetBool( "radar", m_Settings.radar );
 	pKV->SetInt( "aimassist", m_Settings.aimassist );
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
@@ -284,6 +311,8 @@ void CGESplitScreenMatch::Validate()
 {
 	m_Settings.wincondition = clamp( m_Settings.wincondition, 0, 2 );
 	m_Settings.aimassist = clamp( m_Settings.aimassist, 0, 3 );
+	m_Settings.jumpheight = clamp( m_Settings.jumpheight, 0, GESS_NUM_JUMPHEIGHTS - 1 );
+	m_Settings.turbo = clamp( m_Settings.turbo, 0, GESS_NUM_TURBOMODES - 1 );
 	m_Settings.timelimit = clamp( m_Settings.timelimit, 0, GESS_MATCH_TIME_MAX );
 	m_Settings.killlimit = clamp( m_Settings.killlimit, 1, GESS_MATCH_KILLS_MAX );
 	m_Settings.perdisplay = clamp( m_Settings.perdisplay, 1, GES_SS_MAX_PLAYERS );
@@ -304,15 +333,34 @@ void CGESplitScreenMatch::Validate()
 
 	if ( mode >= 0 )
 	{
-		if ( m_Modes[mode].teams == GESS_TEAMS_NEVER )
-			m_Settings.teams = false;
-		else if ( m_Modes[mode].teams == GESS_TEAMS_ALWAYS )
-			m_Settings.teams = true;
+		// Teams come from the mode: the "(teams)" modes are team games, the rest aren't
+		m_Settings.teams = m_Modes[mode].teams == GESS_TEAMS_ALWAYS;
 	}
+}
+
+// cfg/ges_splitscreen_settings.txt: read each time a match's settings are applied,
+// so an edit takes effect from the next match or map. Written with the defaults
+// when it's missing.
+static void GESS_ApplySettingsFile()
+{
+	KeyValues *pKV = new KeyValues( "SplitScreenSettings" );
+	if ( !pKV->LoadFromFile( filesystem, GESS_SETTINGS_FILE, "MOD" ) )
+	{
+		pKV->SetFloat( "respawn_delay", GESS_DEFAULT_RESPAWN_DELAY );
+		pKV->SaveToFile( filesystem, GESS_SETTINGS_FILE, "MOD" );
+	}
+
+	// Seconds dead before "Press FIRE to respawn" shows and the player can respawn
+	const float flDelay = clamp( pKV->GetFloat( "respawn_delay", GESS_DEFAULT_RESPAWN_DELAY ), 0.0f, 60.0f );
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_respawndelay %g\n", flDelay ) );
+
+	pKV->deleteThis();
 }
 
 void CGESplitScreenMatch::ApplyCvars( bool bMode )
 {
+	GESS_ApplySettingsFile();
+
 	if ( bMode )
 	{
 		// Keep this mode for the whole session instead of rotating scenarios
@@ -340,10 +388,13 @@ void CGESplitScreenMatch::ApplyCvars( bool bMode )
 	// Jumping on or off, for everyone: it's the server's movement rule, so the
 	// guests obey it too
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowjump %d\n", m_Settings.jump ? 1 : 0 ) );
+	// How high (the Cheats page's Jump height)
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_ss_jumpheight %g\n", g_GESSJumpHeights[m_Settings.jumpheight].value ) );
+	// Turbo mode (the Cheats page): everyone's running speed, GoldenEye: Source's online setting
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_velocity %g\n", g_GESSTurboModes[m_Settings.turbo].value ) );
 
 	// The radar, for everyone (the server's setting; a game mode can still force it on)
-	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowradar %d\n", m_Settings.radar ? 1 : 0 ) );
-	// Aim assist for the players on controllers (split screen only; keyboard and mouse never get it)
+	engine->ClientCmd_Unrestricted( VarArgs( "ge_allowradar %d\n", m_Settings.radar ? 1 : 0 ) );	// Aim assist for the players on controllers (split screen only; keyboard and mouse never get it)
 	engine->ClientCmd_Unrestricted( VarArgs( "ge_ss_aimassist %d\n", m_Settings.aimassist ) );
 	// Cheats (the Cheats page), for everyone
 	for ( int i = 0; i < GESS_NUM_CHEATS; i++ )
@@ -378,15 +429,20 @@ void CGESplitScreenMatch::OnLevelInit()
 {
 	// The scenario's own config runs while the map loads and may change the
 	// limits, so set ours again now that we're in. Only for a match we started.
-	if ( m_bPendingApply )
-		m_flApplyTime = gpGlobals->realtime + 1.0f;
-
 	// Joined someone else's server: that's online play, not our match
 	INetChannelInfo *pNet = engine->GetNetChannelInfo();
 	if ( m_bMatchActive && pNet && !pNet->IsLoopback() )
 	{
 		m_bMatchActive = false;
 		m_bPendingApply = false;
+	}
+
+	// (Every map of the match, not just the first: Play Again and the next map
+	// run the mode's config again too)
+	if ( m_bPendingApply || m_bMatchActive )
+	{
+		m_bPendingApply = true;
+		m_flApplyTime = gpGlobals->realtime + 1.0f;
 	}
 }
 

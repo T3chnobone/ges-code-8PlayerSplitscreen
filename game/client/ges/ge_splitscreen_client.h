@@ -205,7 +205,7 @@ public:
 	C_BasePlayer *GetSlotPlayer( int slot ) const;
 	bool IsSlotProfileInUse( int profile, int ignoreSlot ) const;
 	int  NextFreeProfile( int slot, int current ) const;
-	// The next (dir 1) or previous (dir -1) invited profile or Guest that no other
+	// The next (dir 1) or previous (dir -1) profile or Guest that no other
 	// player is using, wrapping round (LB / RB in the lobby)
 	int  CycleProfile( int slot, int current, int dir ) const;
 
@@ -213,7 +213,7 @@ public:
 	void DebugJoin( int slot );
 	void DebugCycleProfile( int slot, int dir );
 
-	// Profile list entries offered in the join menu: invited profiles followed by "Guest"
+	// Profile list entries offered in the join menu: every profile followed by "Guest"
 	int  GetMenuProfileCount() const;
 	int  GetMenuProfileIndex( int entry ) const;	// -1 = Guest/default
 	int  GetPauseMenuCount() const;
@@ -365,6 +365,8 @@ public:
 	// A split screen match started from the Split Screen menu is running on our own server
 	bool IsSplitMatch() const;
 	bool ShouldSuppressGameMenus() const;
+	// Player 1 chose Exit game: the results show, then back to the menu
+	bool IsExitingToMenu() const { return m_flExitToMenuTime > 0; }
 private:
 	void SendJoin( int slot );
 	void LeaveSlot( int slot );
@@ -372,6 +374,10 @@ private:
 	void RestoreHostName();
 
 	int  ComputeButtons( const GESSPadState_t &pad ) const;
+	// Reload button like the N64 game: a tap reloads (when it's let go), held for
+	// ges_ss_hold_use_time it uses (opens doors) instead. Returns IN_RELOAD / IN_USE.
+	int  ReloadHoldButtons( int slot, bool bDown );
+	void ResetReloadHold( int slot );
 	void ComputeMove( const GESSPadState_t &pad, float &forward, float &side ) const;
 	float LookScale( int slot, const GESSPadState_t &pad ) const;
 	// Sticky aim / slowdown near a target (ge_ss_aimassist 2 / 3): turns angles to follow a
@@ -379,6 +385,13 @@ private:
 	float ApplyAimAssist( int slot, C_BasePlayer *pPlayer, QAngle &angles );
 
 	LocalSlot_t m_Slots[GES_SS_MAX_PLAYERS];
+	struct ReloadHold_t
+	{
+		bool	down;			// Reload is held
+		float	downTime;		// When it went down
+		float	reloadUntil;	// A tap sends IN_RELOAD until then
+	};
+	ReloadHold_t m_ReloadHold[GES_SS_MAX_PLAYERS];
 	int		m_iSlotPad[GES_SS_MAX_PLAYERS];	// Controller of each player, -1 = none
 	bool	m_bSlotHadPad[GES_SS_MAX_PLAYERS];	// Had a controller since joining (shows "Controller disconnected")
 

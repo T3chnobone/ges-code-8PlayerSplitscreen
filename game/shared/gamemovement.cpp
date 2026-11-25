@@ -2578,6 +2578,7 @@ void CGameMovement::PlaySwimSound()
 
 #ifdef GE_DLL
 extern ConVar ge_allowjump;
+extern ConVar ge_ss_jumpheight;
 #endif
 
 //-----------------------------------------------------------------------------
@@ -2752,6 +2753,13 @@ bool CGameMovement::CheckJumpButton( void )
 	{
 		flMul = sqrt(2 * GetCurrentGravity() * GAMEMOVEMENT_JUMP_HEIGHT);
 	}
+
+#ifdef GE_DLL
+	// Split screen Jump height cheat: the speed off the ground grows with the
+	// square root of the height (v = sqrt( 2 * g * h ))
+	if ( ge_ss_jumpheight.GetFloat() > 1.0f )
+		flMul *= sqrt( ge_ss_jumpheight.GetFloat() );
+#endif
 
 	// Acclerate upward
 	// If we are ducking...

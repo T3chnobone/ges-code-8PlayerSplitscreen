@@ -50,8 +50,8 @@ The menu has two pages, **Profiles** and **Match**, picked with the tabs at the 
 ### Profiles page
 
 Each profile has a name, a character (or random), controller sensitivity (0.1 to 3.0),
-inverted look, and **Invited**. Only invited profiles are offered when a player joins, and a
-"Guest" entry is always available. Profiles are saved to `cfg/ges_splitscreen_profiles.txt`.
+inverted look. Every profile is offered when a player joins (there is no Invited setting any
+more), and a "Guest" entry is always available. Profiles are saved to `cfg/ges_splitscreen_profiles.txt`.
 The page also lists connected controllers and which players are ready (the lobby).
 
 ### Using the menu with a controller
@@ -95,7 +95,6 @@ On the Match page you pick:
   weapons, so the list is greyed out for it.
 - **Team game**: MI6 vs Janus. It is greyed out for modes that are always or never team
   games (for example the Golden Gun is never a team game, Capture the Key always is).
-- **Jumping allowed**: `ge_allowjump` for everyone in the match (guests too). Jump is A / Cross.
 - **Radar**: `ge_allowradar` for everyone in the match. Each player sees GoldenEye's own radar in
   their view (see Changes, 15 November). A game mode that forces the radar on still shows it.
 - **Aim assist** (`ge_ss_aimassist`, saved as `aimassist`): only for the players on controllers
@@ -122,6 +121,11 @@ On the Match page you pick:
     paint colours run down your screen instead of blood (`materials/VGUI/hud/paintscreen`). The
     dust puffs on walls are unchanged. GoldenEye's own Paintball mode
     (`ge_paintball`, Create Server) is separate and unchanged.
+  - *Jumping* (`ge_allowjump`, saved as `jump`): for everyone in the match (guests too). Jump is
+    A / Cross. *Jump height* (`ge_ss_jumpheight`, saved as `jumpheight`): Normal, High (twice as
+    high) or Moon (four times as high), greyed out while jumping is off.
+  - *Turbo mode* (`ge_velocity`, saved as `turbo`): GoldenEye: Source's own online Turbo mode,
+    how fast everyone runs: Slow (0.7x), Normal, Turbo (1.5x) or Light speed (2x).
 - **Win condition**:
   - *Timed, highest score*: the mode's normal scoring when the time limit runs out.
   - *First to N kills*: the match ends as soon as a player (or team) reaches the kill limit.
@@ -179,7 +183,7 @@ out again for the players who are playing. The spare cell lists who is in while 
 
 - **In the menus (lobby)**: profiles are chosen here, not in the game. Player 1 is always in; the
   other players press START to join (START again leaves). Each player then rotates through the
-  invited profiles and Guest with LB / RB (profiles another player is using are skipped). The
+  profiles and Guest with LB / RB (profiles another player is using are skipped). The
   Split Screen menu's Profiles page lists who is in and with which profile. Everyone joins with
   their profile when the match starts; nobody gets a picker at the start of the game.
 - **In a game**: a player presses START and joins at once with the next free profile.
@@ -277,10 +281,10 @@ the next round" in that player's own view.
 | Left trigger | Aim mode |
 | RB | Alt fire / zoom |
 | A | Jump (when the match allows jumping) |
-| X | Reload |
+| X | Reload (tap) / use: open doors, press buttons (hold briefly) |
 | B / left stick click | Crouch |
 | Y / LB | Next / previous weapon |
-| Right stick click | Use (doors, buttons) |
+| Right stick click | Use (doors, buttons) straight away |
 | Back | Nothing (the leaderboard is on START) |
 | Start | Join / leaderboard and menu |
 
@@ -318,6 +322,18 @@ borderless and the size of both monitors. You can also launch with
 With `ges_ss_dualscreen 2` (the default), a window wider than 2.6:1 is treated as two
 screens: the first "players per display" players go on the left half and the rest on the right.
 
+## Playing online with Steam friends
+
+Host with **Create Server** (internet, not LAN). The engine also opens the game on Steam's relay
+network (`sv_use_steam_networking 1`), so friends can join without port forwarding, and it tells
+Steam how to reach the server you're on. Friends who have the mod installed can then use
+**Join Game** on you in their Steam friends list.
+
+**INVITE FRIENDS** in the in-game menu (`ges_invite_friends`) opens the Steam overlay's friends
+list, where **Invite to Game** on a friend sends them an invite. With the overlay off, it opens Steam's own
+friends window instead, where the same right-click works. Without Steam, `status` in the console shows the relay address (`udp/ip`, starting 169.254), which a
+friend can join with `connect <address>`; it changes every time a map loads.
+
 ## Console variables
 
 | Cvar | Default | Meaning |
@@ -334,6 +350,7 @@ screens: the first "players per display" players go on the left half and the res
 | `ges_ss_aim_sticky` / `ges_ss_aim_slowdown` / `ges_ss_aim_radius` | 0.85 / 0.4 / 1.5 | Sticky aim strength, slowdown speed, degrees around a target that count as on it |
 | `ges_ss_pad_deadzone` | 0.22 | Fixed stick dead zone (when not measured, or with auto off) |
 | `ges_ss_menu_pad_nav` / `ges_ss_menu_hide_mouse` | 1 / 0 | Controller drives the game's menus / hide the mouse there |
+| `ges_ss_hold_use_time` | 0.25 | Seconds reload (X, or the keyboard's reload key) must be held to use instead of reloading (0: reload only reloads) |
 | `ges_ss_pad_backend` | auto | `sdl` or `xinput` |
 | `ge_wincondition` | 0 | 0 score, 1 kills, 2 kill/death ratio |
 | `ge_killlimit` | 0 | Kills that end the match with `ge_wincondition 1` (0 = none) |
@@ -581,6 +598,15 @@ screens: the first "players per display" players go on the left half and the res
   patches) is used; `painteffect_c1-8` (one colour each) stay in for
   `ges_paint_deathscreen_style 1`, one random paint colour per death (default 0, mixed).
 
+## Changes (19 November)
+- **Creator credit on the main menu.** "Split Screen mod by" and the T3chnobone 007 logo sit under
+  the GoldenEye: Source title, right-aligned with the end of "SOURCE". It is one 1024x256 RGBA
+  texture (`materials/VGUI/splitscreen/creator_credit`, text, logo and a soft dark shadow so it reads
+  on the white iris), drawn by `CGESSCreatorCredit` in `ge_splitscreen_menu.cpp` only on the main
+  menu, placed from the screen centre in units of the screen height so it follows the background
+  at any resolution. Made by `splitscreen_resources/tools/make_creator_credit.py` (Pillow, SciPy)
+  from the logo artwork: it cuts the logo out of its black background and writes the VTF.
+
 ## Changes (17 November)
 - **Menus scale with the resolution.** One factor for 1080p, `GE_MENU_SCALE_1080` (1.5, in
   `game/client/ges/vgui/ge_panelhelper.h`); 1440p is 1.5x that and 4K 2.5x (a bit more than the
@@ -621,3 +647,45 @@ screens: the first "players per display" players go on the left half and the res
   back, and B still closes the START menu.
 - **SPLIT SCREEN on the main menu opens the Match page** instead of Profiles. The Profiles tab (or
   Y on player 1's controller) is one press away; `ges_splitscreen_profiles` still opens Profiles.
+
+## Changes (20 November)
+- **Mod version and update check on the main menu.** The bottom right corner of the main menu shows
+  "Split Screen Mod v0.3". Once per game start the newest GitHub release is fetched
+  (`api.github.com/repos/T3chnobone/ges-code-8PlayerSplitscreen/releases/latest`, through Steam's
+  HTTP client, which does HTTPS) and its tag is compared with the built-in version. If it is newer a
+  gold line under it says "Update available: v0.4 - click to download", and a click opens that
+  release's page, where the setup is. No network or no Steam just leaves the version showing.
+  `CGESSVersionLabel` in `game/client/ges/vgui/ge_splitscreen_version.cpp`.
+  - **Bump `GES_SS_VERSION` in `ge_splitscreen_version.h` for every release**, to the release tag
+    without the "v" (tag `v0.3` -> `"0.3"`).
+  - `ges_ss_version` prints the version and what the check found. `ges_ss_check_update` checks again;
+    `ges_ss_check_update 9.9` pretends 9.9 is the newest release, to see the message.
+    `ges_ss_update_check 0` turns the check off.
+
+## Changes (24 November)
+
+- **Hold reload to open doors**, like the N64 game: tapping X / Square reloads, holding it for a
+  quarter of a second uses instead (open doors, press buttons) for as long as it stays held, and
+  doesn't reload. The reload is sent when a tap is let go. The same goes for player 1's keyboard
+  reload key (the keyboard's use key still works too). The right stick click still uses straight
+  away. `ges_ss_hold_use_time` sets the hold time; 0 puts reload back to plain reload.
+
+- **Jump and Turbo options on the Cheats page.** *Jumping* moved from the Match page to the Cheats
+  page, with a new *Jump height* choice (Normal, High 2x, Moon 4x) under it: a replicated
+  `ge_ss_jumpheight` that `CGameMovement::CheckJumpButton` multiplies the take-off speed by the
+  square root of, so movement prediction matches the server. *Turbo mode* sets the online game's
+  `ge_velocity` (Slow 0.7x, Normal, Turbo 1.5x, Light speed 2x); the scoreboard and server info show
+  "Turbo" the same as online. Both are saved with the match (`jumpheight`, `turbo`) and set for
+  every match; like the other match settings they stay set afterwards, so set `ge_velocity 1` and
+  `ge_ss_jumpheight 1` before hosting online in the same session.
+- **Radar** now has its own row on the Match page: "Radar (shows where the other players are)".
+
+- **Team games come from the mode.** The Match page's Team game tick box is gone: Capture the Key
+  (teams) and Tournament Deathmatch (teams) are team games, every other mode plays without teams.
+- **No Radar is a cheat.** The Match page's Radar tick box moved to the Cheats page as "No Radar"
+  (ticked: nobody gets the radar). Still saved as `radar` in the match settings.
+- **Play Again / Return to Menu.** 5 seconds after a split screen match ends, a bar at the bottom
+  offers Play Again (same map and settings) or Return to Menu; the server holds the results meanwhile
+  (`ges_ss_matchend_hold`). `ges_ss_matchend_delay` sets the wait, `ges_ss_matchend_prompt 0` turns it
+  off, `ges_ss_debug_matchend` shows it straight away.
+- **ge_transition no longer strands you** in its small black room: it moves on 1 second after loading.

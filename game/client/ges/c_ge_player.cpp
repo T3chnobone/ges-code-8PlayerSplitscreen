@@ -29,6 +29,7 @@
 #include "ge_musicmanager.h"
 
 #include "ge_splitscreen_client.h"
+#include "ge_customhead.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -50,6 +51,10 @@ IMPLEMENT_CLIENTCLASS_DT(C_GEPlayer, DT_GE_Player, CGEPlayer)
 
 	RecvPropEHandle( RECVINFO( m_hHat ) ),
 	RecvPropInt( RECVINFO( m_takedamage ) ),
+
+	RecvPropInt( RECVINFO( m_iCustomHeadChar ) ),
+	RecvPropInt( RECVINFO( m_iCustomHeadSkin ) ),
+	RecvPropString( RECVINFO( m_szCustomHeadFile ) ),
 END_RECV_TABLE()
 
 BEGIN_PREDICTION_DATA( C_GEPlayer )
@@ -78,6 +83,11 @@ C_GEPlayer::C_GEPlayer()
 	m_iNewZoomOffset = 0;
 	m_bSentUnlockCode = false;
 
+	m_iCustomHeadChar = m_iAppliedHeadChar = -1;
+	m_iCustomHeadSkin = m_iAppliedHeadSkin = 0;
+	m_szCustomHeadFile[0] = m_szAppliedHeadFile[0] = '\0';
+	m_bAppliedHead = false;
+
 	// Load our voice overhead icons if not done yet
 	if ( m_pDM_VoiceHeadMaterial == NULL )
 	{
@@ -94,6 +104,9 @@ C_GEPlayer::C_GEPlayer()
 
 C_GEPlayer::~C_GEPlayer( void )
 {
+	if ( m_hCustomHead.Get() )
+		m_hCustomHead->Destroy();
+
 	// Make sure we resume our music if we get destroyed right before level load
 	GEMusicManager()->ResumeMusic();
 
@@ -325,6 +338,29 @@ void C_GEPlayer::ItemPreFrame( void )
 
 void C_GEPlayer::ClientThink( void )
 {
+	// Split screen guests aren't the engine's local player, so the zoom below never
+	// ran for them and aiming down the sights only zoomed player 1's view. Their aim
+	// mode comes from the server (m_flFullZoomTime); zoom their view to match.
+	if ( !IsLocalPlayer() && GESS_IsLocalGuest( this ) )
+	{
+		CGEWeapon *pGEWeapon = ToGEWeapon( GetActiveWeapon() );
+		int zoom = 0;
+		if ( IsAlive() && !IsObserver() && pGEWeapon && pGEWeapon->IsWeaponVisible() && StartedAimMode() )
+			zoom = (int) pGEWeapon->GetZoomOffset();
+
+		if ( zoom == 0 && ( !IsAlive() || IsObserver() ) )
+		{
+			// Dead or spectating: unzoom straight away, as player 1 does
+			if ( m_flZoomEnd != 0 || GetZoom() != 0 )
+				SetZoom( 0, true );
+		}
+		else if ( zoom != (int) m_flZoomEnd )
+		{
+			SetZoom( zoom );
+		}
+		m_iNewZoomOffset = zoom;
+	}
+
 	if ( IsLocalPlayer() )
 	{
 		// See if we need to zoom in/out based on our aim mode
@@ -398,6 +434,41 @@ void C_GEPlayer::ClientThink( void )
 	BaseClass::ClientThink();
 }
 
+// Puts the networked custom head on the body (or takes it off). Only does work
+// when the choice changed, since this runs on every update from the server.
+void C_GEPlayer::UpdateCustomHead()
+{
+	if ( m_bAppliedHead && m_iAppliedHeadChar == m_iCustomHeadChar && m_iAppliedHeadSkin == m_iCustomHeadSkin
+		&& !Q_strcmp( m_szAppliedHeadFile, m_szCustomHeadFile ) )
+		return;
+
+	// The body has to be loaded first
+	if ( !GetModelPtr() )
+		return;
+
+	m_bAppliedHead = true;
+	m_iAppliedHeadChar = m_iCustomHeadChar;
+	m_iAppliedHeadSkin = m_iCustomHeadSkin;
+	Q_strncpy( m_szAppliedHeadFile, m_szCustomHeadFile, sizeof( m_szAppliedHeadFile ) );
+
+	if ( m_hCustomHead.Get() )
+		m_hCustomHead->Destroy();
+	m_hCustomHead = NULL;
+
+	// An imported head this PC doesn't have: the body keeps its own head
+	char model[MAX_PATH];
+	int skin;
+	if ( !GECustomHead_GetModel( m_iCustomHeadChar, m_iCustomHeadSkin, m_szCustomHeadFile, model, sizeof( model ), skin ) )
+		return;
+
+	C_GECustomHead *pHead = C_GECustomHead::Create( this, model, skin );
+	if ( pHead )
+	{
+		pHead->SetOwnerPlayer( this );
+		m_hCustomHead = pHead;
+	}
+}
+
 void C_GEPlayer::PostDataUpdate( DataUpdateType_t updateType )
 {
 	// Looks like we spawned, cancel any sound modifiers that are active
@@ -414,6 +485,8 @@ void C_GEPlayer::PostDataUpdate( DataUpdateType_t updateType )
 	}
 
 	BaseClass::PostDataUpdate( updateType );
+
+	UpdateCustomHead();
 
 	// This occurs after the baseclass cause we have to setup the local player first
 	if ( updateType == DATA_UPDATE_CREATED && IsLocalPlayer() )

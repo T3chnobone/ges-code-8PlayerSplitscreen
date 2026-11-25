@@ -1,6 +1,6 @@
 ; GoldenEye: Source Split Screen Mod - setup wizard (NSIS 3, Unicode)
 ;
-; Build:  makensis -DVERSION=0.1.0 -DGAME_TITLE="GoldenEye: Source - Split Screen Mod" ges-splitscreen-setup.nsi
+; Build:  makensis -DVERSION=0.3.0 -DGAME_TITLE="GoldenEye: Source - Split Screen Mod" ges-splitscreen-setup.nsi
 ; Expects the files to install in .\payload\ laid out like the gesource folder
 ; (bin\client.dll, bin\server.dll, ..., resource\*.res, materials\..., gameinfo.txt, steam.inf).
 
@@ -9,7 +9,7 @@ ManifestDPIAware true
 SetCompressor /SOLID lzma
 
 !ifndef VERSION
-  !define VERSION "0.1.0"
+  !define VERSION "0.3.0"
 !endif
 !ifndef GAME_TITLE
   !define GAME_TITLE "GoldenEye: Source - Split Screen Mod"
@@ -22,13 +22,28 @@ SetCompressor /SOLID lzma
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\GESSplitScreenMod"
 !define BACKUP_DIR "splitscreen_backup"
 
-Name "${PRODUCT} ${VERSION}"
-OutFile "GES-SplitScreenMod-Setup-${VERSION}.exe"
+!define MOD_ZIP_NAME "GES-SplitScreenMod.zip"
+!ifndef MOD_ZIP_URL   ; a test build can point this at a local server
+  !define MOD_ZIP_URL "https://github.com/${REPO_URL_PATH}/releases/latest/download/${MOD_ZIP_NAME}"
+!endif
+!ifdef WEB
+  ; Web setup: always installs the newest release, so its name has no version
+  Name "${PRODUCT}"
+  OutFile "GES-SplitScreenMod-Setup.exe"
+!else
+  Name "${PRODUCT} ${VERSION}"
+  OutFile "GES-SplitScreenMod-Setup-${VERSION}.exe"
+!endif
 RequestExecutionLevel admin
 InstallDir "$PROGRAMFILES32\Steam\steamapps\sourcemods\gesource"
-BrandingText "${PRODUCT} ${VERSION}"
+BrandingText "${PRODUCT}"
 
-VIProductVersion "${VERSION}.0"
+; The Windows version resource only takes numbers: 0.2.0-test -> 0.2.0.0
+!searchparse /noerrors "${VERSION}" "" VERSION_NUM "-"
+!ifndef VERSION_NUM
+  !define VERSION_NUM "${VERSION}"
+!endif
+VIProductVersion "${VERSION_NUM}.0"
 VIAddVersionKey "ProductName" "${PRODUCT}"
 VIAddVersionKey "FileDescription" "${PRODUCT} setup"
 VIAddVersionKey "FileVersion" "${VERSION}"
@@ -43,8 +58,13 @@ VIAddVersionKey "LegalCopyright" "GoldenEye: Source by Team GoldenEye: Source. U
 !define MUI_ABORTWARNING
 !define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
 !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
-!define MUI_WELCOMEPAGE_TITLE "${PRODUCT} ${VERSION}"
-!define MUI_WELCOMEPAGE_TEXT "This adds local split screen for up to 8 players with controllers to GoldenEye: Source, plus Big Head, Paintball, aim assist and the other new match options.$\r$\n$\r$\nYou need Steam, Source SDK Base 2013 Multiplayer (free on Steam) and GoldenEye: Source 5.0.6 installed.$\r$\n$\r$\nThe files this replaces are backed up first, and the uninstaller puts them back.$\r$\n$\r$\nPlease quit GoldenEye: Source before continuing."
+!define MUI_WELCOMEPAGE_TITLE "${PRODUCT}"
+!ifdef WEB
+  !define WELCOME_EXTRA "Setup downloads the newest version of the mod from GitHub, so you need an internet connection.$\r$\n$\r$\n"
+!else
+  !define WELCOME_EXTRA ""
+!endif
+!define MUI_WELCOMEPAGE_TEXT "This adds local split screen for up to 8 players with controllers to GoldenEye: Source, plus Big Head, Paintball, aim assist and the other new match options.$\r$\n$\r$\nYou need Steam, Source SDK Base 2013 Multiplayer (free on Steam) and GoldenEye: Source 5.0.6 installed.$\r$\n$\r$\n${WELCOME_EXTRA}The files this replaces are backed up first, and the uninstaller puts them back.$\r$\n$\r$\nPlease quit GoldenEye: Source before continuing."
 !define MUI_DIRECTORYPAGE_TEXT_TOP "Setup found this GoldenEye: Source folder. If yours is somewhere else, pick the gesource folder that holds gameinfo.txt."
 !define MUI_DIRECTORYPAGE_TEXT_DESTINATION "GoldenEye: Source folder (gesource)"
 !define MUI_FINISHPAGE_SHOWREADME "https://github.com/${REPO_URL_PATH}/blob/ges-splitscreen/INSTALL_SPLITSCREEN.md#controller-quick-start"
@@ -196,36 +216,129 @@ FunctionEnd
 
 ; Back up a file once (first install keeps the original), or note that it was new.
 ; A file the mod added is marked under _added\, so installing again over the mod
-; doesn't back up the mod's own copy as if it were an original.
-!macro BackupFile REL
-  ${If} ${FileExists} "$INSTDIR\${BACKUP_DIR}\_added\${REL}"
+; doesn't back up the mod's own copy as if it were an original.  $R1 = path relative to gesource.
+Function BackupRel
+  ${If} ${FileExists} "$INSTDIR\${BACKUP_DIR}\_added\$R1"
     ; added by an earlier install of the mod: nothing to back up
-  ${ElseIf} ${FileExists} "$INSTDIR\${REL}"
-    ${IfNot} ${FileExists} "$INSTDIR\${BACKUP_DIR}\${REL}"
-      ${GetParent} "$INSTDIR\${BACKUP_DIR}\${REL}" $1
+  ${ElseIf} ${FileExists} "$INSTDIR\$R1"
+    ${IfNot} ${FileExists} "$INSTDIR\${BACKUP_DIR}\$R1"
+      ${GetParent} "$INSTDIR\${BACKUP_DIR}\$R1" $1
       CreateDirectory "$1"
-      CopyFiles /SILENT "$INSTDIR\${REL}" "$INSTDIR\${BACKUP_DIR}\${REL}"
+      CopyFiles /SILENT "$INSTDIR\$R1" "$INSTDIR\${BACKUP_DIR}\$R1"
     ${EndIf}
   ${Else}
     FileOpen $9 "$INSTDIR\${BACKUP_DIR}\new_files.txt" a
     FileSeek $9 0 END
-    FileWrite $9 "${REL}$\r$\n"
+    FileWrite $9 "$R1$\r$\n"
     FileClose $9
-    ${GetParent} "$INSTDIR\${BACKUP_DIR}\_added\${REL}" $1
+    ${GetParent} "$INSTDIR\${BACKUP_DIR}\_added\$R1" $1
     CreateDirectory "$1"
-    FileOpen $9 "$INSTDIR\${BACKUP_DIR}\_added\${REL}" w
+    FileOpen $9 "$INSTDIR\${BACKUP_DIR}\_added\$R1" w
     FileClose $9
   ${EndIf}
+FunctionEnd
+!macro BackupFile REL
+  StrCpy $R1 "${REL}"
+  Call BackupRel
 !macroend
+
+!ifdef WEB
+Var ModVersion
+; Download the newest mod zip from the latest GitHub release (or use a zip next to the exe),
+; back up what it replaces and copy it in.
+Function WebInstall
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\ges_fetch.ps1" "ges_fetch.ps1"
+  retry:
+  DetailPrint "Getting the newest Split Screen Mod files from GitHub..."
+  nsExec::ExecToLog 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\ges_fetch.ps1" -Url "${MOD_ZIP_URL}" -Local "$EXEDIR\${MOD_ZIP_NAME}" -Out "$PLUGINSDIR\mod"'
+  Pop $0
+  ${If} $0 != 0
+    SetErrorLevel $0   ; a silent run exits with the reason: 2 download failed, 3 checksum mismatch, 4 not the mod zip
+    MessageBox MB_ABORTRETRYIGNORE|MB_ICONEXCLAMATION "Setup couldn't get the Split Screen Mod files (error $0). Check your internet connection and click Retry.$\r$\n$\r$\nTo install without internet, download ${MOD_ZIP_NAME} from the Releases page and put it next to this setup. Click Ignore to open the Releases page." /SD IDABORT IDRETRY retry IDIGNORE openpage
+    Abort "Couldn't get the mod files."
+    openpage:
+    ExecShell "open" "https://github.com/${REPO_URL_PATH}/releases/latest"
+    Abort "Couldn't get the mod files."
+  ${EndIf}
+  StrCpy $ModVersion ""
+  ${If} ${FileExists} "$PLUGINSDIR\mod\splitscreen_version.txt"
+    FileOpen $9 "$PLUGINSDIR\mod\splitscreen_version.txt" r
+    FileRead $9 $ModVersion
+    FileClose $9
+    Push $ModVersion
+    Call TrimNewline
+    Pop $ModVersion
+  ${EndIf}
+  DetailPrint "Installing Split Screen Mod $ModVersion"
+  ; Every listed file must be in the download, or backups would go to the wrong names
+  FileOpen $8 "$PLUGINSDIR\filelist.txt" r
+  FileRead $8 $R1
+  chk_loop:
+    StrCmp $R1 "" chk_done
+    Push $R1
+    Call TrimNewline
+    Pop $R1
+    StrCmp $R1 "" chk_next
+    ${IfNot} ${FileExists} "$PLUGINSDIR\mod\$R1"
+      FileClose $8
+      SetErrorLevel 5
+      MessageBox MB_OK|MB_ICONSTOP "Setup couldn't read the downloaded file list ($R1). Nothing was changed." /SD IDOK
+      Abort "Couldn't read the downloaded file list."
+    ${EndIf}
+    chk_next:
+    FileRead $8 $R1
+    Goto chk_loop
+  chk_done:
+  FileClose $8
+  ; Only now touch gesource: a failed download leaves it exactly as it was
+  CreateDirectory "$INSTDIR\${BACKUP_DIR}"
+  ; Back up every file the download will replace
+  FileOpen $8 "$PLUGINSDIR\filelist.txt" r
+  FileRead $8 $R1
+  bk_loop:
+    StrCmp $R1 "" bk_done
+    Push $R1
+    Call TrimNewline
+    Pop $R1
+    StrCmp $R1 "" +2
+    Call BackupRel
+    FileRead $8 $R1
+    Goto bk_loop
+  bk_done:
+  FileClose $8
+  CopyFiles /SILENT "$PLUGINSDIR\mod\*.*" "$INSTDIR"
+FunctionEnd
+
+Function TrimNewline
+  Exch $0
+  Push $1
+  loop:
+    StrCpy $1 $0 1 -1
+    StrCmp $1 "$\r" trim
+    StrCmp $1 "$\n" trim
+    Goto out
+  trim:
+    StrCpy $0 $0 -1
+    Goto loop
+  out:
+  Pop $1
+  Exch $0
+FunctionEnd
+!endif
 
 Section "Split Screen Mod (required)" SecCore
   SectionIn RO
+!ifdef WEB
+  Call WebInstall   ; creates the backup folder only once the download worked
+!else
   CreateDirectory "$INSTDIR\${BACKUP_DIR}"
   !include "payload_backup.nsh"   ; generated: one BackupFile line per payload file
 
   SetOutPath "$INSTDIR"
   SetOverwrite on
   File /r "payload\*.*"
+!endif
 
 
   SetOutPath "$INSTDIR\${BACKUP_DIR}"
@@ -233,7 +346,11 @@ Section "Split Screen Mod (required)" SecCore
   WriteUninstaller "$INSTDIR\${BACKUP_DIR}\Uninstall Split Screen Mod.exe"
 
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "${PRODUCT}"
+!ifdef WEB
+  WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "$ModVersion"
+!else
   WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
+!endif
   WriteRegStr HKLM "${UNINST_KEY}" "Publisher" "T3chnobone"
   WriteRegStr HKLM "${UNINST_KEY}" "URLInfoAbout" "https://github.com/${REPO_URL_PATH}"
   WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"

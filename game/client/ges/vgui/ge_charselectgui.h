@@ -25,6 +25,9 @@
 #include <vgui/KeyCode.h>
 #include "ge_CreditsText.h"
 #include "GameEventListener.h"
+#include "ge_customchar.h"
+
+class CGECustomCharPicker;
 #include "ge_character_data.h"
 
 namespace vgui {
@@ -62,6 +65,7 @@ public:
 	MESSAGE_FUNC_PARAMS( CharacterClicked,		 "CharClicked",			data );
 	MESSAGE_FUNC_PARAMS( CharacterDoubleClicked, "CharDoubleClicked",	data );
 	MESSAGE_FUNC_PARAMS( SkinClicked,			 "SkinClicked",			data );
+	MESSAGE_FUNC_PARAMS( OnCustomCharPicked,	 "CustomCharPicked",	data );
 
 protected:
 	// VGUI2 overrides
@@ -92,6 +96,8 @@ private:
 
 	int		m_iCurrPage;
 	char	m_szCurrChar[MAX_CHAR_IDENT];
+	char	m_szCustomSpec[GE_CUSTOMCHAR_SPEC_LEN];	// Last custom character (body + head)
+	::CGECustomCharPicker *m_pCustomPicker;
 	int		m_iCurrSkin;
 };
 

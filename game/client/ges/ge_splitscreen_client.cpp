@@ -14,6 +14,7 @@
 #include "ge_splitscreen_match.h"
 #include "ge_musicmanager.h"
 #include "ge_character_data.h"
+#include "ge_customchar.h"
 #include "c_gemp_player.h"
 #include "c_hl2mp_player.h"
 #include "usercmd.h"
@@ -21,6 +22,7 @@
 #include "gamerules.h"
 #include "view.h"
 #include "vgui/ISurface.h"
+#include "vgui/ISystem.h"
 #include "vgui/IInput.h"
 #include "vgui/IInputInternal.h"
 #include "vgui/ILocalize.h"
@@ -35,6 +37,8 @@ void GESS_UpdateMenuMouse( bool bWant );
 #include "ge_shareddefs.h"
 #include "inetchannelinfo.h"
 #include "inputsystem/iinputsystem.h"
+#include "clientsteamcontext.h"
+#include "steam/steam_api.h"
 
 #ifdef _WIN32
 	#define WIN32_LEAN_AND_MEAN
@@ -43,6 +47,10 @@ void GESS_UpdateMenuMouse( bool bWant );
 	#undef CreateEvent
 	#undef PlaySound
 #endif
+
+// ge_splitscreen_matchend.cpp: Play Again / Return to Menu after a match
+bool GESS_MatchEnd_Update();
+void GESS_MatchEnd_Reset();
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -368,6 +376,7 @@ CGESplitScreenClient::CGESplitScreenClient() : CAutoGameSystemPerFrame( "CGESpli
 		s.calRow = GESS_CALROW_REMEASURE;
 		s.calPad = -1;
 		memset( s.calBackup, 0, sizeof( s.calBackup ) );
+		ResetReloadHold( i );
 		m_GuestProfile[i] = CGESSProfiles::DefaultProfile();
 		m_iSlotPad[i] = -1;
 		m_bSlotHadPad[i] = false;
@@ -446,6 +455,8 @@ void CGESplitScreenClient::Shutdown()
 
 void CGESplitScreenClient::LevelInitPostEntity()
 {
+	GESS_MatchEnd_Reset();
+
 	// Re-apply the split screen match limits after the scenario config ran
 	GESSMatch()->OnLevelInit();
 
@@ -482,6 +493,8 @@ void CGESplitScreenClient::LevelInitPostEntity()
 
 void CGESplitScreenClient::LevelShutdownPreEntity()
 {
+	GESS_MatchEnd_Reset();
+
 	m_bSplitActive = false;
 	m_bPregame = false;
 	SetRenderSlot( -1 );
@@ -724,7 +737,7 @@ const char *CGESplitScreenClient::GetSlotName( int slot ) const
 	return s_szName[slot];
 }
 
-// The next invited profile after "current" that no other player is using,
+// The next profile after "current" that no other player is using,
 // wrapping round to "Guest" (-1) after the last one
 int CGESplitScreenClient::NextFreeProfile( int slot, int current ) const
 {
@@ -750,7 +763,7 @@ int CGESplitScreenClient::NextFreeProfile( int slot, int current ) const
 
 int CGESplitScreenClient::CycleProfile( int slot, int current, int dir ) const
 {
-	const int count = GetMenuProfileCount();	// invited profiles, then Guest
+	const int count = GetMenuProfileCount();	// every profile, then Guest
 	if ( count <= 0 )
 		return current;
 
@@ -789,13 +802,13 @@ bool CGESplitScreenClient::IsSlotProfileInUse( int profile, int ignoreSlot ) con
 
 int CGESplitScreenClient::GetMenuProfileCount() const
 {
-	return GESSProfiles()->GetInvitedCount() + 1;
+	return GESSProfiles()->Count() + 1;	// Every profile, then Guest
 }
 
 int CGESplitScreenClient::GetMenuProfileIndex( int entry ) const
 {
-	if ( entry < GESSProfiles()->GetInvitedCount() )
-		return GESSProfiles()->GetInvited( entry );
+	if ( entry >= 0 && entry < GESSProfiles()->Count() )
+		return entry;
 	return -1;
 }
 
@@ -1291,6 +1304,13 @@ void CGESplitScreenClient::Update( float frametime )
 	UpdateHostLook( dt );
 	UpdatePregame();
 
+	// After a split screen match: Play Again / Return to Menu (uses the presses first)
+	if ( GESS_MatchEnd_Update() )
+	{
+		for ( int i = 0; i < GES_SS_MAX_PLAYERS; i++ )
+			m_Slots[i].menu = GESS_MENU_NONE;
+	}
+
 	if ( ges_ss_enable.GetBool() )
 	{
 		for ( int i = 0; i < GES_SS_MAX_PLAYERS; i++ )
@@ -1714,7 +1734,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 	// ---- Not in a game: guests can get ready from the menus ("lobby") ----
 	if ( !bInGame )
 	{
-		// Profiles are chosen here, in the menus: LB / RB rotate through the invited
+		// Profiles are chosen here, in the menus: LB / RB rotate through the
 		// profiles (and Guest) nobody else is using. Player 1 is always in; the
 		// others press START to join (and again to leave).
 		const int dir = pad.connected ? ( pad.WasPressed( GESS_PAD_RB ) ? 1 : ( pad.WasPressed( GESS_PAD_LB ) ? -1 : 0 ) ) : 0;
@@ -1722,7 +1742,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 		if ( slot == 0 )
 		{
 			// Player 1 isn't assumed to be the Steam account: they get a profile
-			// like everyone else (the first free invited one)
+			// like everyone else (the first free one)
 			if ( s.profile < 0 && !s.profileChosen )
 				s.profile = NextFreeProfile( slot, -1 );
 			if ( dir )
@@ -1742,7 +1762,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 		{
 			if ( s.state == GESS_SLOT_EMPTY )
 			{
-				// Ready up with the first invited profile nobody else is using
+				// Ready up with the first profile nobody else is using
 				s.profile = NextFreeProfile( slot, -1 );
 				s.state = GESS_SLOT_JOINING;
 				s.joinSentTime = -1000.0f;
@@ -1779,7 +1799,7 @@ void CGESplitScreenClient::UpdateSlot( int slot, float dt )
 	if ( slot == 0 && !m_bPregame && ShouldSuppressGameMenus() && !m_bHostAppliedThisLevel && s.menu == GESS_MENU_NONE && !enginevgui->IsGameUIVisible() )
 	{
 		// Never a spectator, and no picker: play straight away with the profile chosen
-		// in the Split Screen menu (or the first free invited one) and the team from
+		// in the Split Screen menu (or the first free one) and the team from
 		// the profile menu (auto assign if none).
 		if ( s.profile < 0 && !s.profileChosen && !m_bHostChosen )
 			s.profile = NextFreeProfile( slot, -1 );
@@ -2668,7 +2688,7 @@ void CGESplitScreenClient::ApplyHostChoice()
 	// The profile's character, or a random one when it doesn't fit the team
 	if ( IsTeamplay() )
 	{
-		const CGECharData *pChar = GECharacters()->Get( character );
+		const CGECharData *pChar = GECustomChar_GetBodyChar( character );
 		if ( !pChar || team == MAX_GE_TEAMS || pChar->iTeam != team )
 			character = CHAR_RANDOM_IDENT;
 	}
@@ -3205,13 +3225,60 @@ int CGESplitScreenClient::ComputeButtons( const GESSPadState_t &pad ) const
 	if ( pad.IsDown( GESS_PAD_RT ) )		buttons |= IN_ATTACK;
 	if ( pad.IsDown( GESS_PAD_LT ) )		buttons |= IN_AIMMODE;
 	if ( pad.IsDown( GESS_PAD_RB ) )		buttons |= IN_ATTACK2;
-	// Face buttons: A / Cross jumps, X / Square reloads, B / Circle crouches
+	// Face buttons: A / Cross jumps, B / Circle crouches. X / Square (reload: tap
+	// reloads, a short hold uses) goes through ReloadHoldButtons.
 	if ( pad.IsDown( GESS_PAD_A ) )			buttons |= IN_JUMP;
-	if ( pad.IsDown( GESS_PAD_X ) )			buttons |= IN_RELOAD;
 	if ( pad.IsDown( GESS_PAD_B ) )			buttons |= IN_DUCK;
 	if ( pad.IsDown( GESS_PAD_LSTICK ) )	buttons |= IN_DUCK;
 	if ( pad.IsDown( GESS_PAD_RSTICK ) )	buttons |= IN_USE;		// action / open doors
 	// Back / Select does nothing: the leaderboard is on START
+	return buttons;
+}
+
+static ConVar ges_ss_hold_use_time( "ges_ss_hold_use_time", "0.25", FCVAR_ARCHIVE, "Split screen: holding reload this many seconds uses (opens doors) instead of reloading, like the N64 game. A tap reloads. 0: reload and use stay separate.", true, 0.0f, true, 2.0f );
+
+void CGESplitScreenClient::ResetReloadHold( int slot )
+{
+	ReloadHold_t &h = m_ReloadHold[slot];
+	h.down = false;
+	h.downTime = 0;
+	h.reloadUntil = 0;
+}
+
+int CGESplitScreenClient::ReloadHoldButtons( int slot, bool bDown )
+{
+	ReloadHold_t &h = m_ReloadHold[slot];
+	const float holdTime = ges_ss_hold_use_time.GetFloat();
+	if ( holdTime <= 0.0f )
+	{
+		ResetReloadHold( slot );
+		return bDown ? IN_RELOAD : 0;
+	}
+
+	const float now = gpGlobals->realtime;
+	int buttons = 0;
+	if ( bDown )
+	{
+		if ( !h.down )
+		{
+			h.down = true;
+			h.downTime = now;
+		}
+		// Held long enough: use (doors, buttons) for as long as it stays down
+		if ( now - h.downTime >= holdTime )
+			buttons |= IN_USE;
+	}
+	else if ( h.down )
+	{
+		// Let go before the hold time: a tap, reload. Sent for a few ticks so the
+		// server can't miss it.
+		h.down = false;
+		if ( now - h.downTime < holdTime )
+			h.reloadUntil = now + 0.1f;
+	}
+
+	if ( now < h.reloadUntil )
+		buttons |= IN_RELOAD;
 	return buttons;
 }
 
@@ -3226,15 +3293,25 @@ void CGESplitScreenClient::ComputeMove( const GESSPadState_t &pad, float &forwar
 void CGESplitScreenClient::HostCreateMove( float frametime, CUserCmd *cmd, QAngle &viewangles, bool active )
 {
 	if ( !ges_ss_enable.GetBool() || !active )
+	{
+		ResetReloadHold( 0 );
 		return;
+	}
+
+	// Reload (the keyboard's or the controller's X): a tap reloads, a short hold
+	// uses, like the N64 game. The keyboard's own use key still works too.
+	const bool bKeyReload = ( cmd->buttons & IN_RELOAD ) != 0;
+	cmd->buttons &= ~IN_RELOAD;
 
 	const int padIndex = GetSlotPad( 0 );
-	if ( padIndex < 0 )
-		return;
+	const GESSPadState_t *pPad = padIndex >= 0 ? &GESSGamepads()->GetPad( padIndex ) : NULL;
+	const bool bPadPlays = pPad && pPad->connected && m_Slots[0].menu == GESS_MENU_NONE && !IsGameUIVisible() && !m_bPregame;
 
-	const GESSPadState_t &pad = GESSGamepads()->GetPad( padIndex );
-	if ( !pad.connected || m_Slots[0].menu != GESS_MENU_NONE || IsGameUIVisible() || m_bPregame )
+	cmd->buttons |= ReloadHoldButtons( 0, bKeyReload || ( bPadPlays && pPad->IsDown( GESS_PAD_X ) ) );
+
+	if ( !bPadPlays )
 		return;
+	const GESSPadState_t &pad = *pPad;
 
 	// Look: every frame in UpdateHostLook (this runs once per tick, not per frame)
 
@@ -3261,7 +3338,10 @@ void CGESplitScreenClient::FillGuestCmds( CUserCmd *cmd )
 
 		LocalSlot_t &s = m_Slots[slot];
 		if ( !ges_ss_enable.GetBool() || s.state != GESS_SLOT_JOINED )
+		{
+			ResetReloadHold( slot );
 			continue;
+		}
 
 		g.active = true;
 		g.viewangles = s.angles;
@@ -3273,10 +3353,13 @@ void CGESplitScreenClient::FillGuestCmds( CUserCmd *cmd )
 
 		const GESSPadState_t &pad = GESSGamepads()->GetPad( GetSlotPad( slot ) );
 		if ( !pad.connected || s.menu != GESS_MENU_NONE || enginevgui->IsGameUIVisible() || m_bPregame )
+		{
+			ResetReloadHold( slot );
 			continue;	// Stand still while in a menu (or waiting for the match to start)
+		}
 
 		ComputeMove( pad, g.forwardmove, g.sidemove );
-		g.buttons = ComputeButtons( pad );
+		g.buttons = ComputeButtons( pad ) | ReloadHoldButtons( slot, pad.IsDown( GESS_PAD_X ) );
 		if ( g.forwardmove > 0 ) g.buttons |= IN_FORWARD;
 		if ( g.forwardmove < 0 ) g.buttons |= IN_BACK;
 		if ( g.sidemove > 0 ) g.buttons |= IN_MOVERIGHT;
@@ -3402,6 +3485,36 @@ void CGESplitScreenClient::SpanMonitors()
 #endif
 }
 
+// Opens the Steam overlay's friends list. While you are on a server the engine tells Steam
+// how to reach it (rich presence "connect"), so friends running the mod get "Join Game" in
+// their Steam friends list, and you get "Invite to Game" on a friend here.
+CON_COMMAND( ges_invite_friends, "Open the Steam overlay friends list to invite friends to this game" )
+{
+	ISteamFriends *pFriends = steamapicontext ? steamapicontext->SteamFriends() : NULL;
+	ISteamUtils *pUtils = steamapicontext ? steamapicontext->SteamUtils() : NULL;
+	if ( !pFriends || !pUtils )
+	{
+		Msg( "Steam isn't available, so friends can't be invited.\n" );
+		return;
+	}
+
+	if ( !engine->IsInGame() )
+	{
+		Msg( "Start or join a game first, then invite friends.\n" );
+		return;
+	}
+
+	if ( !pUtils->IsOverlayEnabled() )
+	{
+		// No overlay (it is off in Steam's settings, or the game wasn't started from Steam):
+		// open Steam's own friends window, where Invite to Game works the same way
+		Msg( "The Steam overlay is off, so Steam's friends window opens instead. Right-click a friend and choose Invite to Game.\n" );
+		vgui::system()->ShellExecute( "open", "steam://open/friends" );
+		return;
+	}
+
+	pFriends->ActivateGameOverlay( "Friends" );
+}
 CON_COMMAND( ges_ss_status, "Show split screen players and controllers" )
 {
 	GESplitScreenClient()->PrintStatus();
